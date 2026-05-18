@@ -141,7 +141,8 @@ def to_public(user: dict) -> UserPublic:
 
 # ---------- Market data (Yahoo Finance + CoinGecko) ----------
 _QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
-_QUOTE_TTL = 15  # seconds
+_QUOTE_TTL = 15  # seconds for stocks
+_CRYPTO_TTL = 120  # seconds for crypto (CoinGecko free tier is heavily rate-limited)
 
 
 def _yf_symbol(sym: str) -> str:
@@ -235,17 +236,28 @@ def _cg_quote(sym: str) -> dict:
     cache_key = f"cg:{sym}"
     now = time.time()
     cached = _QUOTE_CACHE.get(cache_key)
-    if cached and now - cached[0] < _QUOTE_TTL:
+    if cached and now - cached[0] < _CRYPTO_TTL:
         return cached[1]
     cg_id = _cg_id(sym)
     if not cg_id:
         raise HTTPException(404, f"Unknown crypto {sym}")
-    r = requests.get(
-        "https://api.coingecko.com/api/v3/simple/price",
-        params={"ids": cg_id, "vs_currencies": "inr", "include_24hr_change": "true"},
-        timeout=10,
-    )
+    try:
+        r = requests.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": cg_id, "vs_currencies": "inr", "include_24hr_change": "true"},
+            timeout=10,
+        )
+    except Exception as e:
+        if cached:
+            return cached[1]
+        raise HTTPException(502, f"Crypto provider unreachable: {e}")
+    if r.status_code == 429:
+        if cached:
+            return cached[1]
+        raise HTTPException(429, "Crypto provider rate-limit. Try again shortly.")
     if r.status_code != 200:
+        if cached:
+            return cached[1]
         raise HTTPException(502, "Crypto provider error")
     data = r.json().get(cg_id, {})
     price = float(data.get("inr", 0))
