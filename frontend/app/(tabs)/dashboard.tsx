@@ -15,6 +15,7 @@ import { colors, fonts, spacing, radius, shadow, formatINR, formatPct } from "@/
 import CrownLogo from "@/src/components/CrownLogo";
 import { api, Portfolio, Quote } from "@/src/api/client";
 import { useAuth } from "@/src/context/AuthContext";
+import { usePolling } from "@/src/hooks/usePolling";
 
 export default function Dashboard() {
   const { user, refreshUser } = useAuth();
@@ -45,6 +46,20 @@ export default function Dashboard() {
       load();
     }, [load])
   );
+
+  // Poll prices every 12s while screen is in foreground (real-time-ish updates)
+  usePolling(async () => {
+    try {
+      const [p, o, w] = await Promise.all([
+        api.portfolio().catch(() => null),
+        api.marketOverview().catch(() => []),
+        api.watchlist().catch(() => []),
+      ]);
+      if (p) setPortfolio(p);
+      if (o.length) setOverview(o);
+      setWatchlist(w);
+    } catch {}
+  }, 12000);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -120,17 +135,17 @@ export default function Dashboard() {
           </View>
         </View>
 
-        {/* Subscription banner */}
-        {!user?.subscription_active && (
+        {/* Top-up offer banner (only if user has < ₹2L in wallet, encourage top-up) */}
+        {(user?.wallet_balance || 0) < 200000 && (
           <TouchableOpacity
-            testID="subscribe-banner"
+            testID="topup-banner"
             style={styles.subBanner}
             onPress={() => router.push("/subscribe")}
             activeOpacity={0.85}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.subBannerTitle}>Activate Titan Plan</Text>
-              <Text style={styles.subBannerSub}>Pay ₹199 · Unlock ₹1,00,000 demo cash</Text>
+              <Text style={styles.subBannerTitle}>Need more demo capital?</Text>
+              <Text style={styles.subBannerSub}>Top-up plans from ₹199 · Up to ₹10,00,000</Text>
             </View>
             <Ionicons name="arrow-forward" size={20} color={colors.parchment} />
           </TouchableOpacity>

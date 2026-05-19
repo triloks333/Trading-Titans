@@ -148,7 +148,12 @@ export const api = {
     request<any>("/whatif", { method: "POST", body: JSON.stringify({ symbol, market, amount, years_ago }) }, false),
   autopsy: () => request<any>("/autopsy"),
 
-  createSubscriptionOrder: () => request<any>("/subscription/create-order", { method: "POST" }),
+  upstoxStatus: () => request<any>("/upstox/status", {}, false),
+  upstoxAuthUrl: () => request<{ auth_url: string; state: string }>("/upstox/authorize-url", {}, false),
+
+  createSubscriptionOrder: (planId: string = "titan_1l") =>
+    request<any>(`/subscription/create-order?plan_id=${encodeURIComponent(planId)}`, { method: "POST" }),
+  listPlans: () => request<any[]>("/subscription/plans", {}, false),
   activateSubscription: (payload: any = {}) =>
     request<any>("/subscription/activate", { method: "POST", body: JSON.stringify(payload) }),
 };

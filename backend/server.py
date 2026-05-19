@@ -30,6 +30,12 @@ JWT_SECRET = os.environ.get("JWT_SECRET", "trading-titans-dev-secret-change-me")
 JWT_ALGO = "HS256"
 TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days
 
+# Upstox (real-time NSE/BSE via developer OAuth)
+UPSTOX_KEY = os.environ.get("UPSTOX_API_KEY", "")
+UPSTOX_SECRET = os.environ.get("UPSTOX_API_SECRET", "")
+UPSTOX_REDIRECT = os.environ.get("UPSTOX_REDIRECT_URI", "")
+UPSTOX_BASE = "https://api.upstox.com/v2"
+
 # ---------- DB ----------
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -281,7 +287,175 @@ def _cg_quote(sym: str) -> dict:
 def get_quote(symbol: str, market: str) -> dict:
     if market == "crypto":
         return _cg_quote(symbol)
+    # Try Upstox first if authorized; fall back to Yahoo Finance
+    try:
+        ux = _upstox_quote(symbol)
+        if ux:
+            return ux
+    except Exception as e:
+        logging.debug("upstox quote failed for %s, falling back to yfinance: %s", symbol, e)
     return _yf_quote(_yf_symbol(symbol))
+
+
+# ---------- Upstox (real-time NSE/BSE) ----------
+import secrets as _secrets
+from urllib.parse import urlencode as _urlencode
+
+
+_UPSTOX_INSTRUMENT_MAP: dict[str, str] = {}  # symbol -> instrument_key cache
+
+
+async def _upstox_token() -> Optional[str]:
+    doc = await db.upstox_token.find_one({"_id": "main"})
+    if not doc:
+        return None
+    expires_at = doc.get("expires_at")
+    if expires_at and expires_at <= datetime.now(timezone.utc):
+        return None
+    return doc.get("access_token")
+
+
+def _upstox_instrument_key(symbol: str) -> str:
+    s = symbol.upper().strip()
+    if s in _UPSTOX_INSTRUMENT_MAP:
+        return _UPSTOX_INSTRUMENT_MAP[s]
+    # Default convention; works for most NSE EQ instruments after instrument-master ingestion
+    return f"NSE_EQ|{s}"
+
+
+def _upstox_quote(symbol: str) -> Optional[dict]:
+    """Synchronous quote via Upstox. Returns None if not configured/authorized."""
+    # token lookup is async; do a quick sync read
+    import pymongo
+    sync_client = pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+    doc = sync_client[DB_NAME].upstox_token.find_one({"_id": "main"})
+    sync_client.close()
+    if not doc:
+        return None
+    expires_at = doc.get("expires_at")
+    if expires_at and expires_at <= datetime.now(timezone.utc):
+        return None
+    token = doc.get("access_token")
+    if not token:
+        return None
+    key = _upstox_instrument_key(symbol)
+    cache_key = f"ux:{key}"
+    now = time.time()
+    cached = _QUOTE_CACHE.get(cache_key)
+    if cached and now - cached[0] < _QUOTE_TTL:
+        return cached[1]
+    try:
+        r = requests.get(
+            f"{UPSTOX_BASE}/market-quote/quotes",
+            params={"instrument_key": key},
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            timeout=8,
+        )
+    except Exception:
+        return None
+    if r.status_code != 200:
+        return None
+    data = r.json().get("data", {})
+    if not data:
+        return None
+    # data is a dict keyed by something like "NSE_EQ:RELIANCE"
+    first = next(iter(data.values()))
+    price = float(first.get("last_price") or 0)
+    prev = float(first.get("ohlc", {}).get("close") or first.get("close_price") or price)
+    change = price - prev
+    change_pct = (change / prev * 100) if prev else 0.0
+    out = {
+        "symbol": symbol.upper(),
+        "yf_symbol": key,
+        "name": first.get("symbol") or symbol.upper(),
+        "price": round(price, 2),
+        "previous_close": round(prev, 2),
+        "change": round(change, 2),
+        "change_pct": round(change_pct, 2),
+        "currency": "INR",
+        "market": "stock",
+        "source": "upstox",
+    }
+    _QUOTE_CACHE[cache_key] = (now, out)
+    return out
+
+
+@api.get("/upstox/status")
+async def upstox_status():
+    if not UPSTOX_KEY:
+        return {"configured": False, "authorized": False, "reason": "not_configured"}
+    doc = await db.upstox_token.find_one({"_id": "main"})
+    if not doc:
+        return {"configured": True, "authorized": False, "reason": "not_logged_in"}
+    expires_at = doc.get("expires_at")
+    now = datetime.now(timezone.utc)
+    if expires_at and expires_at <= now:
+        return {"configured": True, "authorized": False, "reason": "expired", "expired_at": expires_at.isoformat()}
+    remaining = int((expires_at - now).total_seconds()) if expires_at else None
+    return {"configured": True, "authorized": True, "expires_at": expires_at.isoformat() if expires_at else None, "remaining_seconds": remaining}
+
+
+@api.get("/upstox/authorize-url")
+async def upstox_authorize_url():
+    if not UPSTOX_KEY or not UPSTOX_REDIRECT:
+        raise HTTPException(400, "Upstox not configured. Set UPSTOX_API_KEY and UPSTOX_REDIRECT_URI.")
+    state = _secrets.token_urlsafe(16)
+    await db.upstox_state.insert_one({"_id": state, "created_at": datetime.now(timezone.utc)})
+    params = {
+        "response_type": "code",
+        "client_id": UPSTOX_KEY,
+        "redirect_uri": UPSTOX_REDIRECT,
+        "state": state,
+    }
+    return {"auth_url": f"https://api.upstox.com/v2/login/authorization/dialog?{_urlencode(params)}", "state": state}
+
+
+@api.get("/upstox/callback")
+async def upstox_callback(code: str, state: str):
+    valid_state = await db.upstox_state.find_one({"_id": state})
+    if not valid_state:
+        raise HTTPException(400, "Invalid state")
+    await db.upstox_state.delete_one({"_id": state})
+    try:
+        r = requests.post(
+            f"{UPSTOX_BASE}/login/authorization/token",
+            data={
+                "code": code,
+                "client_id": UPSTOX_KEY,
+                "client_secret": UPSTOX_SECRET,
+                "redirect_uri": UPSTOX_REDIRECT,
+                "grant_type": "authorization_code",
+            },
+            headers={"accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+            timeout=15,
+        )
+    except Exception as e:
+        raise HTTPException(502, f"Upstox unreachable: {e}")
+    if r.status_code != 200:
+        raise HTTPException(502, f"Upstox token exchange failed: {r.text[:200]}")
+    payload = r.json()
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise HTTPException(502, "No access_token returned")
+    # Upstox tokens expire at 3:30 AM IST next day
+    from zoneinfo import ZoneInfo
+    ist = ZoneInfo("Asia/Kolkata")
+    now_ist = datetime.now(ist)
+    cutoff = now_ist.replace(hour=3, minute=30, second=0, microsecond=0)
+    if now_ist >= cutoff:
+        cutoff = cutoff + timedelta(days=1)
+    expires_at = cutoff.astimezone(timezone.utc)
+    await db.upstox_token.replace_one(
+        {"_id": "main"},
+        {
+            "_id": "main",
+            "access_token": access_token,
+            "expires_at": expires_at,
+            "created_at": datetime.now(timezone.utc),
+        },
+        upsert=True,
+    )
+    return {"ok": True, "expires_at": expires_at.isoformat(), "message": "Upstox connected. Real-time NSE data is now active."}
 
 
 # ---------- Auth routes ----------
@@ -292,13 +466,15 @@ async def register(payload: RegisterIn):
     if existing:
         raise HTTPException(400, "Email already registered")
     uid = str(uuid.uuid4())
+    # MVP: every new signup gets ₹1,00,000 demo cash automatically (free tier)
     doc = {
         "_id": uid,
         "email": email,
         "name": payload.name,
         "password_hash": hash_pw(payload.password),
-        "wallet_balance": 0.0,
-        "subscription_active": False,
+        "wallet_balance": 100000.0,
+        "subscription_active": True,
+        "plan": "free_starter",
         "total_realized_pnl": 0.0,
         "created_at": datetime.now(timezone.utc),
     }
@@ -372,23 +548,39 @@ async def market_search(q: str = Query(min_length=1), market: str = "stock"):
 @api.get("/market/history")
 async def market_history(symbol: str, market: str = "stock", range: str = "1mo"):
     """range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 5y"""
+    cache_key = f"hist:{market}:{symbol}:{range}"
+    now = time.time()
+    cached = _QUOTE_CACHE.get(cache_key)
+    # cache history for 5 minutes
+    if cached and now - cached[0] < 300:
+        return cached[1]
     if market == "crypto":
         cg_id = _cg_id(symbol)
         if not cg_id:
             raise HTTPException(404, "Unknown crypto")
         days_map = {"1d": 1, "5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "5y": 1825}
         days = days_map.get(range, 30)
-        r = requests.get(
-            f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
-            params={"vs_currency": "inr", "days": days},
-            timeout=15,
-        )
+        try:
+            r = requests.get(
+                f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
+                params={"vs_currency": "inr", "days": days},
+                timeout=15,
+            )
+        except Exception as e:
+            if cached:
+                return cached[1]
+            raise HTTPException(502, f"History provider unreachable: {e}")
         if r.status_code != 200:
+            if cached:
+                return cached[1]
+            if r.status_code == 429:
+                raise HTTPException(429, "History provider rate-limit. Try again shortly.")
             raise HTTPException(502, "History provider error")
         points = r.json().get("prices", [])
-        # Downsample to ~60 points
         step = max(1, len(points) // 60)
-        return {"symbol": symbol.upper(), "points": [{"t": p[0], "v": round(p[1], 2)} for p in points[::step]]}
+        out = {"symbol": symbol.upper(), "points": [{"t": p[0], "v": round(p[1], 2)} for p in points[::step]]}
+        _QUOTE_CACHE[cache_key] = (now, out)
+        return out
     sym = _yf_symbol(symbol)
     period_map = {"1d": "1d", "5d": "5d", "1mo": "1mo", "3mo": "3mo", "6mo": "6mo", "1y": "1y", "5y": "5y"}
     interval_map = {"1d": "5m", "5d": "30m", "1mo": "1d", "3mo": "1d", "6mo": "1d", "1y": "1d", "5y": "1wk"}
@@ -695,20 +887,39 @@ def _autopsy_tip(loss_pct: float, market: str) -> str:
     return "Small loss. Tag the reason: news, sector rotation, or noise. Don't average down without conviction."
 
 
-# ---------- Subscription (Razorpay - MOCKED) ----------
+# ---------- Subscription (Razorpay - MOCKED, kept for future) ----------
+# Plan tiers — kept on backend for when payment goes live
+PLANS = {
+    "titan_1l": {"name": "Titan Starter", "price": 199, "cash": 100000.0},
+    "titan_5l": {"name": "Titan Pro", "price": 899, "cash": 500000.0},
+    "titan_10l": {"name": "Titan Elite", "price": 1499, "cash": 1000000.0},
+}
+
+
+@api.get("/subscription/plans")
+async def list_plans():
+    return [{"id": k, **v} for k, v in PLANS.items()]
+
+
 class SubscribeIn(BaseModel):
-    payment_id: Optional[str] = None  # would be razorpay_payment_id in prod
+    plan_id: str = "titan_1l"
+    payment_id: Optional[str] = None
     order_id: Optional[str] = None
     signature: Optional[str] = None
 
 
 @api.post("/subscription/create-order")
-async def create_subscription_order(user: dict = Depends(current_user)):
-    """Returns a (mock) Razorpay order. Real keys would create actual order."""
+async def create_subscription_order(plan_id: str = "titan_1l", user: dict = Depends(current_user)):
+    """Returns a (mock) Razorpay order for the given plan. Real keys would create actual order."""
+    plan = PLANS.get(plan_id)
+    if not plan:
+        raise HTTPException(400, "Unknown plan")
     order = {
         "id": f"order_mock_{uuid.uuid4().hex[:12]}",
-        "amount": 19900,  # paise
+        "amount": plan["price"] * 100,  # paise
         "currency": "INR",
+        "plan_id": plan_id,
+        "plan": plan,
         "key_id": os.environ.get("RAZORPAY_KEY_ID", "rzp_test_MOCK_KEY"),
         "is_mock": not bool(os.environ.get("RAZORPAY_KEY_ID")),
     }
@@ -717,28 +928,34 @@ async def create_subscription_order(user: dict = Depends(current_user)):
 
 @api.post("/subscription/activate")
 async def activate_subscription(payload: SubscribeIn, user: dict = Depends(current_user)):
-    """MOCKED: Activates Titan Plan, credits ₹1,00,000 demo cash. Real Razorpay verification would happen here."""
-    if user.get("subscription_active"):
-        raise HTTPException(400, "Already a Titan member")
-    new_balance = user["wallet_balance"] + 100000.0
+    """Top up wallet for the selected plan. MOCKED Razorpay — credits cash without real verification."""
+    plan = PLANS.get(payload.plan_id)
+    if not plan:
+        raise HTTPException(400, "Unknown plan")
+    new_balance = user["wallet_balance"] + plan["cash"]
     await db.users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"subscription_active": True, "wallet_balance": new_balance, "subscribed_at": datetime.now(timezone.utc)}},
+        {"$set": {
+            "subscription_active": True,
+            "wallet_balance": new_balance,
+            "plan": payload.plan_id,
+            "subscribed_at": datetime.now(timezone.utc),
+        }},
     )
     await db.orders.insert_one({
         "_id": str(uuid.uuid4()),
         "user_id": user["_id"],
-        "symbol": "TITAN_PLAN",
-        "name": "Titan Plan Subscription",
+        "symbol": plan["name"].upper().replace(" ", "_"),
+        "name": f"{plan['name']} Top-up",
         "market": "subscription",
         "side": "credit",
         "quantity": 1,
-        "price": 199.0,
-        "total": 199.0,
+        "price": float(plan["price"]),
+        "total": float(plan["price"]),
         "realized_pnl": 0.0,
         "created_at": datetime.now(timezone.utc),
     })
-    return {"ok": True, "new_balance": new_balance, "message": "Titan Plan activated. ₹1,00,000 credited."}
+    return {"ok": True, "new_balance": new_balance, "credited": plan["cash"], "message": f"{plan['name']} activated. ₹{int(plan['cash']):,} credited."}
 
 
 # ---------- Curated stock list ----------

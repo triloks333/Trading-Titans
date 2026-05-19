@@ -50,39 +50,27 @@ export default function Wallet() {
               <Text style={styles.balLabel}>Demo Cash Balance</Text>
               <Text testID="wallet-balance" style={styles.balValue}>{formatINR(user?.wallet_balance || 0, 2)}</Text>
               <View style={styles.subStatus}>
-                {user?.subscription_active ? (
-                  <View style={[styles.statusPill, { backgroundColor: colors.bullLight }]}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.bull} />
-                    <Text style={[styles.statusText, { color: colors.bull }]}>Titan Plan Active</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.statusPill, { backgroundColor: colors.bearLight }]}>
-                    <Ionicons name="alert-circle" size={14} color={colors.bear} />
-                    <Text style={[styles.statusText, { color: colors.bear }]}>No active subscription</Text>
-                  </View>
-                )}
+                <View style={[styles.statusPill, { backgroundColor: colors.bullLight }]}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.bull} />
+                  <Text style={[styles.statusText, { color: colors.bull }]}>
+                    {user?.subscription_active ? "Active · Trading enabled" : "Free Starter"}
+                  </Text>
+                </View>
               </View>
             </View>
 
-            {!user?.subscription_active ? (
-              <TouchableOpacity
-                testID="wallet-subscribe-button"
-                style={styles.ctaBtn}
-                onPress={() => router.push("/subscribe")}
-                activeOpacity={0.85}
-              >
-                <View>
-                  <Text style={styles.ctaTitle}>Activate Titan Plan</Text>
-                  <Text style={styles.ctaSub}>₹199 · Get ₹1,00,000 demo cash</Text>
-                </View>
-                <Ionicons name="arrow-forward-circle" size={28} color={colors.parchment} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.titanCard}>
-                <Ionicons name="ribbon" size={28} color={colors.imperialGold} />
-                <Text style={styles.titanText}>You're a Titan. Trade fearlessly.</Text>
+            <TouchableOpacity
+              testID="wallet-subscribe-button"
+              style={styles.ctaBtn}
+              onPress={() => router.push("/subscribe")}
+              activeOpacity={0.85}
+            >
+              <View>
+                <Text style={styles.ctaTitle}>Top-up Demo Cash</Text>
+                <Text style={styles.ctaSub}>From ₹199 · Up to ₹10,00,000</Text>
               </View>
-            )}
+              <Ionicons name="arrow-forward-circle" size={28} color={colors.pureWhite} />
+            </TouchableOpacity>
 
             <Text style={styles.section}>Transaction History</Text>
           </>
@@ -141,8 +129,8 @@ const styles = StyleSheet.create({
     borderColor: colors.goldBorder,
     ...shadow.gold,
   },
-  ctaTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.goldLight },
-  ctaSub: { fontFamily: fonts.body, fontSize: 13, color: colors.parchment, marginTop: 2 },
+  ctaTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.pureWhite },
+  ctaSub: { fontFamily: fonts.body, fontSize: 13, color: colors.goldLight, marginTop: 2 },
   titanCard: {
     flexDirection: "row",
     alignItems: "center",

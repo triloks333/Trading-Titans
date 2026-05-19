@@ -1,45 +1,49 @@
-// Trading Titans theme - Parchment + Imperial Gold
+// Trading Titans theme - Light Blue (Zerodha/Groww-inspired)
 export const colors = {
-  // Surfaces
-  parchment: "#F5F2EC",
-  warmWhite: "#FDFAF4",
+  // Surfaces (light blue-tinted)
+  parchment: "#F4F7FB", // app background
+  warmWhite: "#F8FAFD", // cards alt
   pureWhite: "#FFFFFF",
-  cream: "#F9F6EE",
-  sand: "#F0EDE4",
-  birch: "#E4DDD0",
-  // Brand
-  goldDeep: "#8B6914",
-  imperialGold: "#C9970C",
-  goldMid: "#D4AF37",
-  goldLight: "#E8C84A",
-  goldPale: "#FFF8DC",
-  goldBorder: "#C9A227",
-  // Ink
-  ink: "#1A1208",
-  ink2: "#2D2210",
-  ink3: "#5C4A28",
-  ink4: "#8B7A5A",
-  ink5: "#B8A88A",
+  cream: "#EEF4FB", // input bg / muted card
+  sand: "#E6EEF7",
+  birch: "#DDE7F2", // borders
+
+  // Brand blues (primary)
+  goldDeep: "#0B5FBF", // dark accent (replaces gold names internally, but used as primary)
+  imperialGold: "#1A73E8", // primary action (kept name for backward-compat)
+  goldMid: "#3B8BF2",
+  goldLight: "#BBD7F8",
+  goldPale: "#EAF2FC",
+  goldBorder: "#A8C6EC",
+
+  // Ink (cool blue-greys)
+  ink: "#0B1B2B",
+  ink2: "#102A43",
+  ink3: "#334E68",
+  ink4: "#627D98",
+  ink5: "#9FB3C8",
+
   // Semantic
-  bull: "#0A6B3F",
-  bullLight: "#D1F4E5",
-  bear: "#B91C1C",
-  bearLight: "#FEE2E2",
-  blue: "#1D4ED8",
+  bull: "#0F9D58",
+  bullLight: "#D8F3E2",
+  bear: "#D93025",
+  bearLight: "#FCE4E2",
+  blue: "#1A73E8",
   blueLight: "#DBEAFE",
   violet: "#6D28D9",
   violetLight: "#EDE9FE",
 };
 
 export const fonts = {
-  display: "PlayfairDisplay_700Bold",
-  displayBlack: "PlayfairDisplay_900Black",
-  displayItalic: "PlayfairDisplay_700Bold_Italic",
-  body: "DMSans_400Regular",
-  bodyMed: "DMSans_500Medium",
-  bodyBold: "DMSans_700Bold",
-  mono: "DMMono_400Regular",
-  monoMed: "DMMono_500Medium",
+  // All Inter (Zerodha/Groww style)
+  display: "Inter_700Bold",
+  displayBlack: "Inter_900Black",
+  displayItalic: "Inter_700Bold",
+  body: "Inter_400Regular",
+  bodyMed: "Inter_500Medium",
+  bodyBold: "Inter_700Bold",
+  mono: "Inter_500Medium", // Inter has tabular-nums; use medium for tabular numbers
+  monoMed: "Inter_600SemiBold",
 };
 
 export const spacing = {
@@ -63,31 +67,32 @@ export const radius = {
 
 export const shadow = {
   sm: {
-    shadowColor: "#1A1208",
+    shadowColor: "#0B1B2B",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
   md: {
-    shadowColor: "#1A1208",
+    shadowColor: "#0B1B2B",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 3,
   },
   lg: {
-    shadowColor: "#1A1208",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowColor: "#0B1B2B",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
   },
   gold: {
-    shadowColor: "#C9970C",
+    // primary-coloured shadow (now blue)
+    shadowColor: "#1A73E8",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
     elevation: 5,
   },
 };
@@ -98,7 +103,6 @@ export const formatINR = (n: number, decimals = 2): string => {
   const sign = n < 0 ? "-" : "";
   const fixed = abs.toFixed(decimals);
   const [whole, dec] = fixed.split(".");
-  // Indian numbering: last 3 digits, then 2-2 groups
   let result = "";
   if (whole.length > 3) {
     const last3 = whole.slice(-3);

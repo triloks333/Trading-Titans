@@ -19,6 +19,7 @@ import { colors, fonts, spacing, radius, shadow, formatINR, formatPct } from "@/
 import { api, Quote, HistoryPoint } from "@/src/api/client";
 import PriceChart from "@/src/components/PriceChart";
 import { useAuth } from "@/src/context/AuthContext";
+import { usePolling } from "@/src/hooks/usePolling";
 
 const RANGES = [
   { key: "1d", label: "1D" },
@@ -82,6 +83,11 @@ export default function StockDetail() {
     loadChart(range);
     loadHolding();
   }, [loadQuote, loadChart, loadHolding, range]);
+
+  // Live polling: refresh quote every 8s for stocks, 12s for crypto
+  usePolling(() => {
+    loadQuote();
+  }, m === "crypto" ? 12000 : 8000);
 
   const place = async () => {
     const qtyN = parseFloat(qty);
