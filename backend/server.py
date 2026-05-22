@@ -24,8 +24,8 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
+MONGO_URL = os.environ.get("MONGO_URL", "")
+DB_NAME = os.environ.get("DB_NAME", "trading_titans")
 JWT_SECRET = os.environ.get("JWT_SECRET", "trading-titans-dev-secret-change-me")
 JWT_ALGO = "HS256"
 TOKEN_TTL_MIN = 60 * 24 * 7  # 7 days
@@ -36,20 +36,35 @@ UPSTOX_SECRET = os.environ.get("UPSTOX_API_SECRET", "")
 UPSTOX_REDIRECT = os.environ.get("UPSTOX_REDIRECT_URI", "")
 UPSTOX_BASE = "https://api.upstox.com/v2"
 
-# ---------- DB ----------
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+# ---------- Optional DB (MongoDB) ----------
+client: Optional[AsyncIOMotorClient] = None
+db: Any = None
+
+if MONGO_URL:
+    try:
+        client = AsyncIOMotorClient(MONGO_URL)
+        db = client[DB_NAME]
+        logging.info("MongoDB connected: %s", DB_NAME)
+    except Exception as e:
+        logging.warning("MongoDB not available, auth/trade endpoints disabled: %s", e)
+        client = None
+        db = None
 
 
 # ---------- Lifespan ----------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.users.create_index("email", unique=True)
-    await db.orders.create_index([("user_id", 1), ("created_at", -1)])
-    await db.holdings.create_index([("user_id", 1), ("symbol", 1), ("market", 1)], unique=True)
-    await db.watchlist.create_index([("user_id", 1), ("symbol", 1), ("market", 1)], unique=True)
+    if db is not None:
+        try:
+            await db.users.create_index("email", unique=True)
+            await db.orders.create_index([("user_id", 1), ("created_at", -1)])
+            await db.holdings.create_index([("user_id", 1), ("symbol", 1), ("market", 1)], unique=True)
+            await db.watchlist.create_index([("user_id", 1), ("symbol", 1), ("market", 1)], unique=True)
+        except Exception as e:
+            logging.warning("MongoDB index creation failed: %s", e)
     yield
-    client.close()
+    if client is not None:
+        client.close()
 
 
 app = FastAPI(title="Trading Titans API", lifespan=lifespan)
@@ -128,6 +143,8 @@ async def current_user(cred: HTTPAuthorizationCredentials = Depends(bearer)) -> 
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
+    if db is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Database not configured")
     user = await db.users.find_one({"_id": payload.get("sub")}, {"password_hash": 0})
     if not user:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found")
@@ -306,13 +323,18 @@ _UPSTOX_INSTRUMENT_MAP: dict[str, str] = {}  # symbol -> instrument_key cache
 
 
 async def _upstox_token() -> Optional[str]:
-    doc = await db.upstox_token.find_one({"_id": "main"})
-    if not doc:
+    if db is None:
         return None
-    expires_at = doc.get("expires_at")
-    if expires_at and expires_at <= datetime.now(timezone.utc):
+    try:
+        doc = await db.upstox_token.find_one({"_id": "main"})
+        if not doc:
+            return None
+        expires_at = doc.get("expires_at")
+        if expires_at and expires_at <= datetime.now(timezone.utc):
+            return None
+        return doc.get("access_token")
+    except Exception:
         return None
-    return doc.get("access_token")
 
 
 def _upstox_instrument_key(symbol: str) -> str:
@@ -325,11 +347,15 @@ def _upstox_instrument_key(symbol: str) -> str:
 
 def _upstox_quote(symbol: str) -> Optional[dict]:
     """Synchronous quote via Upstox. Returns None if not configured/authorized."""
-    # token lookup is async; do a quick sync read
-    import pymongo
-    sync_client = pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
-    doc = sync_client[DB_NAME].upstox_token.find_one({"_id": "main"})
-    sync_client.close()
+    if not MONGO_URL:
+        return None
+    try:
+        import pymongo
+        sync_client = pymongo.MongoClient(MONGO_URL, serverSelectionTimeoutMS=2000)
+        doc = sync_client[DB_NAME].upstox_token.find_one({"_id": "main"})
+        sync_client.close()
+    except Exception:
+        return None
     if not doc:
         return None
     expires_at = doc.get("expires_at")
