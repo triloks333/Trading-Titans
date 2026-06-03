@@ -208,3 +208,12 @@ class AppTheme {
     );
   }
 }
+
+class AppFormat {
+  static String formatINR(double amount) {
+    // Basic formatting for ₹. Real implementation could use intl package.
+    String numStr = amount.toStringAsFixed(2);
+    // Simple naive formatting if needed, but for now just add symbol:
+    return '₹$numStr';
+  }
+}

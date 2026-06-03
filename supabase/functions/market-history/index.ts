@@ -12,6 +12,7 @@ serve(async (req) => {
     const symbol = url.searchParams.get("symbol") ?? "";
     const market = url.searchParams.get("market") ?? "stock";
     const range = url.searchParams.get("range") ?? "1mo";
+    const interval = url.searchParams.get("interval") ?? "";
 
     if (!symbol) {
       return new Response(JSON.stringify({ error: "symbol required" }), {
@@ -21,8 +22,8 @@ serve(async (req) => {
     }
 
     const data = market === "crypto"
-      ? await cgHistory(symbol, range)
-      : await yfHistory(symbol, range);
+      ? await cgHistory(symbol, range, interval || undefined)
+      : await yfHistory(symbol, range, interval || undefined);
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

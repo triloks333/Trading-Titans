@@ -13,6 +13,13 @@ class Holding {
   final double dayPnl;
   final double dayPnlPct;
 
+  // F&O-specific fields
+  final String instrumentType; // 'EQUITY' | 'OPTION'
+  final String? optionType;    // 'CE' | 'PE' (null for equity)
+  final double? strikePrice;   // null for equity
+  final String? expiryDate;    // e.g. '2026-06-05' (null for equity)
+  final String productType;    // 'NRML' | 'MIS' | 'CNC' (CNC = delivery for equity)
+
   Holding({
     required this.symbol,
     required this.name,
@@ -27,7 +34,39 @@ class Holding {
     required this.pnlPct,
     required this.dayPnl,
     required this.dayPnlPct,
+    this.instrumentType = 'EQUITY',
+    this.optionType,
+    this.strikePrice,
+    this.expiryDate,
+    this.productType = 'CNC',
   });
+
+  // Convenience getters
+  bool get isOption => instrumentType == 'OPTION';
+  bool get isEquity => instrumentType == 'EQUITY';
+  bool get isLong => quantity > 0;
+  bool get isShort => quantity < 0;
+  String get positionTag => isLong ? 'LONG' : 'SHORT';
+  String get displayName {
+    if (isOption && optionType != null && strikePrice != null) {
+      return '$symbol ${strikePrice!.toStringAsFixed(0)} $optionType';
+    }
+    return name.isNotEmpty ? name : symbol;
+  }
+
+  /// Returns time remaining until expiry as a human-readable string
+  String? get expiryCountdown {
+    if (expiryDate == null) return null;
+    final expiry = DateTime.tryParse(expiryDate!);
+    if (expiry == null) return null;
+    final now = DateTime.now();
+    final expiryEod = DateTime(expiry.year, expiry.month, expiry.day, 15, 30);
+    final diff = expiryEod.difference(now);
+    if (diff.isNegative) return 'Expired';
+    if (diff.inDays > 0) return '${diff.inDays}d ${diff.inHours % 24}h';
+    if (diff.inHours > 0) return '${diff.inHours}h ${diff.inMinutes % 60}m';
+    return '${diff.inMinutes}m';
+  }
 
   factory Holding.fromJson(Map<String, dynamic> json) {
     return Holding(
@@ -44,6 +83,11 @@ class Holding {
       pnlPct: (json['pnl_pct'] as num?)?.toDouble() ?? 0.0,
       dayPnl: (json['day_pnl'] as num?)?.toDouble() ?? 0.0,
       dayPnlPct: (json['day_pnl_pct'] as num?)?.toDouble() ?? 0.0,
+      instrumentType: json['instrument_type'] as String? ?? 'EQUITY',
+      optionType: json['option_type'] as String?,
+      strikePrice: (json['strike_price'] as num?)?.toDouble(),
+      expiryDate: json['expiry_date'] as String?,
+      productType: json['product_type'] as String? ?? 'CNC',
     );
   }
 
@@ -62,6 +106,11 @@ class Holding {
       'pnl_pct': pnlPct,
       'day_pnl': dayPnl,
       'day_pnl_pct': dayPnlPct,
+      'instrument_type': instrumentType,
+      'option_type': optionType,
+      'strike_price': strikePrice,
+      'expiry_date': expiryDate,
+      'product_type': productType,
     };
   }
 }
@@ -86,6 +135,13 @@ class Portfolio {
     required this.dayPnl,
     required this.holdings,
   });
+
+  // Convenience getters for filtered lists
+  List<Holding> get equityHoldings =>
+      holdings.where((h) => h.isEquity).toList();
+
+  List<Holding> get optionPositions =>
+      holdings.where((h) => h.isOption).toList();
 
   factory Portfolio.fromJson(Map<String, dynamic> json) {
     return Portfolio(

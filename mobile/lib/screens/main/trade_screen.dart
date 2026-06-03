@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../services/market_service.dart';
-import 'stock_detail_screen.dart';
+import '../../models/quote.dart';
+
+import '../../widgets/stock_action_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TradeScreen extends StatefulWidget {
@@ -25,7 +27,8 @@ class _TradeScreenState extends State<TradeScreen> {
     {'symbol': 'HDFCBANK', 'name': 'HDFC Bank'},
     {'symbol': 'INFY', 'name': 'Infosys'},
     {'symbol': 'ICICIBANK', 'name': 'ICICI Bank'},
-    {'symbol': 'TATAMOTORS', 'name': 'Tata Motors'},
+    {'symbol': 'TMCV', 'name': 'Tata Motors (Commercial)'},
+    {'symbol': 'TMPV', 'name': 'Tata Motors (Passenger)'},
     {'symbol': 'ADANIENT', 'name': 'Adani Enterprises'},
     {'symbol': 'ZOMATO', 'name': 'Zomato'},
   ];
@@ -179,9 +182,7 @@ class _TradeScreenState extends State<TradeScreen> {
                         final symbol = item['symbol'] as String? ?? '';
                         final name = item['name'] as String? ?? '';
                         return GestureDetector(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => StockDetailScreen(symbol: symbol, market: _market, name: name),
-                          )),
+                          onTap: () => StockActionSheet.show(context, symbol: symbol, market: _market, name: name),
                           child: Container(
                             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                             padding: const EdgeInsets.all(AppSpacing.md),
@@ -213,9 +214,9 @@ class _TradeScreenState extends State<TradeScreen> {
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
-                              ],
-                            ),
+                                  _LivePriceWidget(symbol: symbol, market: _market),
+                                ],
+                              ),
                           ),
                         );
                       },
@@ -224,6 +225,71 @@ class _TradeScreenState extends State<TradeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LivePriceWidget extends StatefulWidget {
+  final String symbol;
+  final String market;
+  const _LivePriceWidget({required this.symbol, required this.market});
+
+  @override
+  State<_LivePriceWidget> createState() => _LivePriceWidgetState();
+}
+
+class _LivePriceWidgetState extends State<_LivePriceWidget> {
+  Quote? _quote;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LivePriceWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.symbol != widget.symbol || oldWidget.market != widget.market) {
+      _fetch();
+    }
+  }
+
+  Future<void> _fetch() async {
+    setState(() => _loading = true);
+    final q = await MarketService.quote(widget.symbol, widget.market);
+    if (mounted) {
+      setState(() {
+        _quote = q;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (_quote == null) {
+      return const Icon(Icons.chevron_right, size: 18, color: AppColors.ink4);
+    }
+    final isPositive = _quote!.change >= 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          '₹${_quote!.price.toStringAsFixed(2)}',
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '${isPositive ? '+' : ''}${_quote!.changePct.toStringAsFixed(2)}%',
+          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+        ),
+      ],
     );
   }
 }

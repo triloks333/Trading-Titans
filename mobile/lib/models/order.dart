@@ -12,6 +12,9 @@ class Order {
   final DateTime? createdAt;
   final DateTime? executedAt;
 
+  final String? orderType;
+  final String? instrumentType;
+
   Order({
     required this.id,
     required this.symbol,
@@ -25,6 +28,8 @@ class Order {
     this.status = 'executed',
     this.createdAt,
     this.executedAt,
+    this.orderType,
+    this.instrumentType,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -45,6 +50,8 @@ class Order {
       executedAt: json['executed_at'] != null
           ? DateTime.tryParse(json['executed_at'] as String)
           : null,
+      orderType: json['order_type'] as String?,
+      instrumentType: json['instrument_type'] as String?,
     );
   }
 

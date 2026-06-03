@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchQuote as yfQuote } from "../_shared/yahoo.ts";
 import { fetchQuote as cgQuote } from "../_shared/coingecko.ts";
+import { fetchQuote as biQuote } from "../_shared/binance.ts";
+import { fetchQuote as cxQuote } from "../_shared/coindcx.ts";
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -24,15 +26,32 @@ serve(async (req) => {
       }
     }
 
-    // Top crypto
+    // Top crypto - use CoinDCX/Binance for high performance
     for (const sym of ["BTC", "ETH", "SOL"]) {
       try {
-        const q = await cgQuote(sym);
-        results.push({ ...q, display_name: q.name, category: "crypto" });
+        let q: Record<string, any> | null = null;
+        try {
+          q = await cxQuote(sym);
+        } catch (_) {}
+        if (!q) {
+          try {
+            q = await biQuote(sym);
+          } catch (_) {}
+        }
+        if (!q) {
+          try {
+            q = await cgQuote(sym);
+          } catch (_) {}
+        }
+        if (q) {
+          results.push({ ...q, display_name: q.name || q.display_name, category: "crypto" });
+        }
       } catch {
         // skip
       }
     }
+
+
 
     return new Response(JSON.stringify(results), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

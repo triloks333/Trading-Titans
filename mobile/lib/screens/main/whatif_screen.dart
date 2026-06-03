@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/market_service.dart';
 
@@ -12,27 +14,85 @@ class WhatIfScreen extends StatefulWidget {
 class _WhatIfScreenState extends State<WhatIfScreen> {
   String _symbol = 'RELIANCE';
   String _market = 'stock';
-  String _amount = '10000';
-  String _years = '3';
   bool _busy = false;
   Map<String, dynamic>? _result;
 
+  late final TextEditingController _amountController;
+  late final TextEditingController _yearsController;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(text: '10000');
+    _yearsController = TextEditingController(text: '3');
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _yearsController.dispose();
+    super.dispose();
+  }
+
   Future<void> _runSimulation() async {
-    setState(() => _busy = true);
-    final amount = double.tryParse(_amount.replaceAll(',', '')) ?? 0.0;
-    final years = int.tryParse(_years) ?? 1;
-    final result = await MarketService.simulateWhatIf(_symbol, _market, amount, years);
     setState(() {
-      _result = result;
-      _busy = false;
+      _busy = true;
+      _result = null;
     });
+    final amount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+    final years = int.tryParse(_yearsController.text) ?? 1;
+
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid investment amount')),
+      );
+      setState(() => _busy = false);
+      return;
+    }
+
+    if (years <= 0 || years > 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter years between 1 and 10')),
+      );
+      setState(() => _busy = false);
+      return;
+    }
+
+    final result = await MarketService.simulateWhatIf(_symbol, _market, amount, years);
+    if (mounted) {
+      setState(() {
+        _result = result;
+        _busy = false;
+      });
+      if (result == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load simulation. Please verify the symbol and try again.')),
+        );
+      }
+    }
+  }
+
+  void _showAssetSearchSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _AssetSearchBottomSheet(
+        market: _market,
+        onSelected: (symbol, name) {
+          setState(() {
+            _symbol = symbol;
+          });
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('What-If Simulator'),
+        title: Text('What-If Simulator', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
       ),
@@ -42,11 +102,18 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(color: AppColors.pureWhite, borderRadius: BorderRadius.circular(AppRadius.xl), border: Border.all(color: AppColors.birch)),
+              decoration: BoxDecoration(
+                color: AppColors.pureWhite,
+                borderRadius: BorderRadius.circular(AppRadius.xl),
+                border: Border.all(color: AppColors.birch),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('If I had invested in… how much would I have today?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                  Text(
+                    'If I had invested in… how much would I have today?',
+                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   Row(children: [
                     _segmentButton('stock'),
@@ -54,20 +121,55 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                     _segmentButton('crypto'),
                   ]),
                   const SizedBox(height: AppSpacing.lg),
-                  _inputField('Symbol', _symbol, (value) => _symbol = value.toUpperCase()),
-                  const SizedBox(height: AppSpacing.sm),
-                  _inputField('Amount (₹)', _amount, (value) => _amount = value),
-                  const SizedBox(height: AppSpacing.sm),
-                  _inputField('Years Ago', _years, (value) => _years = value),
+                  
+                  // Symbol Selector Field
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Symbol', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: AppSpacing.xs),
+                      InkWell(
+                        onTap: _showAssetSearchSheet,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.cream,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.birch),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _symbol,
+                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
+                              ),
+                              const Icon(Icons.arrow_drop_down, color: AppColors.ink3),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: AppSpacing.md),
+                  _inputField('Amount (₹)', _amountController, TextInputType.number),
+                  const SizedBox(height: AppSpacing.md),
+                  _inputField('Years Ago', _yearsController, TextInputType.number),
                   const SizedBox(height: AppSpacing.lg),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _busy ? null : _runSimulation,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold, padding: const EdgeInsets.symmetric(vertical: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.imperialGold,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
                       child: _busy
                           ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2))
-                          : const Text('Calculate', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                          : Text('Calculate', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                     ),
                   ),
                 ],
@@ -77,21 +179,47 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
             if (_result != null)
               Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(color: AppColors.warmWhite, borderRadius: BorderRadius.circular(AppRadius.xl), border: Border.all(color: AppColors.birch)),
+                decoration: BoxDecoration(
+                  color: AppColors.warmWhite,
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
+                  border: Border.all(color: AppColors.birch),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Result for ${_result!['symbol']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                    Text(
+                      'Result for ${_result!['symbol']}',
+                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Text('Invested ₹${(_result!['amount_invested'] as num).toStringAsFixed(0)}', style: const TextStyle(color: AppColors.ink4)),
+                    Text(
+                      'Invested ₹${(_result!['amount_invested'] as num).toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(color: AppColors.ink4),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Text('Current value ₹${(_result!['current_value'] as num).toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                    Text(
+                      'Current value ₹${(_result!['current_value'] as num).toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Text('P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}₹${(_result!['pnl'] as num).toStringAsFixed(0)}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: (_result!['pnl'] as num) >= 0 ? AppColors.bull : AppColors.bear)),
+                    Text(
+                      'P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}₹${(_result!['pnl'] as num).toStringAsFixed(0)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: (_result!['pnl'] as num) >= 0 ? AppColors.bull : AppColors.bear,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Text('Units held ${(_result!['units'] as num).toStringAsFixed(4)}', style: const TextStyle(color: AppColors.ink4)),
+                    Text(
+                      'Units held ${(_result!['units'] as num).toStringAsFixed(4)}',
+                      style: GoogleFonts.inter(color: AppColors.ink4),
+                    ),
                     const SizedBox(height: AppSpacing.sm),
-                    Text('Simulated purchase price ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}', style: const TextStyle(color: AppColors.ink4)),
+                    Text(
+                      'Simulated purchase price ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}',
+                      style: GoogleFonts.inter(color: AppColors.ink4),
+                    ),
                   ],
                 ),
               ),
@@ -105,7 +233,13 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
     final selected = _market == value;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _market = value),
+        onTap: () {
+          setState(() {
+            _market = value;
+            _symbol = value == 'stock' ? 'RELIANCE' : 'BTC';
+            _result = null;
+          });
+        },
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
@@ -113,30 +247,239 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.birch),
           ),
-          child: Text(value.toUpperCase(), textAlign: TextAlign.center, style: TextStyle(color: selected ? AppColors.ink : AppColors.ink4, fontWeight: FontWeight.w600)),
+          child: Text(
+            value.toUpperCase(),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: selected ? AppColors.ink : AppColors.ink4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _inputField(String label, String value, void Function(String) onChanged) {
+  Widget _inputField(String label, TextEditingController controller, TextInputType keyboardType) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.ink3)),
+        Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
         const SizedBox(height: AppSpacing.xs),
         TextField(
-          onChanged: onChanged,
-          controller: TextEditingController(text: value),
+          controller: controller,
+          keyboardType: keyboardType,
+          style: GoogleFonts.inter(fontSize: 16, color: AppColors.ink, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             hintText: label,
             filled: true,
             fillColor: AppColors.cream,
-            border: const OutlineInputBorder(borderRadius: BorderRadius.zero),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.birch),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.birch),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.imperialGold),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AssetSearchBottomSheet extends StatefulWidget {
+  final String market;
+  final void Function(String symbol, String name) onSelected;
+
+  const _AssetSearchBottomSheet({
+    required this.market,
+    required this.onSelected,
+  });
+
+  @override
+  State<_AssetSearchBottomSheet> createState() => _AssetSearchBottomSheetState();
+}
+
+class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _results = [];
+  bool _loading = false;
+  Timer? _debounce;
+
+  final List<Map<String, String>> _popularStocks = [
+    {'symbol': 'RELIANCE', 'name': 'Reliance Industries'},
+    {'symbol': 'TCS', 'name': 'Tata Consultancy Services'},
+    {'symbol': 'HDFCBANK', 'name': 'HDFC Bank'},
+    {'symbol': 'INFY', 'name': 'Infosys'},
+    {'symbol': 'ICICIBANK', 'name': 'ICICI Bank'},
+    {'symbol': 'TMCV', 'name': 'Tata Motors (Commercial)'},
+    {'symbol': 'TMPV', 'name': 'Tata Motors (Passenger)'},
+    {'symbol': 'ADANIENT', 'name': 'Adani Enterprises'},
+    {'symbol': 'ZOMATO', 'name': 'Zomato'},
+  ];
+
+  final List<Map<String, String>> _popularCrypto = [
+    {'symbol': 'BTC', 'name': 'Bitcoin'},
+    {'symbol': 'ETH', 'name': 'Ethereum'},
+    {'symbol': 'SOL', 'name': 'Solana'},
+    {'symbol': 'BNB', 'name': 'BNB'},
+    {'symbol': 'XRP', 'name': 'Ripple'},
+    {'symbol': 'ADA', 'name': 'Cardano'},
+    {'symbol': 'DOGE', 'name': 'Dogecoin'},
+    {'symbol': 'MATIC', 'name': 'Polygon'},
+  ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String val) {
+    _debounce?.cancel();
+    setState(() {
+      _loading = val.trim().isNotEmpty;
+    });
+    if (val.trim().isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 350), () => _search(val.trim()));
+  }
+
+  Future<void> _search(String query) async {
+    setState(() => _loading = true);
+    final results = await MarketService.search(query, widget.market);
+    if (!mounted) return;
+    setState(() {
+      _results = results;
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final popularList = widget.market == 'stock' ? _popularStocks : _popularCrypto;
+    final displayList = _searchController.text.trim().isEmpty ? popularList : _results;
+
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.75,
+      decoration: const BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.birch,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Select ${widget.market == 'stock' ? 'Stock' : 'Crypto'}',
+                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.ink3),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.birch),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.search, size: 18, color: AppColors.ink4),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: widget.market == 'stock' ? 'Search NSE stocks...' : 'Search crypto...',
+                      hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                      border: InputBorder.none,
+                    ),
+                    style: GoogleFonts.inter(fontSize: 15, color: AppColors.ink),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    itemCount: displayList.length,
+                    itemBuilder: (context, index) {
+                      final item = displayList[index];
+                      final symbol = item['symbol'] as String? ?? '';
+                      final name = item['name'] as String? ?? '';
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.goldPale,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.goldBorder),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            symbol.length >= 2 ? symbol.substring(0, 2) : symbol,
+                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
+                          ),
+                        ),
+                        title: Text(
+                          symbol,
+                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+                        ),
+                        subtitle: Text(
+                          name,
+                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () {
+                          widget.onSelected(symbol, name);
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

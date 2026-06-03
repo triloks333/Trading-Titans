@@ -120,8 +120,14 @@ class _CompeteScreenState extends State<CompeteScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Text(row['name'] ?? 'Titan',
-                                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.ink)),
+                                  Expanded(
+                                    child: Text(
+                                      row['name'] ?? 'Titan',
+                                      style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16, color: AppColors.ink),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
                                   if (isSelf) ...[
                                     const SizedBox(width: 6),
                                     Container(

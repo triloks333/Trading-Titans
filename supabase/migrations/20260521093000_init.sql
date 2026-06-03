@@ -5,7 +5,7 @@ CREATE TABLE public.profiles (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
-    wallet_balance NUMERIC NOT NULL DEFAULT 100000.0,
+    wallet_balance NUMERIC NOT NULL DEFAULT 11000.0,
     subscription_active BOOLEAN NOT NULL DEFAULT true,
     plan TEXT NOT NULL DEFAULT 'free_starter',
     total_realized_pnl NUMERIC NOT NULL DEFAULT 0.0,
@@ -24,6 +24,8 @@ CREATE TABLE public.orders (
     price NUMERIC NOT NULL,
     total NUMERIC NOT NULL,
     realized_pnl NUMERIC NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'executed' CHECK (status IN ('executed', 'pending', 'cancelled')),
+    order_type TEXT NOT NULL DEFAULT 'market' CHECK (order_type IN ('market', 'limit')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_orders_user_created ON public.orders(user_id, created_at DESC);

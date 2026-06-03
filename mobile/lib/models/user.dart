@@ -6,6 +6,9 @@ class User {
   final bool subscriptionActive;
   final DateTime createdAt;
   final double totalRealizedPnl;
+  final String referralCode;
+  final String? referredBy;
+  final bool isAdmin;
 
   User({
     required this.id,
@@ -15,6 +18,9 @@ class User {
     required this.subscriptionActive,
     required this.createdAt,
     required this.totalRealizedPnl,
+    required this.referralCode,
+    this.referredBy,
+    required this.isAdmin,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -26,6 +32,9 @@ class User {
       subscriptionActive: json['subscription_active'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
       totalRealizedPnl: (json['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,
+      referralCode: json['referral_code'] as String? ?? '',
+      referredBy: json['referred_by'] as String?,
+      isAdmin: json['is_admin'] as bool? ?? false,
     );
   }
 
@@ -38,6 +47,9 @@ class User {
       'subscription_active': subscriptionActive,
       'created_at': createdAt.toIso8601String(),
       'total_realized_pnl': totalRealizedPnl,
+      'referral_code': referralCode,
+      'referred_by': referredBy,
+      'is_admin': isAdmin,
     };
   }
 }

@@ -17,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _busy = false;
   String? _error;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -79,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: AppSpacing.md),
                       const Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
-                      _buildField(_passwordController, '••••••••', true),
+                      _buildField(_passwordController, '••••••••', true, isPassword: true),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.sm),
                         Text(_error!, style: const TextStyle(color: AppColors.bear, fontSize: 13)),
@@ -114,16 +115,30 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildField(TextEditingController controller, String placeholder, bool obscureText) {
+  Widget _buildField(TextEditingController controller, String placeholder, bool obscureText, {bool isPassword = false}) {
     return TextField(
       controller: controller,
-      obscureText: obscureText,
+      obscureText: isPassword ? _obscurePassword : obscureText,
       decoration: InputDecoration(
         hintText: placeholder,
+        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
         filled: true,
         fillColor: AppColors.cream,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide(color: AppColors.birch)),
         contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 16),
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.ink4,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              )
+            : null,
       ),
     );
   }

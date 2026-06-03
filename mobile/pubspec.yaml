@@ -40,6 +40,16 @@ dependencies:
   http: ^1.6.0
   supabase_flutter: ^2.12.4
   fl_chart: ^0.70.2
+  interactive_chart: ^0.3.6
+  flutter_local_notifications: ^21.0.0
+  shared_preferences: ^2.5.5
+  showcaseview: ^5.0.2
+  intl: ^0.19.0
+  url_launcher: ^6.3.2
+  webview_flutter: ^4.10.0
+  image_picker: ^1.2.2
+  flutter_svg: ^2.0.10
+
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +82,9 @@ flutter:
 
   assets:
     - assets/logo/
+    - assets/advanced_chart.html
+    - assets/surya_yantra_icon-1.svg
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

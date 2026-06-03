@@ -103,8 +103,9 @@ export async function fetchQuote(sym: string): Promise<CgQuote> {
 
 export async function fetchHistory(
   sym: string,
-  range: string
-): Promise<{ symbol: string; points: { t: number; v: number }[] }> {
+  range: string,
+  interval?: string
+): Promise<{ symbol: string; points: { t: number; v: number }[]; candles: CandleData[] }> {
   const cgId = resolveCgId(sym);
   if (!cgId) throw new Error(`Unknown crypto: ${sym}`);
 
@@ -113,20 +114,32 @@ export async function fetchHistory(
   };
   const days = daysMap[range] ?? 30;
 
-  const url = `${CG_BASE}/coins/${encodeURIComponent(cgId)}/market_chart?vs_currency=inr&days=${days}`;
+  const url = `${CG_BASE}/coins/${encodeURIComponent(cgId)}/ohlc?vs_currency=inr&days=${days}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (res.status === 429) throw new Error("CG history rate-limited");
   if (!res.ok) throw new Error(`CG history failed: ${res.status}`);
 
   const json = await res.json();
-  const prices: [number, number][] = json.prices ?? [];
+  const ohlc: [number, number, number, number, number][] = json ?? [];
 
-  const step = Math.max(1, Math.floor(prices.length / 60));
-  const points = [];
-  for (let i = 0; i < prices.length; i += step) {
-    points.push({ t: prices[i][0], v: round(prices[i][1], 2) });
+  const step = Math.max(1, Math.floor(ohlc.length / 100));
+  const candles: CandleData[] = [];
+  const points: { t: number; v: number }[] = [];
+
+  for (let i = 0; i < ohlc.length; i += step) {
+    const [ts, o, h, l, c] = ohlc[i];
+    candles.push({ t: ts, o: round(o, 2), h: round(h, 2), l: round(l, 2), c: round(c, 2) });
+    points.push({ t: ts, v: round(c, 2) });
   }
-  return { symbol: sym.toUpperCase(), points };
+  return { symbol: sym.toUpperCase(), points, candles };
+}
+
+export interface CandleData {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
 }
 
 export async function searchCrypto(

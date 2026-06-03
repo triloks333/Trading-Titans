@@ -4,8 +4,8 @@ import '../core/supabase_config.dart';
 import '../models/quote.dart';
 
 class ApiService {
-  static const String _functionsBase =
-      'https://zclkzgjmcisjinnuibrh.supabase.co/functions/v1';
+  static final String _functionsBase =
+      '${supabaseUrl.endsWith('/') ? supabaseUrl.substring(0, supabaseUrl.length - 1) : supabaseUrl}/functions/v1';
 
   String? _token;
 
@@ -16,7 +16,7 @@ class ApiService {
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $supabaseAnonKey',
-        if (_token != null) 'x-auth-token': _token!,
+        'x-auth-token': ?_token,
       };
 
   Future<Map<String, dynamic>> login(String email, String password) async {

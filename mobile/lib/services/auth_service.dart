@@ -25,9 +25,15 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> register(String email, String password, String name) async {
-    await _supabase.signUp(email: email, password: password, name: name);
-    _user = await _supabase.getUserProfile();
+  Future<void> register(String email, String password, String name, {String? referralCode}) async {
+    await _supabase.signUp(email: email, password: password, name: name, referralCode: referralCode);
+    // Profile may not exist immediately after signup (DB trigger race condition).
+    // Retry a few times with a short delay.
+    for (int i = 0; i < 5; i++) {
+      _user = await _supabase.getUserProfile();
+      if (_user != null) break;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
     notifyListeners();
   }
 

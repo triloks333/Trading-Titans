@@ -191,6 +191,15 @@ export async function fetchQuote(symbol: string): Promise<Record<string, unknown
     currency: "INR",
     market: "stock",
     source: "upstox",
+    day_low: first.ohlc?.low != null ? round(Number(first.ohlc.low), 2) : undefined,
+    day_high: first.ohlc?.high != null ? round(Number(first.ohlc.high), 2) : undefined,
+    open: first.ohlc?.open != null ? round(Number(first.ohlc.open), 2) : undefined,
+    volume: first.volume != null ? Number(first.volume) : undefined,
+    avg_trade_price: first.average_price != null ? round(Number(first.average_price), 2) : undefined,
+    last_traded_quantity: first.last_trade_quantity != null ? Number(first.last_trade_quantity) : undefined,
+    last_traded_time: first.last_trade_time ? new Date(Number(first.last_trade_time)).toLocaleString('en-IN') : undefined,
+    lower_circuit: first.lower_circuit_limit != null ? round(Number(first.lower_circuit_limit), 2) : undefined,
+    upper_circuit: first.upper_circuit_limit != null ? round(Number(first.upper_circuit_limit), 2) : undefined,
   };
 }
 

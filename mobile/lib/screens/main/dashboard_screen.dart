@@ -34,7 +34,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
-    _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) => _refreshPrices());
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshPrices());
   }
 
   @override

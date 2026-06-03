@@ -78,7 +78,10 @@ class _WalletScreenState extends State<WalletScreen> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     GestureDetector(
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen())),
+                      onTap: () async {
+                        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen()));
+                        _loadOrders();
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: AppCard.darkCta,

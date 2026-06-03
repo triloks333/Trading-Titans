@@ -6,6 +6,7 @@ import 'core/supabase_config.dart';
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_navigation.dart';
+import 'package:showcaseview/showcaseview.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,10 @@ class TradingTitansApp extends StatelessWidget {
           return MaterialApp(
             title: 'Trading Titans',
             theme: AppTheme.lightTheme,
-            home: auth.isAuthenticated ? const MainNavigation() : const LoginScreen(),
+            home: auth.isAuthenticated
+                // ignore: deprecated_member_use
+                ? ShowCaseWidget(builder: (context) => const MainNavigation())
+                : const LoginScreen(),
             debugShowCheckedModeBanner: false,
           );
         },

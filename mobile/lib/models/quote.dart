@@ -11,6 +11,16 @@ class Quote {
   final String? source;
   final String? displayName;
   final String? category;
+  
+  final double? dayLow;
+  final double? dayHigh;
+  final double? open;
+  final int? volume;
+  final double? avgTradePrice;
+  final int? lastTradedQuantity;
+  final String? lastTradedTime;
+  final double? lowerCircuit;
+  final double? upperCircuit;
 
   Quote({
     required this.symbol,
@@ -25,6 +35,15 @@ class Quote {
     this.source,
     this.displayName,
     this.category,
+    this.dayLow,
+    this.dayHigh,
+    this.open,
+    this.volume,
+    this.avgTradePrice,
+    this.lastTradedQuantity,
+    this.lastTradedTime,
+    this.lowerCircuit,
+    this.upperCircuit,
   });
 
   factory Quote.fromJson(Map<String, dynamic> json) {
@@ -41,6 +60,15 @@ class Quote {
       source: json['source'] as String?,
       displayName: json['display_name'] as String?,
       category: json['category'] as String?,
+      dayLow: (json['day_low'] as num?)?.toDouble(),
+      dayHigh: (json['day_high'] as num?)?.toDouble(),
+      open: (json['open'] as num?)?.toDouble(),
+      volume: (json['volume'] as num?)?.toInt(),
+      avgTradePrice: (json['avg_trade_price'] as num?)?.toDouble(),
+      lastTradedQuantity: (json['last_traded_quantity'] as num?)?.toInt(),
+      lastTradedTime: json['last_traded_time'] as String?,
+      lowerCircuit: (json['lower_circuit'] as num?)?.toDouble(),
+      upperCircuit: (json['upper_circuit'] as num?)?.toDouble(),
     );
   }
 
@@ -58,6 +86,15 @@ class Quote {
       'source': source,
       'display_name': displayName,
       'category': category,
+      'day_low': dayLow,
+      'day_high': dayHigh,
+      'open': open,
+      'volume': volume,
+      'avg_trade_price': avgTradePrice,
+      'last_traded_quantity': lastTradedQuantity,
+      'last_traded_time': lastTradedTime,
+      'lower_circuit': lowerCircuit,
+      'upper_circuit': upperCircuit,
     };
   }
 }

@@ -3,6 +3,9 @@ import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchQuote as yfQuote } from "../_shared/yahoo.ts";
 import { fetchQuote as cgQuote } from "../_shared/coingecko.ts";
 import { fetchQuote as uxQuote } from "../_shared/upstox.ts";
+import { fetchQuote as fyQuote } from "../_shared/fyers.ts";
+import { fetchQuote as biQuote } from "../_shared/binance.ts";
+import { fetchQuote as cxQuote } from "../_shared/coindcx.ts";
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -23,12 +26,32 @@ serve(async (req) => {
     let quote: Record<string, unknown> | null = null;
 
     if (market === "crypto") {
-      quote = await cgQuote(symbol);
-    } else {
-      // Try Upstox first, fall back to Yahoo Finance
-      quote = await uxQuote(symbol);
+      try {
+        quote = await cxQuote(symbol);
+      } catch (_) {}
       if (!quote) {
-        quote = await yfQuote(symbol);
+        try {
+          quote = await biQuote(symbol);
+        } catch (_) {}
+      }
+      if (!quote) {
+        try {
+          quote = await cgQuote(symbol);
+        } catch (_) {}
+      }
+    } else {
+      try {
+        quote = await fyQuote(symbol);
+      } catch (_) {}
+      if (!quote) {
+        try {
+          quote = await uxQuote(symbol);
+        } catch (_) {}
+      }
+      if (!quote) {
+        try {
+          quote = await yfQuote(symbol);
+        } catch (_) {}
       }
     }
 
@@ -49,3 +72,4 @@ serve(async (req) => {
     });
   }
 });
+

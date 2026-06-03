@@ -27,6 +27,8 @@ const CURATED_NAMES: Record<string, string> = {
   "SUNPHARMA": "Sun Pharmaceutical",
   "NESTLEIND": "Nestle India",
   "TATAMOTORS": "Tata Motors",
+  "TMCV": "Tata Motors - Commercial",
+  "TMPV": "Tata Motors - Passenger",
   "ADANIENT": "Adani Enterprises",
   "ADANIPORTS": "Adani Ports",
   "POWERGRID": "Power Grid Corporation",
@@ -84,6 +86,15 @@ export interface YfQuote {
   market: string;
   display_name?: string;
   category?: string;
+  day_low?: number;
+  day_high?: number;
+  open?: number;
+  volume?: number;
+  avg_trade_price?: number;
+  last_traded_quantity?: number;
+  last_traded_time?: string;
+  lower_circuit?: number;
+  upper_circuit?: number;
 }
 
 export async function fetchQuote(symbol: string): Promise<YfQuote> {
@@ -119,21 +130,27 @@ export async function fetchQuote(symbol: string): Promise<YfQuote> {
 
   // Get display name from curated list or quote summary
   let name = CURATED_NAMES[rawSym] ?? rawSym;
-  if (name === rawSym) {
-    try {
-      const qUrl = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(yfSym)}`;
-      const qRes = await fetch(qUrl, { headers: { "User-Agent": UA } });
-      if (qRes.ok) {
-        const qJson = await qRes.json();
-        const qResult = qJson?.quoteResponse?.result?.[0];
-        if (qResult) {
+  let qResult: any = null;
+  try {
+    const qUrl = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(yfSym)}`;
+    const qRes = await fetch(qUrl, { headers: { "User-Agent": UA } });
+    if (qRes.ok) {
+      const qJson = await qRes.json();
+      qResult = qJson?.quoteResponse?.result?.[0];
+      if (qResult) {
+        if (name === rawSym) {
           name = qResult.longName ?? qResult.shortName ?? rawSym;
         }
       }
-    } catch {
-      // fallback to curated name or raw symbol
     }
+  } catch {
+    // fallback to curated name or raw symbol
   }
+
+  const dayLow = qResult?.regularMarketDayLow ?? meta.regularMarketDayLow;
+  const dayHigh = qResult?.regularMarketDayHigh ?? meta.regularMarketDayHigh;
+  const open = qResult?.regularMarketOpen ?? meta.regularMarketOpen;
+  const volume = qResult?.regularMarketVolume ?? meta.regularMarketVolume;
 
   return {
     symbol: rawSym,
@@ -147,45 +164,94 @@ export async function fetchQuote(symbol: string): Promise<YfQuote> {
     market: "stock",
     display_name: displayName(yfSym),
     category: yfSym.startsWith("^") ? "index" : "stock",
+    day_low: dayLow != null ? round(Number(dayLow), 2) : undefined,
+    day_high: dayHigh != null ? round(Number(dayHigh), 2) : undefined,
+    open: open != null ? round(Number(open), 2) : undefined,
+    volume: volume != null ? Number(volume) : undefined,
   };
+}
+
+export interface CandleData {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
+interface HistoryResult {
+  symbol: string;
+  points: { t: number; v: number }[];
+  candles: CandleData[];
 }
 
 export async function fetchHistory(
   symbol: string,
-  range: string
-): Promise<{ symbol: string; points: { t: number; v: number }[] }> {
+  range: string,
+  interval?: string
+): Promise<HistoryResult> {
   const yfSym = toYfSymbol(symbol);
 
   const periodMap: Record<string, string> = {
     "1d": "1d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
     "6mo": "6mo", "1y": "1y", "5y": "5y",
   };
-  const intervalMap: Record<string, string> = {
+  const defaultInterval: Record<string, string> = {
     "1d": "5m", "5d": "30m", "1mo": "1d", "3mo": "1d",
     "6mo": "1d", "1y": "1d", "5y": "1wk",
   };
+  const intervalMap: Record<string, { range: string; interval: string }> = {
+    "1m":  { range: "1d", interval: "1m" },
+    "5m":  { range: "5d", interval: "5m" },
+    "15m": { range: "1mo", interval: "15m" },
+    "30m": { range: "1mo", interval: "30m" },
+    "1h":  { range: "3mo", interval: "1h" },
+    "1d":  { range: "1y", interval: "1d" },
+    "1w":  { range: "5y", interval: "1wk" },
+  };
 
-  const period = periodMap[range] ?? "1mo";
-  const interval = intervalMap[range] ?? "1d";
+  let period: string;
+  let yfInterval: string;
 
-  const url = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?range=${period}&interval=${interval}`;
+  if (interval && intervalMap[interval]) {
+    period = intervalMap[interval].range;
+    yfInterval = intervalMap[interval].interval;
+  } else {
+    period = periodMap[range] ?? "1mo";
+    yfInterval = defaultInterval[range] ?? "1d";
+  }
+
+  const url = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?range=${period}&interval=${yfInterval}`;
   const res = await fetch(url, { headers: { "User-Agent": UA } });
   if (!res.ok) throw new Error(`YF history failed: ${res.status}`);
 
   const json = await res.json();
   const result = json?.chart?.result?.[0];
-  if (!result) return { symbol: symbol.toUpperCase(), points: [] };
+  if (!result) return { symbol: symbol.toUpperCase(), points: [], candles: [] };
 
   const timestamps: number[] = result.timestamp ?? [];
-  const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+  const quote = result.indicators?.quote?.[0] ?? {};
+  const opens: number[] = quote.open ?? [];
+  const highs: number[] = quote.high ?? [];
+  const lows: number[] = quote.low ?? [];
+  const closes: number[] = quote.close ?? [];
 
-  const points = [];
-  for (let i = 0; i < timestamps.length && i < closes.length; i++) {
-    if (closes[i] != null) {
+  const candles: CandleData[] = [];
+  const points: { t: number; v: number }[] = [];
+
+  for (let i = 0; i < timestamps.length; i++) {
+    if (opens[i] != null && highs[i] != null && lows[i] != null && closes[i] != null) {
+      candles.push({
+        t: timestamps[i] * 1000,
+        o: round(opens[i], 2),
+        h: round(highs[i], 2),
+        l: round(lows[i], 2),
+        c: round(closes[i], 2),
+      });
       points.push({ t: timestamps[i] * 1000, v: round(closes[i], 2) });
     }
   }
-  return { symbol: symbol.toUpperCase(), points };
+  return { symbol: symbol.toUpperCase(), points, candles };
 }
 
 export async function searchStocks(query: string): Promise<{ symbol: string; name: string; market: string }[]> {

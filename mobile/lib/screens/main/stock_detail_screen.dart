@@ -6,8 +6,11 @@ import '../../models/portfolio.dart';
 import '../../services/market_service.dart';
 import '../../services/supabase_service.dart';
 import '../../core/market_hours.dart';
-import '../../widgets/price_chart.dart';
+import 'fullscreen_chart_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'order_entry_screen.dart';
+import 'option_chain_screen.dart';
+import '../../widgets/tradingview_chart.dart';
 
 class StockDetailScreen extends StatefulWidget {
   final String symbol;
@@ -23,20 +26,14 @@ class StockDetailScreen extends StatefulWidget {
 class _StockDetailScreenState extends State<StockDetailScreen> {
   Quote? _quote;
   bool _isWatched = false;
-  bool _busy = false;
-  String _qty = '';
   Holding? _holding;
-  List<Map<String, dynamic>> _history = [];
-  String _selectedRange = '1mo';
   Timer? _pollTimer;
-
-  final List<String> _ranges = ['1d', '5d', '1mo', '3mo', '1y', '5y'];
 
   @override
   void initState() {
     super.initState();
     _loadData();
-    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) => _refreshQuote());
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshQuote());
   }
 
   @override
@@ -46,7 +43,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Future<void> _loadData() async {
-    await Future.wait([_refreshQuote(), _loadHistory(), _loadUserData()]);
+    await Future.wait([_refreshQuote(), _loadUserData()]);
   }
 
   Future<void> _refreshQuote() async {
@@ -54,52 +51,32 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     if (mounted) setState(() => _quote = quote);
   }
 
-  Future<void> _loadHistory() async {
-    final history = await MarketService.getHistory(widget.symbol, widget.market, _selectedRange);
-    if (mounted) setState(() => _history = history);
-  }
 
   Future<void> _loadUserData() async {
-    final watchlist = await SupabaseService().getWatchlist();
     final holdings = await SupabaseService().getHoldings();
+    final watchCheck = await SupabaseService().isWatched(widget.symbol, widget.market);
     final holding = holdings.where((h) => h.symbol == widget.symbol && h.market == widget.market).firstOrNull;
     if (mounted) {
       setState(() {
-        _isWatched = watchlist.any((item) => item.symbol == widget.symbol && item.market == widget.market);
+        _isWatched = watchCheck;
         _holding = holding;
       });
     }
   }
 
   Future<void> _toggleWatch() async {
-    if (_isWatched) {
-      await SupabaseService().removeFromWatchlist(widget.symbol, widget.market);
-    } else {
-      await SupabaseService().addToWatchlist(widget.symbol, widget.market);
+    setState(() => _isWatched = !_isWatched);
+    try {
+      if (_isWatched) {
+        await SupabaseService().addToWatchlist(widget.symbol, widget.market, widget.name);
+      } else {
+        await SupabaseService().removeFromWatchlist(widget.symbol, widget.market);
+      }
+    } catch (_) {
+      setState(() => _isWatched = !_isWatched);
     }
-    await _loadUserData();
   }
 
-  Future<void> _placeOrder(String side) async {
-    final quantity = double.tryParse(_qty.replaceAll(',', '')) ?? 0.0;
-    if (quantity <= 0) return;
-    setState(() => _busy = true);
-    try {
-      await SupabaseService().placeOrder(symbol: widget.symbol, market: widget.market, side: side, quantity: quantity);
-      await _loadData();
-      if (!mounted) return;
-      final isPending = !MarketHours.isOpen(widget.market);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(isPending ? 'Order queued! Will execute at market prices when markets open.' : 'Order placed: $side ${widget.symbol}'),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order failed: $e')));
-    } finally {
-      setState(() => _busy = false);
-    }
-  }
 
   bool get _isUp => (_quote?.change ?? 0) >= 0;
   Color get _changeColor => _isUp ? AppColors.bull : AppColors.bear;
@@ -133,6 +110,20 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                           _buildPriceCard(q),
                           const SizedBox(height: AppSpacing.lg),
                           _buildChartCard(q),
+                          const SizedBox(height: AppSpacing.lg),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildViewChartButton(),
+                              ),
+                              if (widget.market == 'stock') ...[
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: _buildOptionChainButton(),
+                                ),
+                              ],
+                            ],
+                          ),
                           const SizedBox(height: AppSpacing.lg),
                           _buildMarketStatus(),
                           const SizedBox(height: AppSpacing.lg),
@@ -191,44 +182,47 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   Widget _buildChartCard(Quote q) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      height: 350,
       decoration: BoxDecoration(
-        color: AppColors.pureWhite,
+        color: const Color(0xFF131722),
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
-      child: Column(
-        children: [
-          PriceChart(points: _history, isPositive: _isUp),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: _ranges.map((range) {
-              final selected = range == _selectedRange;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedRange = range);
-                  _loadHistory();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: selected ? AppColors.ink : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppRadius.tag),
-                  ),
-                  child: Text(
-                    range.toUpperCase(),
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? AppColors.pureWhite : AppColors.ink4,
-                    ),
-                  ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.xl - 1),
+        child: Stack(
+          children: [
+            TradingViewChart(
+              symbol: widget.symbol,
+              market: widget.market,
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.6),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FullscreenChartScreen(
+                          symbol: widget.symbol,
+                          market: widget.market,
+                          name: widget.name,
+                          quote: _quote,
+                        ),
+                      ),
+                    );
+                    _loadData();
+                  },
                 ),
-              );
-            }).toList(),
-          ),
-        ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -309,6 +303,65 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   bool get _marketOpen => MarketHours.isOpen(widget.market);
 
+  Widget _buildOptionChainButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.layers_outlined, color: AppColors.pureWhite),
+        label: Text('VIEW OPTION CHAIN', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OptionChainScreen(
+                underlyingSymbol: widget.symbol,
+                spotPrice: _quote?.price ?? 0.0,
+                market: widget.market,
+              ),
+            ),
+          );
+          _loadData();
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.imperialGold,
+          foregroundColor: AppColors.pureWhite,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildViewChartButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
+        label: Text('VIEW CHART', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => FullscreenChartScreen(
+                symbol: widget.symbol,
+                market: widget.market,
+                name: widget.name,
+                quote: _quote,
+              ),
+            ),
+          );
+          _loadData();
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.ink2,
+          foregroundColor: AppColors.pureWhite,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMarketStatus() {
     final open = _marketOpen;
     return Container(
@@ -341,83 +394,79 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(0, -2), blurRadius: 8),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            decoration: InputDecoration(
-              hintText: 'Enter quantity...',
-              hintStyle: const TextStyle(color: AppColors.ink5),
-              filled: true,
-              fillColor: AppColors.pureWhite,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: const BorderSide(color: AppColors.birch),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _quote == null ? null : () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OrderEntryScreen(
+                          quote: _quote!,
+                          isBuy: true,
+                        ),
+                      ),
+                    );
+                    _loadData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.bull,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                  ),
+                  child: Text(
+                    'BUY',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.pureWhite,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: const BorderSide(color: AppColors.birch),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
-              suffixText: _quote != null ? '≈ ₹${(double.tryParse(_qty.replaceAll(',', '')) ?? 0) * _quote!.price}' : null,
-              suffixStyle: const TextStyle(color: AppColors.ink4, fontSize: 12),
             ),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (value) => setState(() => _qty = value),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                  child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _busy ? null : () => _placeOrder('buy'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.bull,
-                      disabledBackgroundColor: AppColors.bull.withValues(alpha: 0.5),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                    ),
-                    child: Text(
-                      'Buy',
-                      style: GoogleFonts.inter(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.pureWhite,
-                        letterSpacing: 0.5,
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _quote == null || _holding == null ? null : () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OrderEntryScreen(
+                          quote: _quote!,
+                          isBuy: false,
+                        ),
                       ),
+                    );
+                    _loadData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.bear,
+                    disabledBackgroundColor: AppColors.bear.withValues(alpha: 0.3),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                  ),
+                  child: Text(
+                    'SELL',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.pureWhite,
+                      letterSpacing: 1.0,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: _busy || _holding == null ? null : () => _placeOrder('sell'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.bear,
-                      disabledBackgroundColor: AppColors.bear.withValues(alpha: 0.5),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                    ),
-                    child: Text(
-                      'Sell',
-                      style: GoogleFonts.inter(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.pureWhite,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

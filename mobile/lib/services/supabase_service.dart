@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
 import '../models/portfolio.dart';
@@ -13,6 +16,79 @@ class SupabaseService {
 
   final SupabaseClient client = Supabase.instance.client;
 
+  Future<void> _saveCache(String key, String jsonStr) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonStr);
+    } catch (_) {}
+  }
+
+  Future<String?> _readCache(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Holding>> getCachedHoldings() async {
+    final user = currentUser;
+    if (user == null) return [];
+    final jsonStr = await _readCache('holdings_${user.id}');
+    if (jsonStr == null) return [];
+    try {
+      final decoded = jsonDecode(jsonStr) as List;
+      return decoded
+          .map((e) => Holding.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Quote>> getCachedWatchlist() async {
+    final user = currentUser;
+    if (user == null) return [];
+    final jsonStr = await _readCache('watchlist_${user.id}');
+    if (jsonStr == null) return [];
+    try {
+      final decoded = jsonDecode(jsonStr) as List;
+      return decoded
+          .map((e) => Quote.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Quote>> getCachedMarketOverview() async {
+    final jsonStr = await _readCache('market_overview');
+    if (jsonStr == null) return [];
+    try {
+      final decoded = jsonDecode(jsonStr) as List;
+      return decoded
+          .map((e) => Quote.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<app_models.User?> getCachedUserProfile() async {
+    final user = currentUser;
+    if (user == null) return null;
+    final jsonStr = await _readCache('user_profile_${user.id}');
+    if (jsonStr == null) return null;
+    try {
+      return app_models.User.fromJson(
+        jsonDecode(jsonStr) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> initialize() async {
     if (client.auth.currentSession == null) {
       return;
@@ -20,30 +96,46 @@ class SupabaseService {
     await getUserProfile();
   }
 
-  Future<AuthResponse> signUp({required String email, required String password, required String name}) async {
+  Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+    required String name,
+    String? referralCode,
+  }) async {
+    String? referredById;
+    if (referralCode != null && referralCode.trim().isNotEmpty) {
+      final codeUpper = referralCode.trim().toUpperCase();
+      final referrerProfile = await client
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', codeUpper)
+          .maybeSingle();
+      if (referrerProfile == null) {
+        throw Exception(
+          'Invalid referral code. Please check the code and try again.',
+        );
+      }
+      referredById = referrerProfile['id'] as String;
+    }
+
+    final Map<String, dynamic> userData = {'name': name};
+    if (referredById != null) {
+      userData['referred_by'] = referredById;
+    }
+
     final response = await client.auth.signUp(
       email: email,
       password: password,
-      data: {'name': name},
+      data: userData,
     );
-
-    final user = response.user;
-    if (user != null) {
-      await client.from('profiles').insert({
-        'id': user.id,
-        'email': email,
-        'name': name,
-        'wallet_balance': 100000.0,
-        'subscription_active': true,
-        'plan': 'free_starter',
-        'total_realized_pnl': 0.0,
-      });
-    }
 
     return response;
   }
 
-  Future<AuthResponse> signIn({required String email, required String password}) async {
+  Future<AuthResponse> signIn({
+    required String email,
+    required String password,
+  }) async {
     return await client.auth.signInWithPassword(
       email: email,
       password: password,
@@ -60,26 +152,18 @@ class SupabaseService {
     final user = currentUser;
     if (user == null) return null;
 
-    final profile = await client.from('profiles').select().eq('id', user.id).maybeSingle();
-    if (profile == null) {
-      final email = user.email ?? '';
-      final name = (user.userMetadata?['name'] as String?) ?? email.split('@').first;
-      final created = DateTime.now().toUtc().toIso8601String();
-      final inserted = await client.from('profiles').insert({
-        'id': user.id,
-        'email': email,
-        'name': name,
-        'wallet_balance': 100000.0,
-        'subscription_active': true,
-        'plan': 'free_starter',
-        'total_realized_pnl': 0.0,
-        'created_at': created,
-      }).select().maybeSingle();
-      if (inserted == null) return null;
-      return app_models.User.fromJson(Map<String, dynamic>.from(inserted as Map));
-    }
+    final profile = await client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
+    if (profile == null) return null;
 
-    return app_models.User.fromJson(Map<String, dynamic>.from(profile as Map));
+    final parsed = app_models.User.fromJson(
+      Map<String, dynamic>.from(profile as Map),
+    );
+    await _saveCache('user_profile_${user.id}', jsonEncode(parsed.toJson()));
+    return parsed;
   }
 
   Future<List<Order>> getOrders({int limit = 50}) async {
@@ -94,48 +178,421 @@ class SupabaseService {
         .order('created_at', ascending: false)
         .limit(limit);
 
-    return (data as List<dynamic>).map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+    return (data as List<dynamic>)
+        .map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Settles expired option positions automatically.
+  /// - ITM options: auto-exercised, intrinsic value credited/debited to wallet
+  /// - OTM options: expire worthless, position removed
+  Future<void> settleExpiredOptions() async {
+    final user = currentUser;
+    if (user == null) return;
+
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    // Find all option holdings with expiry_date <= today
+    final expiredRows = await client
+        .from('holdings')
+        .select()
+        .eq('user_id', user.id)
+        .eq('instrument_type', 'OPTION')
+        .lte('expiry_date', todayStr);
+
+    if ((expiredRows as List<dynamic>).isEmpty) return;
+
+    final profile = await getUserProfile();
+    if (profile == null) return;
+    double walletBalance = profile.walletBalance;
+
+    for (final raw in expiredRows) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final holdingId = row['id'] as String;
+      final symbol = row['symbol'] as String;
+      final market = row['market'] as String? ?? 'stock';
+      final quantity = (row['quantity'] as num).toDouble();
+      final avgPrice = (row['avg_price'] as num).toDouble();
+      final optionType = row['option_type'] as String? ?? 'CE';
+      final strikePrice = (row['strike_price'] as num?)?.toDouble() ?? 0.0;
+      final expiryDate = row['expiry_date'] as String? ?? todayStr;
+
+      // Get the underlying spot price for settlement
+      // Extract underlying symbol (e.g., "RELIANCE-2026-06-05-2500-CE" → "RELIANCE")
+      String underlyingSymbol = symbol;
+      if (symbol.contains('-')) {
+        underlyingSymbol = symbol.split('-')[0];
+      }
+
+      double spotPrice = strikePrice; // fallback
+      try {
+        final quote = await MarketService.quote(underlyingSymbol, market);
+        if (quote != null) spotPrice = quote.price;
+      } catch (_) {}
+
+      // Calculate intrinsic value
+      double intrinsicValue = 0.0;
+      if (optionType == 'CE') {
+        intrinsicValue = (spotPrice - strikePrice).clamp(0.0, double.infinity);
+      } else {
+        intrinsicValue = (strikePrice - spotPrice).clamp(0.0, double.infinity);
+      }
+
+      final bool isITM = intrinsicValue > 0;
+      double settlementPnl = 0.0;
+
+      if (quantity > 0) {
+        // Long position: bought option
+        // P&L = (intrinsic value - avg price paid) × quantity
+        settlementPnl = (intrinsicValue - avgPrice) * quantity;
+      } else {
+        // Short position: wrote/sold option
+        // P&L = (avg price received - intrinsic value) × |quantity|
+        settlementPnl = (avgPrice - intrinsicValue) * quantity.abs();
+      }
+
+      // Credit/debit settlement P&L to wallet
+      walletBalance += settlementPnl;
+
+      // Record the settlement as a closed order
+      try {
+        await client.from('orders').insert({
+          'user_id': user.id,
+          'symbol': symbol,
+          'name': '${isITM ? "ITM" : "OTM"} Expiry Settlement',
+          'market': market,
+          'side': quantity > 0 ? 'sell' : 'buy',
+          'quantity': quantity.abs(),
+          'price': isITM ? intrinsicValue : 0.0,
+          'total': intrinsicValue * quantity.abs(),
+          'realized_pnl': settlementPnl,
+          'status': 'executed',
+          'order_type': 'expiry_settlement',
+          'instrument_type': 'OPTION',
+          'strike_price': strikePrice,
+          'option_type': optionType,
+          'expiry_date': expiryDate,
+          'executed_at': DateTime.now().toUtc().toIso8601String(),
+        });
+
+        // Create notification
+        await client.from('notifications').insert({
+          'user_id': user.id,
+          'title': isITM ? 'Option Exercised (ITM)' : 'Option Expired (OTM)',
+          'body': isITM
+              ? '$symbol expired ITM. Settlement P&L: ₹${settlementPnl.toStringAsFixed(2)}'
+              : '$symbol expired OTM. Premium lost: ₹${(avgPrice * quantity.abs()).toStringAsFixed(2)}',
+          'is_read': false,
+          'action_type': 'expiry',
+          'action_data': {'symbol': symbol, 'market': market},
+        });
+      } catch (_) {}
+
+      // Delete the expired holding
+      await client.from('holdings').delete().eq('id', holdingId);
+    }
+
+    // Update wallet balance
+    await client
+        .from('profiles')
+        .update({'wallet_balance': walletBalance})
+        .eq('id', user.id);
   }
 
   Future<List<Holding>> getHoldings() async {
-    await executePendingOrders();
+    await Future.wait([
+      settleExpiredOptions(),
+      executePendingOrders(),
+    ]);
     final user = currentUser;
     if (user == null) return [];
 
+    final now = DateTime.now();
+    final localTodayStart = DateTime(now.year, now.month, now.day);
+    final todayStartStr = localTodayStart.toUtc().toIso8601String();
+
+    String holdingKey(String symbol, String market) => '$symbol\x1F$market';
+
+    final recentOrdersRaw = await client
+        .from('orders')
+        .select('symbol, market, quantity, price, side, name, realized_pnl')
+        .eq('user_id', user.id)
+        .eq('status', 'executed')
+        .gte('executed_at', todayStartStr);
+
+    final todayBuys = <String, double>{};
+    final todayBuyCost = <String, double>{};
+    final todaySells = <String, double>{};
+    final todaySellCost = <String, double>{};
+    final todayRealizedPnl = <String, double>{};
+    final symbolNames = <String, String>{};
+
+    for (final raw in (recentOrdersRaw as List<dynamic>)) {
+      final r = Map<String, dynamic>.from(raw as Map);
+      final symbol = r['symbol'] as String? ?? '';
+      final market = r['market'] as String? ?? 'stock';
+      final key = holdingKey(symbol, market);
+      final q = (r['quantity'] as num).toDouble();
+      final p = (r['price'] as num).toDouble();
+      final side = r['side'] as String? ?? 'buy';
+      final name = r['name'] as String? ?? symbol;
+      final relPnl = (r['realized_pnl'] as num?)?.toDouble() ?? 0.0;
+
+      symbolNames[key] = name;
+
+      if (side == 'buy') {
+        todayBuys[key] = (todayBuys[key] ?? 0.0) + q;
+        todayBuyCost[key] = (todayBuyCost[key] ?? 0.0) + (q * p);
+      } else if (side == 'sell') {
+        todaySells[key] = (todaySells[key] ?? 0.0) + q;
+        todaySellCost[key] = (todaySellCost[key] ?? 0.0) + (q * p);
+        todayRealizedPnl[key] = (todayRealizedPnl[key] ?? 0.0) + relPnl;
+      }
+    }
+
     final rows = await client.from('holdings').select().eq('user_id', user.id);
     final results = <Holding>[];
+    final activeKeys = <String>{};
+    final activeHoldingsMap = <String, Map<String, dynamic>>{};
+
     for (final raw in (rows as List<dynamic>)) {
       final row = Map<String, dynamic>.from(raw as Map);
       final symbol = row['symbol'] as String? ?? '';
       final market = row['market'] as String? ?? 'stock';
-      final quantity = (row['quantity'] as num?)?.toDouble() ?? 0.0;
-      final avgPrice = (row['avg_price'] as num?)?.toDouble() ?? 0.0;
-      final currentQuote = await MarketService.quote(symbol, market);
-      final currentPrice = currentQuote?.price ?? avgPrice;
-      final previousClose = currentQuote?.previousClose ?? currentPrice;
-      final invested = avgPrice * quantity;
-      final currentValue = currentPrice * quantity;
-      final pnl = currentValue - invested;
-      final pnlPct = invested != 0 ? (pnl / invested) * 100 : 0.0;
-      final dayPnl = (currentPrice - previousClose) * quantity;
-      final dayPnlPct = previousClose != 0 ? ((currentPrice - previousClose) / previousClose) * 100 : 0.0;
-
-      results.add(Holding(
-        symbol: symbol,
-        name: row['name'] as String? ?? symbol,
-        market: market,
-        quantity: quantity,
-        avgPrice: avgPrice,
-        currentPrice: currentPrice,
-        previousClose: previousClose,
-        invested: invested,
-        current: currentValue,
-        pnl: pnl,
-        pnlPct: pnlPct,
-        dayPnl: dayPnl,
-        dayPnlPct: dayPnlPct,
-      ));
+      final key = holdingKey(symbol, market);
+      activeKeys.add(key);
+      activeHoldingsMap[key] = row;
     }
+
+    final allKeys = {...activeKeys, ...todayBuys.keys, ...todaySells.keys};
+
+    final allKeysList = allKeys.toList();
+
+    // Build a map of underlying symbols for option contracts
+    // Option symbols look like "RELIANCE-2026-06-05-2500-CE"
+    final underlyingKeyMap = <String, String>{}; // key -> underlying key
+    final underlyingKeys = <String>{}; // unique underlying keys to fetch
+    for (final key in allKeysList) {
+      final parts = key.split('\x1F');
+      final symbol = parts[0];
+      final market = parts[1];
+      final activeRow = activeHoldingsMap[key];
+      final instType = activeRow?['instrument_type'] as String? ?? 'EQUITY';
+
+      if (instType == 'OPTION' && symbol.contains('-')) {
+        final underlying = symbol.split('-')[0]; // e.g. RELIANCE
+        final underlyingKey = '$underlying\x1F$market';
+        underlyingKeyMap[key] = underlyingKey;
+        underlyingKeys.add(underlyingKey);
+      }
+    }
+
+    // Fetch quotes for all keys: equity/crypto symbols + underlying symbols for options
+    final keysToFetch = <String>{...allKeysList, ...underlyingKeys}
+        .where((k) {
+          // Skip fetching option symbols directly — they won't resolve
+          final sym = k.split('\x1F')[0];
+          final row = activeHoldingsMap[k];
+          final instType = row?['instrument_type'] as String? ?? 'EQUITY';
+          return !(instType == 'OPTION' && sym.contains('-'));
+        })
+        .toList();
+
+    final quoteFutures = keysToFetch.map((key) {
+      final parts = key.split('\x1F');
+      return MarketService.quote(parts[0], parts[1]);
+    }).toList();
+
+    final fetchedQuotes = await Future.wait(quoteFutures);
+    final quotesMap = <String, Quote?>{};
+    for (int i = 0; i < keysToFetch.length; i++) {
+      quotesMap[keysToFetch[i]] = fetchedQuotes[i];
+    }
+
+    for (final key in allKeysList) {
+      final parts = key.split('\x1F');
+      final symbol = parts[0];
+      final market = parts[1];
+
+      final activeRow = activeHoldingsMap[key];
+      final quantity = (activeRow?['quantity'] as num?)?.toDouble() ?? 0.0;
+      final avgPrice = (activeRow?['avg_price'] as num?)?.toDouble() ?? 0.0;
+      final name = activeRow?['name'] as String? ?? symbolNames[key] ?? symbol;
+      final instType = activeRow?['instrument_type'] as String? ?? 'EQUITY';
+
+      double currentPrice;
+      double previousClose;
+
+      if (instType == 'OPTION' && underlyingKeyMap.containsKey(key)) {
+        // For options: estimate current price from underlying spot price
+        final underlyingQuote = quotesMap[underlyingKeyMap[key]];
+        final spotPrice = underlyingQuote?.price ?? 0.0;
+        final spotPrevClose = underlyingQuote?.previousClose ?? spotPrice;
+        final strikePrice = (activeRow?['strike_price'] as num?)?.toDouble() ?? 0.0;
+        final optType = activeRow?['option_type'] as String? ?? 'CE';
+        final expiryStr = activeRow?['expiry_date'] as String?;
+
+        // Calculate intrinsic value
+        double intrinsic = 0.0;
+        if (optType == 'CE') {
+          intrinsic = (spotPrice - strikePrice).clamp(0.0, double.infinity);
+        } else {
+          intrinsic = (strikePrice - spotPrice).clamp(0.0, double.infinity);
+        }
+
+        // Estimate time value based on days remaining
+        double timeValue = 0.0;
+        if (expiryStr != null) {
+          try {
+            final expiry = DateTime.parse(expiryStr);
+            final now = DateTime.now();
+            final daysLeft = expiry.difference(now).inHours / 24.0;
+            if (daysLeft > 0) {
+              // Simple time decay: sqrt(daysLeft/30) * avgPrice * 0.3
+              // This gives a rough approximation of theta decay
+              final timeDecayFactor = (daysLeft / 30.0).clamp(0.0, 1.0);
+              final sqrtDecay = timeDecayFactor > 0 ? timeDecayFactor * 0.5 : 0.0;
+              timeValue = avgPrice * sqrtDecay * 0.5;
+            }
+          } catch (_) {}
+        }
+
+        currentPrice = intrinsic + timeValue;
+        if (currentPrice <= 0 && avgPrice > 0) {
+          currentPrice = avgPrice * 0.05; // Floor at 5% of avg price (not zero)
+        }
+
+        // Previous close estimate using yesterday's spot
+        double prevIntrinsic = 0.0;
+        if (optType == 'CE') {
+          prevIntrinsic = (spotPrevClose - strikePrice).clamp(0.0, double.infinity);
+        } else {
+          prevIntrinsic = (strikePrice - spotPrevClose).clamp(0.0, double.infinity);
+        }
+        previousClose = prevIntrinsic + timeValue;
+        if (previousClose <= 0 && avgPrice > 0) {
+          previousClose = avgPrice * 0.05;
+        }
+      } else {
+        // For stocks/crypto: use direct quote
+        final currentQuote = quotesMap[key];
+        currentPrice = currentQuote?.price ?? avgPrice;
+        previousClose = currentQuote?.previousClose ?? currentPrice;
+      }
+
+      final totalBoughtToday = todayBuys[key] ?? 0.0;
+      final cashInToday = todayBuyCost[key] ?? 0.0;
+      final totalSoldToday = todaySells[key] ?? 0.0;
+      final cashOutToday = todaySellCost[key] ?? 0.0;
+      final realizedPnlToday = todayRealizedPnl[key] ?? 0.0;
+
+      final invested = avgPrice * quantity.abs();
+      final currentValue = currentPrice * quantity.abs();
+
+      double dayPnl = 0.0;
+      double dayPnlPct = 0.0;
+
+      if (quantity > 0) {
+        double initialQty = quantity - totalBoughtToday + totalSoldToday;
+        if (initialQty < 0) {
+          initialQty = 0.0;
+        }
+        final initialValue = initialQty * previousClose;
+        dayPnl = (currentValue + cashOutToday) - (initialValue + cashInToday);
+
+        final double denominator = (initialQty * previousClose) + cashInToday;
+        if (denominator > 0) {
+          dayPnlPct = (dayPnl / denominator) * 100;
+        }
+      } else if (quantity < 0) {
+        double initialQtyAbs =
+            quantity.abs() - totalSoldToday + totalBoughtToday;
+        if (initialQtyAbs < 0) {
+          initialQtyAbs = 0.0;
+        }
+        final initialValue = initialQtyAbs * previousClose;
+        dayPnl = (initialValue + cashOutToday) - (currentValue + cashInToday);
+
+        final double denominator =
+            (initialQtyAbs * previousClose) + cashOutToday;
+        if (denominator > 0) {
+          dayPnlPct = (dayPnl / denominator) * 100;
+        }
+      } else {
+        dayPnl = realizedPnlToday;
+        dayPnlPct = 0.0;
+      }
+
+      final bool hasActivityToday = totalBoughtToday > 0 || totalSoldToday > 0;
+      if (!MarketHours.isOpen(market) && !hasActivityToday) {
+        dayPnl = 0.0;
+        dayPnlPct = 0.0;
+      }
+
+      final double pnl = quantity != 0.0
+          ? (currentPrice - avgPrice) * quantity
+          : realizedPnlToday;
+      final double pnlPct = quantity != 0.0
+          ? (invested != 0 ? (pnl / invested) * 100 : 0.0)
+          : 0.0;
+
+      results.add(
+        Holding(
+          symbol: symbol,
+          name: name,
+          market: market,
+          quantity: quantity,
+          avgPrice: avgPrice,
+          currentPrice: currentPrice,
+          previousClose: previousClose,
+          invested: invested,
+          current: currentValue,
+          pnl: pnl,
+          pnlPct: pnlPct,
+          dayPnl: dayPnl,
+          dayPnlPct: dayPnlPct,
+          instrumentType: activeRow?['instrument_type'] as String? ?? 'EQUITY',
+          optionType: activeRow?['option_type'] as String?,
+          strikePrice: (activeRow?['strike_price'] as num?)?.toDouble(),
+          expiryDate: activeRow?['expiry_date'] as String?,
+          productType: activeRow?['product_type'] as String? ?? 'CNC',
+        ),
+      );
+    }
+
+    await _saveCache(
+      'holdings_${user.id}',
+      jsonEncode(results.map((e) => e.toJson()).toList()),
+    );
+    return results;
+  }
+
+  Future<List<Map<String, dynamic>>> getCachedWatchlistRaw() async {
+    final user = currentUser;
+    if (user == null) return [];
+    final jsonStr = await _readCache('watchlist_raw_${user.id}');
+    if (jsonStr == null) return [];
+    try {
+      final decoded = jsonDecode(jsonStr) as List;
+      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getWatchlistRaw() async {
+    final user = currentUser;
+    if (user == null) return [];
+    final rows = await client
+        .from('watchlist')
+        .select()
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false);
+    final results = (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    await _saveCache('watchlist_raw_${user.id}', jsonEncode(results));
     return results;
   }
 
@@ -143,34 +600,64 @@ class SupabaseService {
     final user = currentUser;
     if (user == null) return [];
 
-    final rows = await client.from('watchlist').select().eq('user_id', user.id).order('created_at', ascending: false);
+    final rows = await client
+        .from('watchlist')
+        .select()
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false);
     final results = <Quote>[];
-    for (final raw in (rows as List<dynamic>)) {
-      final row = Map<String, dynamic>.from(raw as Map);
+
+    final rowsList = (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    final quoteFutures = rowsList.map((row) {
       final symbol = row['symbol'] as String? ?? '';
       final market = row['market'] as String? ?? 'stock';
-      final quote = await MarketService.quote(symbol, market);
+      return MarketService.quote(symbol, market);
+    }).toList();
+
+    final quotes = await Future.wait(quoteFutures);
+
+    for (int i = 0; i < rowsList.length; i++) {
+      final row = rowsList[i];
+      final symbol = row['symbol'] as String? ?? '';
+      final market = row['market'] as String? ?? 'stock';
+      final quote = quotes[i];
+
       if (quote != null) {
         results.add(quote);
       } else {
-        results.add(Quote(
-          symbol: symbol,
-          yfSymbol: symbol,
-          name: row['name'] as String? ?? symbol,
-          price: 0.0,
-          previousClose: 0.0,
-          change: 0.0,
-          changePct: 0.0,
-          currency: 'INR',
-          market: market,
-        ));
+        results.add(
+          Quote(
+            symbol: symbol,
+            yfSymbol: symbol,
+            name: row['name'] as String? ?? symbol,
+            price: 0.0,
+            previousClose: 0.0,
+            change: 0.0,
+            changePct: 0.0,
+            currency: 'INR',
+            market: market,
+          ),
+        );
       }
     }
+    await _saveCache(
+      'watchlist_${user.id}',
+      jsonEncode(results.map((e) => e.toJson()).toList()),
+    );
     return results;
   }
 
   Future<List<Quote>> getMarketOverview() async {
-    return await MarketService.getMarketOverview();
+    final overview = await MarketService.getMarketOverview();
+    if (overview.isNotEmpty) {
+      await _saveCache(
+        'market_overview',
+        jsonEncode(overview.map((e) => e.toJson()).toList()),
+      );
+    }
+    return overview;
   }
 
   Future<Quote?> getQuote(String symbol, String market) async {
@@ -189,9 +676,11 @@ class SupabaseService {
           return {
             'user_id': row['id'],
             'name': row['name'],
-            'wallet_balance': (row['wallet_balance'] as num?)?.toDouble() ?? 0.0,
+            'wallet_balance':
+                (row['wallet_balance'] as num?)?.toDouble() ?? 0.0,
             'plan': row['plan'] as String? ?? 'free_starter',
-            'realized_pnl': (row['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,
+            'realized_pnl':
+                (row['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,
           };
         })
         .toList();
@@ -203,24 +692,83 @@ class SupabaseService {
 
     final rows = await client
         .from('orders')
-        .select('symbol, name, side, realized_pnl')
+        .select('symbol, name, side, realized_pnl, created_at')
         .eq('user_id', user.id);
-    final orders = (rows as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final orders = (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
     final totalTrades = orders.length;
     final buyTrades = orders.where((o) => o['side'] == 'buy').length;
     final sellTrades = orders.where((o) => o['side'] == 'sell').length;
-    final winningTrades = orders.where((o) => (o['realized_pnl'] as num).toDouble() > 0).length;
-    final losingTrades = orders.where((o) => (o['realized_pnl'] as num).toDouble() < 0).length;
-    final realizedPnl = orders.fold<double>(0.0, (sum, o) => sum + ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0));
-    final winRate = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).round() : 0;
-    final bestTrade = orders.where((o) => (o['realized_pnl'] as num).toDouble() > 0).fold<Map<String, dynamic>?>(null, (best, next) {
-      if (best == null) return next;
-      return (next['realized_pnl'] as num).toDouble() > (best['realized_pnl'] as num).toDouble() ? next : best;
+    final winningTrades = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) > 0)
+        .length;
+    final losingTrades = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) < 0)
+        .length;
+    final realizedPnl = orders.fold<double>(
+      0.0,
+      (sum, o) => sum + ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0),
+    );
+    final winRate = totalTrades > 0
+        ? ((winningTrades / totalTrades) * 100).round()
+        : 0;
+
+    final wins = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) > 0)
+        .map((o) => (o['realized_pnl'] as num).toDouble())
+        .toList();
+    final losses = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) < 0)
+        .map((o) => (o['realized_pnl'] as num).toDouble())
+        .toList();
+
+    final totalWinsSum = wins.fold<double>(0.0, (sum, val) => sum + val);
+    final totalLossesSum = losses.fold<double>(0.0, (sum, val) => sum + val);
+
+    final avgWin = wins.isNotEmpty ? totalWinsSum / wins.length : 0.0;
+    final avgLoss = losses.isNotEmpty ? totalLossesSum / losses.length : 0.0;
+    final winLossRatio = avgLoss != 0.0 ? avgWin / avgLoss.abs() : 0.0;
+    final profitFactor = totalLossesSum != 0.0
+        ? totalWinsSum / totalLossesSum.abs()
+        : (totalWinsSum > 0 ? double.infinity : 0.0);
+
+    final bestTrade = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) > 0)
+        .fold<Map<String, dynamic>?>(null, (best, next) {
+          if (best == null) return next;
+          return (next['realized_pnl'] as num).toDouble() >
+                  (best['realized_pnl'] as num).toDouble()
+              ? next
+              : best;
+        });
+    final worstTrade = orders
+        .where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) < 0)
+        .fold<Map<String, dynamic>?>(null, (worst, next) {
+          if (worst == null) return next;
+          return (next['realized_pnl'] as num).toDouble() <
+                  (worst['realized_pnl'] as num).toDouble()
+              ? next
+              : worst;
+        });
+
+    final sortedOrders = List<Map<String, dynamic>>.from(orders);
+    sortedOrders.sort((a, b) {
+      final aDate = a['created_at'] != null
+          ? DateTime.tryParse(a['created_at'] as String)
+          : null;
+      final bDate = b['created_at'] != null
+          ? DateTime.tryParse(b['created_at'] as String)
+          : null;
+      if (aDate == null || bDate == null) return 0;
+      return aDate.compareTo(bDate);
     });
-    final worstTrade = orders.where((o) => (o['realized_pnl'] as num).toDouble() < 0).fold<Map<String, dynamic>?>(null, (worst, next) {
-      if (worst == null) return next;
-      return (next['realized_pnl'] as num).toDouble() < (worst['realized_pnl'] as num).toDouble() ? next : worst;
-    });
+
+    double runningPnl = 0.0;
+    final pnlSeries = sortedOrders.map((o) {
+      runningPnl += ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0);
+      return {'date': o['created_at'] as String? ?? '', 'pnl': runningPnl};
+    }).toList();
 
     return {
       'total_trades': totalTrades,
@@ -232,61 +780,75 @@ class SupabaseService {
       'realized_pnl': realizedPnl,
       'best_trade': bestTrade,
       'worst_trade': worstTrade,
+      'avg_win': avgWin,
+      'avg_loss': avgLoss,
+      'win_loss_ratio': winLossRatio,
+      'profit_factor': profitFactor,
+      'pnl_series': pnlSeries,
     };
   }
 
   Future<Map<String, dynamic>> getAutopsy() async {
     final user = currentUser;
     if (user == null) {
+      return {'summary': 'Sign in to see autopsy insights.', 'insights': []};
+    }
+
+    try {
+      final response = await client.functions.invoke('trade-autopsy');
+      final rawData = response.data;
+      if (rawData is Map) {
+        return Map<String, dynamic>.from(rawData);
+      } else if (rawData is String) {
+        return jsonDecode(rawData) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      // Fallback
       return {
-        'summary': 'Sign in to see autopsy insights.',
+        'summary': 'Failed to load live autopsy insights. Please try again.',
         'insights': [],
       };
     }
 
-    final rows = await client
-        .from('orders')
-        .select('symbol, name, market, side, quantity, price, total, realized_pnl, created_at')
-        .eq('user_id', user.id)
-        .order('created_at', ascending: false)
-        .limit(20);
-    final orders = (rows as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    final losses = orders.where((o) => ((o['realized_pnl'] as num?)?.toDouble() ?? 0.0) < 0).toList();
-    final insights = losses.take(5).map((order) {
-      final loss = (order['realized_pnl'] as num?)?.toDouble() ?? 0.0;
-      return {
-        'symbol': order['symbol'] as String? ?? '',
-        'name': order['name'] as String? ?? order['symbol'] as String? ?? '',
-        'market': order['market'] as String? ?? 'stock',
-        'loss': loss.abs(),
-        'loss_pct': order['total'] != null && (order['total'] as num).toDouble() != 0.0 ? (loss.abs() / (order['total'] as num).toDouble()) * 100 : 0.0,
-        'type': 'closed_loss',
-        'tip': 'Review entry size and stop-loss discipline for ${order['symbol']}.',
-      };
-    }).toList();
-
-    return {
-      'summary': losses.isEmpty
-          ? 'No major losing trades yet. Keep sharpening your strategy.'
-          : 'Review your recent losing trades and look for recurring entry or exit mistakes.',
-      'insights': insights,
-    };
+    return {'summary': 'Failed to parse autopsy insights.', 'insights': []};
   }
 
-  Future<void> addToWatchlist(String symbol, String market) async {
+  Future<void> addToWatchlist(
+    String symbol,
+    String market, [
+    String? name,
+  ]) async {
     final user = currentUser;
     if (user == null) return;
     await client.from('watchlist').upsert({
       'user_id': user.id,
       'symbol': symbol,
       'market': market,
+      'name': ?name,
     }, onConflict: 'user_id,symbol,market');
+  }
+
+  Future<bool> isWatched(String symbol, String market) async {
+    final user = currentUser;
+    if (user == null) return false;
+    final rows = await client
+        .from('watchlist')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('symbol', symbol)
+        .eq('market', market);
+    return (rows as List).isNotEmpty;
   }
 
   Future<void> removeFromWatchlist(String symbol, String market) async {
     final user = currentUser;
     if (user == null) return;
-    await client.from('watchlist').delete().eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+    await client
+        .from('watchlist')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('symbol', symbol)
+        .eq('market', market);
   }
 
   Future<Order> placeOrder({
@@ -294,112 +856,395 @@ class SupabaseService {
     required String market,
     required String side,
     required double quantity,
+    double? price,
+    bool isMarket = true,
+    String instrumentType = 'EQUITY',
+    double? strikePrice,
+    String? optionType,
+    String? expiryDate,
   }) async {
+    side = side.toLowerCase();
     final user = currentUser;
     if (user == null) throw Exception('No authenticated user');
 
     final profile = await getUserProfile();
     if (profile == null) throw Exception('Profile not found');
 
-    final quote = await MarketService.quote(symbol, market);
-    if (quote == null) throw Exception('Market quote unavailable');
+    double limitPrice = price ?? 0.0;
+    double currentPrice = 0.0;
+    String name = symbol;
 
-    final currentPrice = quote.price;
-    final total = currentPrice * quantity;
-    double realizedPnl = 0.0;
+    if (instrumentType == 'EQUITY') {
+      final quote = await MarketService.quote(symbol, market);
+      if (quote == null) throw Exception('Market quote unavailable');
+      currentPrice = quote.price;
+      name = quote.name;
+    } else {
+      final liveQuote = await MarketService.quote(symbol, market);
+      if (liveQuote != null) {
+        currentPrice = liveQuote.price;
+        name = liveQuote.name;
+      } else {
+        if (price == null) {
+          throw Exception('Live derivative quote unavailable');
+        }
+        currentPrice = price;
+        if (instrumentType == 'FUTURE') {
+          name = '$symbol Perpetual Futures';
+        } else {
+          name = '$symbol $expiryDate $strikePrice $optionType';
+        }
+      }
+    }
 
-    if (!MarketHours.isOpen(market)) {
-      final order = await client.from('orders').insert({
-        'user_id': user.id,
-        'symbol': symbol,
-        'name': quote.name,
-        'market': market,
-        'side': side,
-        'quantity': quantity,
-        'price': currentPrice,
-        'total': total,
-        'realized_pnl': 0,
-        'status': 'pending',
-      }).select().maybeSingle();
+    bool executeImmediately = isMarket;
+    if (!isMarket) {
+      if (side == 'buy') {
+        executeImmediately = (currentPrice <= limitPrice);
+      } else {
+        executeImmediately = (currentPrice >= limitPrice);
+      }
+    }
+
+    if (market != 'crypto' && !MarketHours.isOpen(market)) {
+      executeImmediately = false;
+    }
+
+    if (!executeImmediately) {
+      final targetPrice = isMarket ? currentPrice : limitPrice;
+      final total = targetPrice * quantity;
+
+      final order = await client
+          .from('orders')
+          .insert({
+            'user_id': user.id,
+            'symbol': symbol,
+            'name': name,
+            'market': market,
+            'side': side,
+            'quantity': quantity,
+            'price': targetPrice,
+            'total': total,
+            'realized_pnl': 0.0,
+            'status': 'pending',
+            'order_type': isMarket ? 'market' : 'limit',
+            'instrument_type': instrumentType,
+            'strike_price': strikePrice,
+            'option_type': optionType,
+            'expiry_date': expiryDate,
+          })
+          .select()
+          .maybeSingle();
+
       if (order == null) throw Exception('Could not place order');
+
+      try {
+        await client.from('notifications').insert({
+          'user_id': user.id,
+          'title': 'Order Pending',
+          'body':
+              '${side.toUpperCase()} ${quantity.toStringAsFixed(market == "crypto" ? 4 : 0)} $symbol placed at ₹${targetPrice.toStringAsFixed(2)}',
+          'is_read': false,
+          'action_type': 'order',
+          'action_data': {'symbol': symbol, 'market': market},
+        });
+      } catch (_) {}
+
       return Order.fromJson(Map<String, dynamic>.from(order as Map));
     }
 
+    final execPrice = currentPrice;
+    final total = execPrice * quantity;
+    double realizedPnl = 0.0;
+
     if (side == 'buy') {
-      if (profile.walletBalance < total) {
-        throw Exception('Insufficient wallet balance');
-      }
-      await client.from('profiles').update({'wallet_balance': profile.walletBalance - total}).eq('id', user.id);
-      final existing = await client.from('holdings').select().eq('user_id', user.id).eq('symbol', symbol).eq('market', market).maybeSingle();
+      final existing = await client
+          .from('holdings')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .eq('market', market)
+          .maybeSingle();
       if (existing == null) {
+        if (profile.walletBalance < total) {
+          throw Exception('Insufficient wallet balance');
+        }
+        await client
+            .from('profiles')
+            .update({'wallet_balance': profile.walletBalance - total})
+            .eq('id', user.id);
         await client.from('holdings').insert({
           'user_id': user.id,
           'symbol': symbol,
           'market': market,
           'quantity': quantity,
-          'avg_price': currentPrice,
-          'name': quote.name,
+          'avg_price': execPrice,
+          'name': name,
+          'instrument_type': instrumentType,
+          'strike_price': strikePrice,
+          'option_type': optionType,
+          'expiry_date': expiryDate,
         });
       } else {
         final existingMap = Map<String, dynamic>.from(existing as Map);
         final oldQuantity = (existingMap['quantity'] as num).toDouble();
         final oldAvg = (existingMap['avg_price'] as num).toDouble();
-        final newQuantity = oldQuantity + quantity;
-        final newAvg = newQuantity > 0 ? ((oldAvg * oldQuantity) + (currentPrice * quantity)) / newQuantity : currentPrice;
-        await client.from('holdings').update({
-          'quantity': newQuantity,
-          'avg_price': newAvg,
-          'name': quote.name,
-        }).eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+
+        if (oldQuantity < 0) {
+          // Covering short position
+          final coverQty = quantity > -oldQuantity ? -oldQuantity : quantity;
+          final remainingBuyQty = quantity - coverQty;
+
+          if (profile.walletBalance < (coverQty * execPrice)) {
+            throw Exception('Insufficient wallet balance to cover short');
+          }
+
+          realizedPnl += (oldAvg - execPrice) * coverQty;
+
+          await client
+              .from('profiles')
+              .update({
+                'wallet_balance':
+                    profile.walletBalance - (coverQty * execPrice),
+                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
+              })
+              .eq('id', user.id);
+
+          final newQty = oldQuantity + coverQty;
+          if (newQty.abs() < 0.00000001) {
+            await client
+                .from('holdings')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('symbol', symbol)
+                .eq('market', market);
+          } else {
+            await client
+                .from('holdings')
+                .update({'quantity': newQty})
+                .eq('user_id', user.id)
+                .eq('symbol', symbol)
+                .eq('market', market);
+          }
+
+          if (remainingBuyQty > 0) {
+            final remainingTotal = remainingBuyQty * execPrice;
+            final updatedProfile = await getUserProfile();
+            if (updatedProfile != null &&
+                updatedProfile.walletBalance >= remainingTotal) {
+              await client
+                  .from('profiles')
+                  .update({
+                    'wallet_balance':
+                        updatedProfile.walletBalance - remainingTotal,
+                  })
+                  .eq('id', user.id);
+              await client.from('holdings').insert({
+                'user_id': user.id,
+                'symbol': symbol,
+                'market': market,
+                'quantity': remainingBuyQty,
+                'avg_price': execPrice,
+                'name': name,
+                'instrument_type': instrumentType,
+                'strike_price': strikePrice,
+                'option_type': optionType,
+                'expiry_date': expiryDate,
+              });
+            }
+          }
+        } else {
+          // Adding to long position
+          if (profile.walletBalance < total) {
+            throw Exception('Insufficient wallet balance');
+          }
+          await client
+              .from('profiles')
+              .update({'wallet_balance': profile.walletBalance - total})
+              .eq('id', user.id);
+          final newQuantity = oldQuantity + quantity;
+          final newAvg = newQuantity > 0
+              ? ((oldAvg * oldQuantity) + (execPrice * quantity)) / newQuantity
+              : execPrice;
+          await client
+              .from('holdings')
+              .update({
+                'quantity': newQuantity,
+                'avg_price': newAvg,
+                'name': name,
+              })
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .eq('market', market);
+        }
       }
     } else {
-      final holdingRaw = await client.from('holdings').select().eq('user_id', user.id).eq('symbol', symbol).eq('market', market).maybeSingle();
-      if (holdingRaw == null) throw Exception('No holding available to sell');
-      final holdingMap = Map<String, dynamic>.from(holdingRaw as Map);
-      final currentQty = (holdingMap['quantity'] as num).toDouble();
-      final avgPrice = (holdingMap['avg_price'] as num).toDouble();
-      if (quantity > currentQty) throw Exception('Not enough quantity to sell');
-      realizedPnl = (currentPrice - avgPrice) * quantity;
-      final updatedQty = currentQty - quantity;
-      await client.from('profiles').update({
-        'wallet_balance': profile.walletBalance + total,
-        'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
-      }).eq('id', user.id);
-      if (updatedQty <= 0) {
-        await client.from('holdings').delete().eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+      final existing = await client
+          .from('holdings')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .eq('market', market)
+          .maybeSingle();
+      if (existing == null) {
+        // Open new short position
+        await client
+            .from('profiles')
+            .update({'wallet_balance': profile.walletBalance + total})
+            .eq('id', user.id);
+        await client.from('holdings').insert({
+          'user_id': user.id,
+          'symbol': symbol,
+          'market': market,
+          'quantity': -quantity,
+          'avg_price': execPrice,
+          'name': name,
+          'instrument_type': instrumentType,
+          'strike_price': strikePrice,
+          'option_type': optionType,
+          'expiry_date': expiryDate,
+        });
       } else {
-        await client.from('holdings').update({
-          'quantity': updatedQty,
-          'avg_price': avgPrice,
-          'name': quote.name,
-        }).eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+        final existingMap = Map<String, dynamic>.from(existing as Map);
+        final oldQuantity = (existingMap['quantity'] as num).toDouble();
+        final oldAvg = (existingMap['avg_price'] as num).toDouble();
+
+        if (oldQuantity > 0) {
+          // Selling to close/reduce long position
+          final sellQty = quantity > oldQuantity ? oldQuantity : quantity;
+          final remainingSellQty = quantity - sellQty;
+
+          realizedPnl += (execPrice - oldAvg) * sellQty;
+          await client
+              .from('profiles')
+              .update({
+                'wallet_balance': profile.walletBalance + (sellQty * execPrice),
+                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
+              })
+              .eq('id', user.id);
+
+          final newQty = oldQuantity - sellQty;
+          if (newQty.abs() < 0.00000001) {
+            await client
+                .from('holdings')
+                .delete()
+                .eq('user_id', user.id)
+                .eq('symbol', symbol)
+                .eq('market', market);
+          } else {
+            await client
+                .from('holdings')
+                .update({'quantity': newQty, 'avg_price': oldAvg, 'name': name})
+                .eq('user_id', user.id)
+                .eq('symbol', symbol)
+                .eq('market', market);
+          }
+
+          if (remainingSellQty > 0) {
+            final remainingTotal = remainingSellQty * execPrice;
+            final updatedProfile = await getUserProfile();
+            if (updatedProfile != null) {
+              await client
+                  .from('profiles')
+                  .update({
+                    'wallet_balance':
+                        updatedProfile.walletBalance + remainingTotal,
+                  })
+                  .eq('id', user.id);
+              await client.from('holdings').insert({
+                'user_id': user.id,
+                'symbol': symbol,
+                'market': market,
+                'quantity': -remainingSellQty,
+                'avg_price': execPrice,
+                'name': name,
+                'instrument_type': instrumentType,
+                'strike_price': strikePrice,
+                'option_type': optionType,
+                'expiry_date': expiryDate,
+              });
+            }
+          }
+        } else {
+          // Adding to existing short position
+          await client
+              .from('profiles')
+              .update({'wallet_balance': profile.walletBalance + total})
+              .eq('id', user.id);
+          final newQuantity = oldQuantity - quantity;
+          final oldQtyAbs = oldQuantity.abs();
+          final newAvg = (oldQtyAbs + quantity) > 0
+              ? ((oldAvg * oldQtyAbs) + (execPrice * quantity)) /
+                    (oldQtyAbs + quantity)
+              : execPrice;
+          await client
+              .from('holdings')
+              .update({
+                'quantity': newQuantity,
+                'avg_price': newAvg,
+                'name': name,
+              })
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .eq('market', market);
+        }
       }
     }
 
-    final order = await client.from('orders').insert({
-      'user_id': user.id,
-      'symbol': symbol,
-      'name': quote.name,
-      'market': market,
-      'side': side,
-      'quantity': quantity,
-      'price': currentPrice,
-      'total': total,
-      'realized_pnl': realizedPnl,
-      'status': 'executed',
-      'executed_at': DateTime.now().toUtc().toIso8601String(),
-    }).select().maybeSingle();
+    final order = await client
+        .from('orders')
+        .insert({
+          'user_id': user.id,
+          'symbol': symbol,
+          'name': name,
+          'market': market,
+          'side': side,
+          'quantity': quantity,
+          'price': execPrice,
+          'total': total,
+          'realized_pnl': realizedPnl,
+          'status': 'executed',
+          'order_type': isMarket ? 'market' : 'limit',
+          'executed_at': DateTime.now().toUtc().toIso8601String(),
+          'instrument_type': instrumentType,
+          'strike_price': strikePrice,
+          'option_type': optionType,
+          'expiry_date': expiryDate,
+        })
+        .select()
+        .maybeSingle();
 
     if (order == null) throw Exception('Could not place order');
-    return Order.fromJson(Map<String, dynamic>.from(order as Map));
+    final placedOrder = Order.fromJson(Map<String, dynamic>.from(order as Map));
+
+    try {
+      await client.from('notifications').insert({
+        'user_id': user.id,
+        'title': 'Order Executed',
+        'body':
+            '${side.toUpperCase()} ${quantity.toStringAsFixed(market == "crypto" ? 4 : 0)} $symbol filled at ₹${execPrice.toStringAsFixed(2)}',
+        'is_read': false,
+        'action_type': 'order',
+        'action_data': {'symbol': symbol, 'market': market},
+      });
+    } catch (_) {}
+
+    return placedOrder;
   }
 
-  Future<void> executePendingOrders() async {
-    if (!MarketHours.isOpen('stock') && !MarketHours.isOpen('crypto')) return;
+  Future<List<Order>> executePendingOrders() async {
+    if (!MarketHours.isOpen('stock') && !MarketHours.isOpen('crypto')) {
+      return [];
+    }
     final user = currentUser;
-    if (user == null) return;
+    if (user == null) return [];
 
-    final pending = await client.from('orders').select().eq('user_id', user.id).eq('status', 'pending');
+    final executedOrders = <Order>[];
+    final pending = await client
+        .from('orders')
+        .select()
+        .eq('user_id', user.id)
+        .eq('status', 'pending');
     for (final raw in (pending as List<dynamic>)) {
       final row = Map<String, dynamic>.from(raw as Map);
       final id = row['id'] as String;
@@ -407,13 +1252,33 @@ class SupabaseService {
       final market = row['market'] as String? ?? 'stock';
       final side = row['side'] as String;
       final quantity = (row['quantity'] as num).toDouble();
+      final instrumentType = row['instrument_type'] as String? ?? 'EQUITY';
+      final strikePrice = (row['strike_price'] as num?)?.toDouble();
+      final optionType = row['option_type'] as String?;
+      final expiryDate = row['expiry_date'] as String?;
+      final orderType = row['order_type'] as String? ?? 'market';
+      final limitPrice = (row['price'] as num?)?.toDouble() ?? 0.0;
 
       if (!MarketHours.isOpen(market)) continue;
 
       try {
+        double execPrice = 0.0;
+        String name = symbol;
+
         final quote = await MarketService.quote(symbol, market);
         if (quote == null) continue;
-        final execPrice = quote.price;
+        execPrice = quote.price;
+        name = quote.name;
+
+        if (orderType == 'limit') {
+          if (side == 'buy' && execPrice > limitPrice) {
+            continue;
+          }
+          if (side == 'sell' && execPrice < limitPrice) {
+            continue;
+          }
+        }
+
         final total = execPrice * quantity;
         final profile = await getUserProfile();
         if (profile == null) continue;
@@ -421,70 +1286,304 @@ class SupabaseService {
         double realizedPnl = 0.0;
 
         if (side == 'buy') {
-          if (profile.walletBalance < total) continue;
-          await client.from('profiles').update({'wallet_balance': profile.walletBalance - total}).eq('id', user.id);
-          final existing = await client.from('holdings').select().eq('user_id', user.id).eq('symbol', symbol).eq('market', market).maybeSingle();
+          final existing = await client
+              .from('holdings')
+              .select()
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .eq('market', market)
+              .maybeSingle();
           if (existing == null) {
+            if (profile.walletBalance < total) continue;
+            await client
+                .from('profiles')
+                .update({'wallet_balance': profile.walletBalance - total})
+                .eq('id', user.id);
             await client.from('holdings').insert({
-              'user_id': user.id, 'symbol': symbol, 'market': market,
-              'quantity': quantity, 'avg_price': execPrice, 'name': quote.name,
+              'user_id': user.id,
+              'symbol': symbol,
+              'market': market,
+              'quantity': quantity,
+              'avg_price': execPrice,
+              'name': name,
+              'instrument_type': instrumentType,
+              'strike_price': strikePrice,
+              'option_type': optionType,
+              'expiry_date': expiryDate,
             });
           } else {
             final m = Map<String, dynamic>.from(existing as Map);
             final oq = (m['quantity'] as num).toDouble();
             final oa = (m['avg_price'] as num).toDouble();
-            final nq = oq + quantity;
-            final na = nq > 0 ? ((oa * oq) + (execPrice * quantity)) / nq : execPrice;
-            await client.from('holdings').update({'quantity': nq, 'avg_price': na, 'name': quote.name})
-              .eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+
+            if (oq < 0) {
+              // Covering short position
+              final coverQty = quantity > -oq ? -oq : quantity;
+              final remainingBuyQty = quantity - coverQty;
+
+              if (profile.walletBalance < (coverQty * execPrice)) continue;
+
+              realizedPnl += (oa - execPrice) * coverQty;
+
+              await client
+                  .from('profiles')
+                  .update({
+                    'wallet_balance':
+                        profile.walletBalance - (coverQty * execPrice),
+                    'total_realized_pnl':
+                        profile.totalRealizedPnl + realizedPnl,
+                  })
+                  .eq('id', user.id);
+
+              final newQty = oq + coverQty;
+              if (newQty.abs() < 0.00000001) {
+                await client
+                    .from('holdings')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('symbol', symbol)
+                    .eq('market', market);
+              } else {
+                await client
+                    .from('holdings')
+                    .update({'quantity': newQty})
+                    .eq('user_id', user.id)
+                    .eq('symbol', symbol)
+                    .eq('market', market);
+              }
+
+              if (remainingBuyQty > 0) {
+                final remainingTotal = remainingBuyQty * execPrice;
+                final updatedProfile = await getUserProfile();
+                if (updatedProfile != null &&
+                    updatedProfile.walletBalance >= remainingTotal) {
+                  await client
+                      .from('profiles')
+                      .update({
+                        'wallet_balance':
+                            updatedProfile.walletBalance - remainingTotal,
+                      })
+                      .eq('id', user.id);
+                  await client.from('holdings').insert({
+                    'user_id': user.id,
+                    'symbol': symbol,
+                    'market': market,
+                    'quantity': remainingBuyQty,
+                    'avg_price': execPrice,
+                    'name': name,
+                    'instrument_type': instrumentType,
+                    'strike_price': strikePrice,
+                    'option_type': optionType,
+                    'expiry_date': expiryDate,
+                  });
+                }
+              }
+            } else {
+              if (profile.walletBalance < total) continue;
+              await client
+                  .from('profiles')
+                  .update({'wallet_balance': profile.walletBalance - total})
+                  .eq('id', user.id);
+              final nq = oq + quantity;
+              final na = nq > 0
+                  ? ((oa * oq) + (execPrice * quantity)) / nq
+                  : execPrice;
+              await client
+                  .from('holdings')
+                  .update({'quantity': nq, 'avg_price': na, 'name': name})
+                  .eq('user_id', user.id)
+                  .eq('symbol', symbol)
+                  .eq('market', market);
+            }
           }
         } else {
-          final holdingRaw = await client.from('holdings').select().eq('user_id', user.id).eq('symbol', symbol).eq('market', market).maybeSingle();
-          if (holdingRaw == null) {
-            await client.from('orders').update({'status': 'cancelled'}).eq('id', id);
-            continue;
-          }
-          final m = Map<String, dynamic>.from(holdingRaw as Map);
-          final cq = (m['quantity'] as num).toDouble();
-          final ap = (m['avg_price'] as num).toDouble();
-          if (quantity > cq) {
-            await client.from('orders').update({'status': 'cancelled'}).eq('id', id);
-            continue;
-          }
-          realizedPnl = (execPrice - ap) * quantity;
-          final uq = cq - quantity;
-          await client.from('profiles').update({
-            'wallet_balance': profile.walletBalance + total,
-            'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
-          }).eq('id', user.id);
-          if (uq <= 0) {
-            await client.from('holdings').delete().eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+          final existing = await client
+              .from('holdings')
+              .select()
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .eq('market', market)
+              .maybeSingle();
+          if (existing == null) {
+            // Open new short position
+            await client
+                .from('profiles')
+                .update({'wallet_balance': profile.walletBalance + total})
+                .eq('id', user.id);
+            await client.from('holdings').insert({
+              'user_id': user.id,
+              'symbol': symbol,
+              'market': market,
+              'quantity': -quantity,
+              'avg_price': execPrice,
+              'name': name,
+              'instrument_type': instrumentType,
+              'strike_price': strikePrice,
+              'option_type': optionType,
+              'expiry_date': expiryDate,
+            });
           } else {
-            await client.from('holdings').update({'quantity': uq, 'avg_price': ap, 'name': quote.name})
-              .eq('user_id', user.id).eq('symbol', symbol).eq('market', market);
+            final m = Map<String, dynamic>.from(existing as Map);
+            final oq = (m['quantity'] as num).toDouble();
+            final oa = (m['avg_price'] as num).toDouble();
+
+            if (oq > 0) {
+              // Selling to close/reduce long position
+              final sellQty = quantity > oq ? oq : quantity;
+              final remainingSellQty = quantity - sellQty;
+
+              realizedPnl += (execPrice - oa) * sellQty;
+              await client
+                  .from('profiles')
+                  .update({
+                    'wallet_balance':
+                        profile.walletBalance + (sellQty * execPrice),
+                    'total_realized_pnl':
+                        profile.totalRealizedPnl + realizedPnl,
+                  })
+                  .eq('id', user.id);
+
+              final newQty = oq - sellQty;
+              if (newQty.abs() < 0.00000001) {
+                await client
+                    .from('holdings')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('symbol', symbol)
+                    .eq('market', market);
+              } else {
+                await client
+                    .from('holdings')
+                    .update({'quantity': newQty, 'avg_price': oa, 'name': name})
+                    .eq('user_id', user.id)
+                    .eq('symbol', symbol)
+                    .eq('market', market);
+              }
+
+              if (remainingSellQty > 0) {
+                final remainingTotal = remainingSellQty * execPrice;
+                final updatedProfile = await getUserProfile();
+                if (updatedProfile != null) {
+                  await client
+                      .from('profiles')
+                      .update({
+                        'wallet_balance':
+                            updatedProfile.walletBalance + remainingTotal,
+                      })
+                      .eq('id', user.id);
+                  await client.from('holdings').insert({
+                    'user_id': user.id,
+                    'symbol': symbol,
+                    'market': market,
+                    'quantity': -remainingSellQty,
+                    'avg_price': execPrice,
+                    'name': name,
+                    'instrument_type': instrumentType,
+                    'strike_price': strikePrice,
+                    'option_type': optionType,
+                    'expiry_date': expiryDate,
+                  });
+                }
+              }
+            } else {
+              // Adding to short position
+              await client
+                  .from('profiles')
+                  .update({'wallet_balance': profile.walletBalance + total})
+                  .eq('id', user.id);
+              final nq = oq - quantity;
+              final oqAbs = oq.abs();
+              final na = (oqAbs + quantity) > 0
+                  ? ((oa * oqAbs) + (execPrice * quantity)) / (oqAbs + quantity)
+                  : execPrice;
+              await client
+                  .from('holdings')
+                  .update({'quantity': nq, 'avg_price': na, 'name': name})
+                  .eq('user_id', user.id)
+                  .eq('symbol', symbol)
+                  .eq('market', market);
+            }
           }
         }
 
-        await client.from('orders').update({
-          'status': 'executed',
-          'price': execPrice,
-          'total': total,
-          'realized_pnl': realizedPnl,
-          'executed_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', id);
+        final updatedOrder = await client
+            .from('orders')
+            .update({
+              'status': 'executed',
+              'price': execPrice,
+              'total': total,
+              'realized_pnl': realizedPnl,
+              'executed_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+
+        if (updatedOrder != null) {
+          final execOrder = Order.fromJson(
+            Map<String, dynamic>.from(updatedOrder as Map),
+          );
+          executedOrders.add(execOrder);
+
+          try {
+            await client.from('notifications').insert({
+              'user_id': user.id,
+              'title': 'Order Executed',
+              'body':
+                  '${side.toUpperCase()} ${quantity.toStringAsFixed(market == "crypto" ? 4 : 0)} $symbol filled at ₹${execPrice.toStringAsFixed(2)}',
+              'is_read': false,
+              'action_type': 'order',
+              'action_data': {'symbol': symbol, 'market': market},
+            });
+          } catch (_) {}
+        }
       } catch (_) {}
     }
+    return executedOrders;
   }
 
   Future<void> cancelOrder(String orderId) async {
-    await client.from('orders').update({'status': 'cancelled'}).eq('id', orderId);
+    await client
+        .from('orders')
+        .update({'status': 'cancelled'})
+        .eq('id', orderId);
+  }
+
+  Future<void> modifyOrder({
+    required String orderId,
+    required double quantity,
+    required double price,
+  }) async {
+    final total = quantity * price;
+    await client
+        .from('orders')
+        .update({'quantity': quantity, 'price': price, 'total': total})
+        .eq('id', orderId);
   }
 
   Future<Map<String, dynamic>> createSubscriptionOrder(String planId) async {
     final plans = {
-      'titan_1l': {'id': 'titan_1l', 'name': 'Starter Boost', 'price': 199, 'cash': 50000, 'is_mock': true},
-      'titan_5l': {'id': 'titan_5l', 'name': 'Titan Plus', 'price': 899, 'cash': 100000, 'is_mock': true},
-      'titan_pro': {'id': 'titan_pro', 'name': 'Pro Launch', 'price': 1499, 'cash': 200000, 'is_mock': true},
+      'titan_1l': {
+        'id': 'titan_1l',
+        'name': 'Starter Boost',
+        'price': 199,
+        'cash': 100000,
+        'is_mock': true,
+      },
+      'titan_5l': {
+        'id': 'titan_5l',
+        'name': 'Titan Plus',
+        'price': 599,
+        'cash': 500000,
+        'is_mock': true,
+      },
+      'titan_pro': {
+        'id': 'titan_pro',
+        'name': 'Pro Launch',
+        'price': 999,
+        'cash': 1000000,
+        'is_mock': true,
+      },
     };
     final plan = plans[planId] ?? plans['titan_1l']!;
     return {
@@ -494,7 +1593,10 @@ class SupabaseService {
     };
   }
 
-  Future<Map<String, dynamic>> activateSubscription({required String planId, String? orderId}) async {
+  Future<Map<String, dynamic>> activateSubscription({
+    required String planId,
+    String? orderId,
+  }) async {
     final user = currentUser;
     if (user == null) {
       throw Exception('No authenticated user');
@@ -505,15 +1607,23 @@ class SupabaseService {
       throw Exception('Profile not found');
     }
 
-    final planCash = planId == 'titan_5l' ? 100000.0 : planId == 'titan_pro' ? 200000.0 : 50000.0;
-    await client.from('profiles').update({
-      'wallet_balance': profile.walletBalance + planCash,
-      'subscription_active': true,
-      'plan': planId,
-    }).eq('id', user.id);
+    final planCash = planId == 'titan_5l'
+        ? 500000.0
+        : planId == 'titan_pro'
+        ? 1000000.0
+        : 100000.0;
+    await client
+        .from('profiles')
+        .update({
+          'wallet_balance': profile.walletBalance + planCash,
+          'subscription_active': true,
+          'plan': planId,
+        })
+        .eq('id', user.id);
 
     return {
-      'message': 'Subscription activated and ₹${planCash.toStringAsFixed(0)} credited to your wallet.',
+      'message':
+          'Subscription activated and ₹${planCash.toStringAsFixed(0)} credited to your wallet.',
     };
   }
 
@@ -528,12 +1638,106 @@ class SupabaseService {
       throw Exception('Profile not found');
     }
 
-    await client.from('profiles').update({
-      'wallet_balance': profile.walletBalance + amount,
-    }).eq('id', user.id);
+    await client
+        .from('profiles')
+        .update({'wallet_balance': profile.walletBalance + amount})
+        .eq('id', user.id);
   }
 
-  Future<List<Map<String, dynamic>>> getHistory(String symbol, String market, String range) async {
+  Future<void> purchasePackage(
+    String packageName,
+    double packagePrice,
+    double cashAmount,
+  ) async {
+    final user = currentUser;
+    if (user == null) {
+      throw Exception('No authenticated user');
+    }
+
+    final profile = await getUserProfile();
+    if (profile == null) {
+      throw Exception('Profile not found');
+    }
+
+    // 1. Credit the user's wallet
+    await client
+        .from('profiles')
+        .update({'wallet_balance': profile.walletBalance + cashAmount})
+        .eq('id', user.id);
+
+    // 2. Check if user was referred by someone
+    if (profile.referredBy != null && profile.referredBy!.isNotEmpty) {
+      final commissionAmt = 0.2 * packagePrice;
+      await client.from('referral_commissions').insert({
+        'referrer_id': profile.referredBy,
+        'referred_id': user.id,
+        'package_name': packageName,
+        'package_price': packagePrice,
+        'commission_amount': commissionAmt,
+        'status': 'unclaimed',
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getHistory(
+    String symbol,
+    String market,
+    String range,
+  ) async {
     return await MarketService.getHistory(symbol, market, range);
+  }
+
+  Future<void> submitSupportTicket({
+    required String type,
+    required String title,
+    required String content,
+    String? imageUrl,
+  }) async {
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+    await client.from('support_tickets').insert({
+      'user_id': user.id,
+      'email': user.email ?? 'unknown',
+      'type': type,
+      'title': title,
+      'content': content,
+      'image_url': imageUrl,
+    });
+  }
+
+  Future<String?> uploadTicketAttachment(String path, Uint8List bytes) async {
+    final user = currentUser;
+    if (user == null) return null;
+    final fileExtension = path.split('.').last;
+    final fileName =
+        '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+
+    await client.storage
+        .from('support_attachments')
+        .uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: fileExtension == 'png' ? 'image/png' : 'image/jpeg',
+            upsert: true,
+          ),
+        );
+
+    return client.storage.from('support_attachments').getPublicUrl(fileName);
+  }
+
+  Future<List<Map<String, dynamic>>> getSupportTickets() async {
+    final rows = await client
+        .from('support_tickets')
+        .select('*')
+        .order('created_at', ascending: false);
+    return (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+  Future<void> toggleTicketResolved(String ticketId, bool resolved) async {
+    await client.from('support_tickets').update({
+      'resolved': resolved,
+    }).eq('id', ticketId);
   }
 }
