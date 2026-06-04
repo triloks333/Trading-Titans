@@ -75,7 +75,16 @@ class MarketService {
           )
           .timeout(_timeout);
       if (response.statusCode == 200) {
-        return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+        final List decoded = jsonDecode(response.body);
+        return decoded.map((e) {
+          final map = Map<String, dynamic>.from(e as Map);
+          final sym = (map['symbol'] as String? ?? '').toUpperCase();
+          if (sym == 'ZOMATO') {
+            map['symbol'] = 'ETERNAL';
+            map['name'] = 'Eternal (Zomato)';
+          }
+          return map;
+        }).toList();
       }
     } catch (_) {}
     return [];
