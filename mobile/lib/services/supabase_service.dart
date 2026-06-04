@@ -186,92 +186,142 @@ class SupabaseService {
   /// Settles expired option positions automatically.
   /// - ITM options: auto-exercised, intrinsic value credited/debited to wallet
   /// - OTM options: expire worthless, position removed
-  Future<void> settleExpiredOptions() async {
+  Future<void> settleExpiredDerivatives() async {
     final user = currentUser;
     if (user == null) return;
 
     final today = DateTime.now();
     final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-    // Find all option holdings with expiry_date <= today
-    final expiredRows = await client
+    // Find all derivative holdings (OPTION + FUTURE) with expiry_date <= today
+    final expiredOptionRows = await client
         .from('holdings')
         .select()
         .eq('user_id', user.id)
         .eq('instrument_type', 'OPTION')
         .lte('expiry_date', todayStr);
 
-    if ((expiredRows as List<dynamic>).isEmpty) return;
+    final expiredFutureRows = await client
+        .from('holdings')
+        .select()
+        .eq('user_id', user.id)
+        .eq('instrument_type', 'FUTURE')
+        .lte('expiry_date', todayStr);
+
+    final allExpired = [
+      ...(expiredOptionRows as List<dynamic>),
+      ...(expiredFutureRows as List<dynamic>).where((r) {
+        // For PERPETUAL futures, never auto-expire
+        final expiry = (r as Map)['expiry_date'] as String? ?? '';
+        return expiry != 'PERPETUAL' && expiry.isNotEmpty;
+      }),
+    ];
+
+    if (allExpired.isEmpty) return;
 
     final profile = await getUserProfile();
     if (profile == null) return;
     double walletBalance = profile.walletBalance;
+    double totalRealizedPnl = profile.totalRealizedPnl;
 
-    for (final raw in expiredRows) {
+    for (final raw in allExpired) {
       final row = Map<String, dynamic>.from(raw as Map);
       final holdingId = row['id'] as String;
       final symbol = row['symbol'] as String;
       final market = row['market'] as String? ?? 'stock';
       final quantity = (row['quantity'] as num).toDouble();
       final avgPrice = (row['avg_price'] as num).toDouble();
+      final instType = row['instrument_type'] as String? ?? 'OPTION';
       final optionType = row['option_type'] as String? ?? 'CE';
       final strikePrice = (row['strike_price'] as num?)?.toDouble() ?? 0.0;
       final expiryDate = row['expiry_date'] as String? ?? todayStr;
 
       // Get the underlying spot price for settlement
-      // Extract underlying symbol (e.g., "RELIANCE-2026-06-05-2500-CE" → "RELIANCE")
       String underlyingSymbol = symbol;
       if (symbol.contains('-')) {
         underlyingSymbol = symbol.split('-')[0];
+      } else if (symbol.contains(' ')) {
+        // Future symbols like "RELIANCE JUN FUT"
+        underlyingSymbol = symbol.split(' ')[0];
       }
 
-      double spotPrice = strikePrice; // fallback
+      double spotPrice = avgPrice; // fallback
       try {
         final quote = await MarketService.quote(underlyingSymbol, market);
         if (quote != null) spotPrice = quote.price;
       } catch (_) {}
 
-      // Calculate intrinsic value
-      double intrinsicValue = 0.0;
-      if (optionType == 'CE') {
-        intrinsicValue = (spotPrice - strikePrice).clamp(0.0, double.infinity);
-      } else {
-        intrinsicValue = (strikePrice - spotPrice).clamp(0.0, double.infinity);
-      }
-
-      final bool isITM = intrinsicValue > 0;
       double settlementPnl = 0.0;
+      String orderName = '';
+      String notifTitle = '';
+      String notifBody = '';
 
-      if (quantity > 0) {
-        // Long position: bought option
-        // P&L = (intrinsic value - avg price paid) × quantity
-        settlementPnl = (intrinsicValue - avgPrice) * quantity;
+      if (instType == 'FUTURE') {
+        // ── FUTURES SETTLEMENT ──
+        // Futures settle at the closing spot price
+        // Long: P&L = (spotPrice - avgPrice) × quantity
+        // Short: P&L = (avgPrice - spotPrice) × |quantity|
+        if (quantity > 0) {
+          settlementPnl = (spotPrice - avgPrice) * quantity;
+        } else {
+          settlementPnl = (avgPrice - spotPrice) * quantity.abs();
+        }
+
+        orderName = 'Futures Expiry Settlement';
+        notifTitle = 'Futures Expired';
+        notifBody = '$symbol expired. Settlement P&L: ${settlementPnl >= 0 ? '+' : ''}₹${settlementPnl.toStringAsFixed(2)}';
+
+        // Return the blocked margin + P&L to wallet
+        // Margin was ~15% of notional at entry
+        final blockedMargin = avgPrice * quantity.abs() * 0.15;
+        walletBalance += blockedMargin + settlementPnl;
+
       } else {
-        // Short position: wrote/sold option
-        // P&L = (avg price received - intrinsic value) × |quantity|
-        settlementPnl = (avgPrice - intrinsicValue) * quantity.abs();
+        // ── OPTIONS SETTLEMENT ──
+        double intrinsicValue = 0.0;
+        if (optionType == 'CE') {
+          intrinsicValue = (spotPrice - strikePrice).clamp(0.0, double.infinity);
+        } else {
+          intrinsicValue = (strikePrice - spotPrice).clamp(0.0, double.infinity);
+        }
+
+        final bool isITM = intrinsicValue > 0;
+
+        if (quantity > 0) {
+          // Long: bought option
+          settlementPnl = (intrinsicValue - avgPrice) * quantity;
+        } else {
+          // Short: wrote option
+          settlementPnl = (avgPrice - intrinsicValue) * quantity.abs();
+        }
+
+        walletBalance += settlementPnl;
+        orderName = '${isITM ? "ITM" : "OTM"} Expiry Settlement';
+        notifTitle = isITM ? 'Option Exercised (ITM)' : 'Option Expired (OTM)';
+        notifBody = isITM
+            ? '$symbol expired ITM. Settlement P&L: ₹${settlementPnl.toStringAsFixed(2)}'
+            : '$symbol expired OTM. Premium lost: ₹${(avgPrice * quantity.abs()).toStringAsFixed(2)}';
       }
 
-      // Credit/debit settlement P&L to wallet
-      walletBalance += settlementPnl;
+      totalRealizedPnl += settlementPnl;
 
-      // Record the settlement as a closed order
+      // Record the settlement as a closed order (shows in Order History)
       try {
         await client.from('orders').insert({
           'user_id': user.id,
           'symbol': symbol,
-          'name': '${isITM ? "ITM" : "OTM"} Expiry Settlement',
+          'name': orderName,
           'market': market,
           'side': quantity > 0 ? 'sell' : 'buy',
           'quantity': quantity.abs(),
-          'price': isITM ? intrinsicValue : 0.0,
-          'total': intrinsicValue * quantity.abs(),
+          'price': spotPrice,
+          'total': spotPrice * quantity.abs(),
           'realized_pnl': settlementPnl,
           'status': 'executed',
           'order_type': 'expiry_settlement',
-          'instrument_type': 'OPTION',
-          'strike_price': strikePrice,
-          'option_type': optionType,
+          'instrument_type': instType,
+          'strike_price': instType == 'OPTION' ? strikePrice : null,
+          'option_type': instType == 'OPTION' ? optionType : null,
           'expiry_date': expiryDate,
           'executed_at': DateTime.now().toUtc().toIso8601String(),
         });
@@ -279,10 +329,8 @@ class SupabaseService {
         // Create notification
         await client.from('notifications').insert({
           'user_id': user.id,
-          'title': isITM ? 'Option Exercised (ITM)' : 'Option Expired (OTM)',
-          'body': isITM
-              ? '$symbol expired ITM. Settlement P&L: ₹${settlementPnl.toStringAsFixed(2)}'
-              : '$symbol expired OTM. Premium lost: ₹${(avgPrice * quantity.abs()).toStringAsFixed(2)}',
+          'title': notifTitle,
+          'body': notifBody,
           'is_read': false,
           'action_type': 'expiry',
           'action_data': {'symbol': symbol, 'market': market},
@@ -293,16 +341,19 @@ class SupabaseService {
       await client.from('holdings').delete().eq('id', holdingId);
     }
 
-    // Update wallet balance
+    // Update wallet balance and total realized P&L
     await client
         .from('profiles')
-        .update({'wallet_balance': walletBalance})
+        .update({
+          'wallet_balance': walletBalance,
+          'total_realized_pnl': totalRealizedPnl,
+        })
         .eq('id', user.id);
   }
 
   Future<List<Holding>> getHoldings() async {
     await Future.wait([
-      settleExpiredOptions(),
+      settleExpiredDerivatives(),
       executePendingOrders(),
     ]);
     final user = currentUser;
@@ -369,8 +420,9 @@ class SupabaseService {
 
     final allKeysList = allKeys.toList();
 
-    // Build a map of underlying symbols for option contracts
+    // Build a map of underlying symbols for option and future contracts
     // Option symbols look like "RELIANCE-2026-06-05-2500-CE"
+    // Future symbols look like "RELIANCE JUN FUT" or "BTCUSDT"
     final underlyingKeyMap = <String, String>{}; // key -> underlying key
     final underlyingKeys = <String>{}; // unique underlying keys to fetch
     for (final key in allKeysList) {
@@ -385,17 +437,28 @@ class SupabaseService {
         final underlyingKey = '$underlying\x1F$market';
         underlyingKeyMap[key] = underlyingKey;
         underlyingKeys.add(underlyingKey);
+      } else if (instType == 'FUTURE') {
+        // Extract underlying from future symbol: "RELIANCE JUN FUT" -> "RELIANCE"
+        String underlying = symbol;
+        if (symbol.contains(' ')) {
+          underlying = symbol.split(' ')[0];
+        }
+        final underlyingKey = '$underlying\x1F$market';
+        underlyingKeyMap[key] = underlyingKey;
+        underlyingKeys.add(underlyingKey);
       }
     }
 
-    // Fetch quotes for all keys: equity/crypto symbols + underlying symbols for options
+    // Fetch quotes for all keys: equity/crypto symbols + underlying symbols for derivatives
     final keysToFetch = <String>{...allKeysList, ...underlyingKeys}
         .where((k) {
-          // Skip fetching option symbols directly — they won't resolve
+          // Skip fetching derivative symbols directly — they won't resolve
           final sym = k.split('\x1F')[0];
           final row = activeHoldingsMap[k];
           final instType = row?['instrument_type'] as String? ?? 'EQUITY';
-          return !(instType == 'OPTION' && sym.contains('-'));
+          if (instType == 'OPTION' && sym.contains('-')) return false;
+          if (instType == 'FUTURE') return false;
+          return true;
         })
         .toList();
 
@@ -474,6 +537,29 @@ class SupabaseService {
         if (previousClose <= 0 && avgPrice > 0) {
           previousClose = avgPrice * 0.05;
         }
+      } else if (instType == 'FUTURE' && underlyingKeyMap.containsKey(key)) {
+        // For futures: derive price from underlying spot + carry cost
+        final underlyingQuote = quotesMap[underlyingKeyMap[key]];
+        final spotPrice = underlyingQuote?.price ?? avgPrice;
+        final spotPrevClose = underlyingQuote?.previousClose ?? spotPrice;
+        final expiryStr = activeRow?['expiry_date'] as String?;
+
+        // Calculate carry cost: futures ≈ spot × (1 + r × T)
+        double carryMultiplier = 1.0;
+        if (expiryStr != null && expiryStr != 'PERPETUAL') {
+          try {
+            final expiry = DateTime.parse(expiryStr);
+            final now = DateTime.now();
+            final daysLeft = expiry.difference(now).inHours / 24.0;
+            if (daysLeft > 0) {
+              // Risk-free rate ~6.5% annualized
+              carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
+            }
+          } catch (_) {}
+        }
+
+        currentPrice = spotPrice * carryMultiplier;
+        previousClose = spotPrevClose * carryMultiplier;
       } else {
         // For stocks/crypto: use direct quote
         final currentQuote = quotesMap[key];
@@ -955,6 +1041,10 @@ class SupabaseService {
 
     final execPrice = currentPrice;
     final total = execPrice * quantity;
+    // Calculate margin required: derivatives use ~15% margin, equity uses full value
+    final bool isDerivative = instrumentType == 'FUTURE' || instrumentType == 'OPTION';
+    final double marginPct = isDerivative ? 0.15 : 1.0;
+    final double marginRequired = total * marginPct;
     double realizedPnl = 0.0;
 
     if (side == 'buy') {
@@ -966,12 +1056,12 @@ class SupabaseService {
           .eq('market', market)
           .maybeSingle();
       if (existing == null) {
-        if (profile.walletBalance < total) {
-          throw Exception('Insufficient wallet balance');
+        if (profile.walletBalance < marginRequired) {
+          throw Exception('Insufficient wallet balance. Required margin: ₹${marginRequired.toStringAsFixed(0)}');
         }
         await client
             .from('profiles')
-            .update({'wallet_balance': profile.walletBalance - total})
+            .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
             .eq('id', user.id);
         await client.from('holdings').insert({
           'user_id': user.id,
@@ -1029,14 +1119,17 @@ class SupabaseService {
 
           if (remainingBuyQty > 0) {
             final remainingTotal = remainingBuyQty * execPrice;
+            final remainingMargin = remainingTotal * marginPct;
             final updatedProfile = await getUserProfile();
-            if (updatedProfile != null &&
-                updatedProfile.walletBalance >= remainingTotal) {
+            if (updatedProfile != null) {
+              if (updatedProfile.walletBalance < remainingMargin) {
+                throw Exception('Insufficient wallet balance for remaining buy. Required: ₹${remainingMargin.toStringAsFixed(0)}');
+              }
               await client
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        updatedProfile.walletBalance - remainingTotal,
+                        updatedProfile.walletBalance - (isDerivative ? remainingMargin : remainingTotal),
                   })
                   .eq('id', user.id);
               await client.from('holdings').insert({
@@ -1055,12 +1148,12 @@ class SupabaseService {
           }
         } else {
           // Adding to long position
-          if (profile.walletBalance < total) {
-            throw Exception('Insufficient wallet balance');
+          if (profile.walletBalance < marginRequired) {
+            throw Exception('Insufficient wallet balance. Required margin: ₹${marginRequired.toStringAsFixed(0)}');
           }
           await client
               .from('profiles')
-              .update({'wallet_balance': profile.walletBalance - total})
+              .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
               .eq('id', user.id);
           final newQuantity = oldQuantity + quantity;
           final newAvg = newQuantity > 0
@@ -1087,10 +1180,15 @@ class SupabaseService {
           .eq('market', market)
           .maybeSingle();
       if (existing == null) {
-        // Open new short position
+        // Open new short position — require margin
+        if (profile.walletBalance < marginRequired) {
+          throw Exception('Insufficient margin to short sell. Required: ₹${marginRequired.toStringAsFixed(0)}');
+        }
+        // For derivatives: block margin from wallet; for equity: credit sale proceeds
+        final double walletDelta = isDerivative ? -marginRequired : total;
         await client
             .from('profiles')
-            .update({'wallet_balance': profile.walletBalance + total})
+            .update({'wallet_balance': profile.walletBalance + walletDelta})
             .eq('id', user.id);
         await client.from('holdings').insert({
           'user_id': user.id,
@@ -1118,7 +1216,7 @@ class SupabaseService {
           await client
               .from('profiles')
               .update({
-                'wallet_balance': profile.walletBalance + (sellQty * execPrice),
+                'wallet_balance': profile.walletBalance + (isDerivative ? (sellQty * oldAvg * marginPct + realizedPnl) : (sellQty * execPrice)),
                 'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
               })
               .eq('id', user.id);
@@ -1142,13 +1240,17 @@ class SupabaseService {
 
           if (remainingSellQty > 0) {
             final remainingTotal = remainingSellQty * execPrice;
+            final remainingMargin = remainingTotal * marginPct;
             final updatedProfile = await getUserProfile();
             if (updatedProfile != null) {
+              if (updatedProfile.walletBalance < remainingMargin) {
+                throw Exception('Insufficient margin for remaining short. Required: ₹${remainingMargin.toStringAsFixed(0)}');
+              }
               await client
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        updatedProfile.walletBalance + remainingTotal,
+                        updatedProfile.walletBalance - remainingMargin,
                   })
                   .eq('id', user.id);
               await client.from('holdings').insert({
@@ -1167,9 +1269,12 @@ class SupabaseService {
           }
         } else {
           // Adding to existing short position
+          if (profile.walletBalance < marginRequired) {
+            throw Exception('Insufficient margin to add to short. Required: ₹${marginRequired.toStringAsFixed(0)}');
+          }
           await client
               .from('profiles')
-              .update({'wallet_balance': profile.walletBalance + total})
+              .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : -total)})
               .eq('id', user.id);
           final newQuantity = oldQuantity - quantity;
           final oldQtyAbs = oldQuantity.abs();
