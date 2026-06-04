@@ -315,22 +315,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         const SizedBox(height: 2),
                         Builder(
                           builder: (context) {
-                            final priceDiff = h.currentPrice - h.previousClose;
-                            final pct = h.previousClose > 0 ? (priceDiff / h.previousClose) * 100 : 0.0;
-                            final isPctPositive = pct >= 0;
-                            return Text(
-                              'LTP: ₹${h.currentPrice.toStringAsFixed(2)} (${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%)',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: isPctPositive ? AppColors.bull : AppColors.bear,
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 2),
-                        Builder(
-                          builder: (context) {
                             if (isClosed) {
                               return Text(
                                 '0 shares',
@@ -355,12 +339,33 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(isClosed ? '₹0.00' : _fmt(h.current), style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
-                      Text(
-                        isClosed
-                            ? '${isPositive ? '+' : ''}${_fmt(h.pnl)}'
-                            : '${isPositive ? '+' : ''}${h.pnlPct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+                      Builder(
+                        builder: (context) {
+                          return Text(
+                            'LTP ₹${h.currentPrice.toStringAsFixed(2)}',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.ink,
+                              fontSize: 13,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 2),
+                      Builder(
+                        builder: (context) {
+                          final priceDiff = h.currentPrice - h.previousClose;
+                          final pct = h.previousClose > 0 ? (priceDiff / h.previousClose) * 100 : 0.0;
+                          final isPctPositive = pct >= 0;
+                          return Text(
+                            '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isPctPositive ? AppColors.bull : AppColors.bear,
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
