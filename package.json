@@ -1,0 +1,34 @@
+{
+  "name": "trading-titans",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/triloks333/Trading-Titans.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/triloks333/Trading-Titans/issues"
+  },
+  "homepage": "https://github.com/triloks333/Trading-Titans#readme",
+  "dependencies": {
+    "@remotion/cli": "^4.0.471",
+    "@remotion/transitions": "^4.0.471",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-router-dom": "^5.3.3",
+    "lucide-react": "^1.17.0",
+    "motion": "^12.40.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "remotion": "^4.0.471",
+    "typescript": "^6.0.3"
+  }
+}
