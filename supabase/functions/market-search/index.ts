@@ -28,7 +28,7 @@ const CURATED_STOCKS = [
   { symbol: "TMPV", name: "Tata Motors - Passenger", market: "stock" },
   { symbol: "ADANIENT", name: "Adani Enterprises", market: "stock" },
   { symbol: "NTPC", name: "NTPC", market: "stock" },
-  { symbol: "ZOMATO", name: "Zomato", market: "stock" },
+  { symbol: "ETERNAL", name: "Eternal (Zomato)", market: "stock" },
   { symbol: "PAYTM", name: "One97 Communications (Paytm)", market: "stock" },
 ];
 

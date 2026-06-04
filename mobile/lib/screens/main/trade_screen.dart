@@ -30,7 +30,7 @@ class _TradeScreenState extends State<TradeScreen> {
     {'symbol': 'TMCV', 'name': 'Tata Motors (Commercial)'},
     {'symbol': 'TMPV', 'name': 'Tata Motors (Passenger)'},
     {'symbol': 'ADANIENT', 'name': 'Adani Enterprises'},
-    {'symbol': 'ZOMATO', 'name': 'Zomato'},
+    {'symbol': 'ETERNAL', 'name': 'Eternal (Zomato)'},
   ];
 
   final List<Map<String, String>> _popularCrypto = [
