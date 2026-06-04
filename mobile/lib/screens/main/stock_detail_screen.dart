@@ -402,12 +402,16 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 height: 52,
                 child: ElevatedButton(
                   onPressed: _quote == null ? null : () async {
+                    final bool isFuture = widget.symbol.toUpperCase().contains('FUT') || widget.symbol.toUpperCase().contains('FUTURE');
+                    final bool isOption = widget.symbol.toUpperCase().contains('-CE') || widget.symbol.toUpperCase().contains('-PE');
+                    final instType = isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY');
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => OrderEntryScreen(
                           quote: _quote!,
                           isBuy: true,
+                          instrumentType: instType,
                         ),
                       ),
                     );
@@ -435,13 +439,17 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               child: SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _quote == null || _holding == null ? null : () async {
+                  onPressed: _quote == null ? null : () async {
+                    final bool isFuture = widget.symbol.toUpperCase().contains('FUT') || widget.symbol.toUpperCase().contains('FUTURE');
+                    final bool isOption = widget.symbol.toUpperCase().contains('-CE') || widget.symbol.toUpperCase().contains('-PE');
+                    final instType = isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY');
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => OrderEntryScreen(
                           quote: _quote!,
                           isBuy: false,
+                          instrumentType: instType,
                         ),
                       ),
                     );
@@ -449,7 +457,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.bear,
-                    disabledBackgroundColor: AppColors.bear.withValues(alpha: 0.3),
+                    disabledBackgroundColor: AppColors.bear.withAlpha(76),
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                   ),

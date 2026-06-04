@@ -1,8 +1,8 @@
 int getOptionLotSize(String symbol) {
   final cleanSym = symbol.toUpperCase().trim();
   
-  // Extract underlying symbol if it is an option ticker (e.g. ICICIBANK-2026-05-28-1250-CE)
-  final underlying = cleanSym.split('-').first;
+  // Extract underlying symbol if it is an option ticker (e.g. ICICIBANK-2026-05-28-1250-CE) or future ticker (e.g. RELIANCE FUT)
+  final underlying = cleanSym.split('-').first.split(' ').first;
 
   const lotSizes = {
     'NIFTY': 50,

@@ -88,7 +88,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   }
 
   int get _lotSize {
-    if (widget.instrumentType == 'OPTION') {
+    if (widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE') {
       return getOptionLotSize(widget.quote.symbol);
     }
     return 1;

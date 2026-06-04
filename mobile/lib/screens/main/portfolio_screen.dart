@@ -89,7 +89,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   @override
   Widget build(BuildContext context) {
     final equityHoldings = _holdings.where((h) => h.isEquity && h.quantity > 0).toList();
-    final optionPositions = _holdings.where((h) => h.isOption && h.quantity != 0).toList();
+    final optionPositions = _holdings.where((h) => (h.isOption || h.instrumentType == 'FUTURE' || h.quantity < 0) && h.quantity != 0).toList();
     final closedPositions = _holdings.where((h) => h.quantity == 0).toList();
 
     return DefaultTabController(
@@ -321,12 +321,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                 style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
                               );
                             }
-                            final isOption = h.symbol.contains('-CE') || h.symbol.contains('-PE');
-                            final lotSize = isOption ? getOptionLotSize(h.symbol) : 1;
-                            final numLots = h.quantity / lotSize;
-                            final qtyText = isOption
-                                ? '${numLots.toStringAsFixed(1).replaceAll('.0', '')} lot${numLots == 1 ? '' : 's'} (${h.quantity.toInt()} units)'
-                                : '${h.quantity.toStringAsFixed(h.market == 'crypto' ? 4 : 0)} shares';
+                             final isDerivative = h.instrumentType == 'OPTION' || h.instrumentType == 'FUTURE' || h.symbol.contains('-CE') || h.symbol.contains('-PE') || h.symbol.toUpperCase().contains('FUT');
+                             final lotSize = isDerivative ? getOptionLotSize(h.symbol) : 1;
+                             final numLots = h.quantity / lotSize;
+                             final qtyText = isDerivative
+                                 ? '${numLots.toStringAsFixed(1).replaceAll('.0', '')} lot${numLots.abs() == 1 ? '' : 's'} (${h.quantity.toInt()} units)'
+                                 : '${h.quantity.toStringAsFixed(h.market == 'crypto' ? 4 : 0)} shares';
                             return Text(
                               qtyText,
                               style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
