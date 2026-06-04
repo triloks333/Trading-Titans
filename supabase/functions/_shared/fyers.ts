@@ -23,24 +23,26 @@ function getServiceClient() {
 }
 
 export function toFyersSymbol(sym: string): string {
-  const s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
+  let s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
   if (s.includes(":")) return s;
   if (s === "NIFTY" || s === "NIFTY 50" || s === "^NSEI") return "NSE:NIFTY50-INDEX";
   if (s === "BANKNIFTY" || s === "BANK NIFTY" || s === "^NSEBANK") return "NSE:NIFTYBANK-INDEX";
   if (s === "SENSEX" || s === "^BSESN") return "BSE:SENSEX-INDEX";
+  if (s === "ZOMATO") s = "ETERNAL";
   
   // Standard stock format: NSE:RELIANCE-EQ
   return `NSE:${s}-EQ`;
 }
 
 function toFyersOptionUnderlying(sym: string): string {
-  const s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
+  let s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
   if (s.includes(":")) return s;
   if (s === "NIFTY" || s === "NIFTY 50" || s === "^NSEI") return "NSE:NIFTY50-INDEX";
   if (s === "BANKNIFTY" || s === "BANK NIFTY" || s === "^NSEBANK") return "NSE:NIFTYBANK-INDEX";
   if (s === "FINNIFTY" || s === "NIFTY FIN SERVICE") return "NSE:FINNIFTY-INDEX";
   if (s === "MIDCPNIFTY" || s === "NIFTY MID SELECT") return "NSE:MIDCPNIFTY-INDEX";
   if (s === "SENSEX" || s === "^BSESN") return "BSE:SENSEX-INDEX";
+  if (s === "ZOMATO") s = "ETERNAL";
   return `NSE:${s}-EQ`;
 }
 

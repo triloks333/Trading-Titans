@@ -181,6 +181,10 @@ class _TradingViewChartState extends State<TradingViewChart> {
       sym = sym.split('-')[0];
     }
 
+    if (sym == 'ZOMATO') {
+      sym = 'ETERNAL';
+    }
+
     // Normalize exchange prefixes
     final spaceMatch = RegExp(r'^(NSE|BSE)[\s\-](.+)$').firstMatch(sym);
     if (spaceMatch != null) {
