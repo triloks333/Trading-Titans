@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../services/supabase_service.dart';
+import '../../services/auth_service.dart';
+import '../../widgets/reward_celebration_dialog.dart';
 import 'dashboard_screen.dart';
 import 'trade_screen.dart';
 import 'portfolio_screen.dart';
@@ -17,6 +22,61 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
+  Timer? _rewardCheckTimer;
+  bool _showingReward = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Check for unclaimed rewards every 10 seconds
+    _rewardCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkRewards());
+    // Initial check after a brief load delay
+    Future.delayed(const Duration(seconds: 2), () => _checkRewards());
+  }
+
+  @override
+  void dispose() {
+    _rewardCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkRewards() async {
+    if (_showingReward || !mounted) return;
+    try {
+      final rewards = await SupabaseService().checkUnclaimedRewards();
+      if (rewards.isNotEmpty && mounted) {
+        final reward = rewards.first;
+        final rewardId = reward['id'] as String;
+        final amount = (reward['amount'] as num).toDouble();
+        final message = reward['message'] as String? ?? 'You received a reward!';
+
+        setState(() => _showingReward = true);
+
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogCtx) => RewardCelebrationDialog(
+              amount: amount,
+              message: message,
+              onClose: () async {
+                Navigator.of(dialogCtx).pop();
+                try {
+                  await SupabaseService().claimReward(rewardId, amount);
+                  if (mounted) {
+                    await context.read<AuthService>().refreshUser();
+                  }
+                } catch (_) {}
+                if (mounted) {
+                  setState(() => _showingReward = false);
+                }
+              },
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
 
   Widget _getScreen(int index) {
     switch (index) {

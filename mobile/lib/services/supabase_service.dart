@@ -1740,4 +1740,72 @@ class SupabaseService {
       'resolved': resolved,
     }).eq('id', ticketId);
   }
+
+  Future<void> sendReward({
+    required String email,
+    required double amount,
+    required String message,
+  }) async {
+    // 1. Find profile by email
+    final profile = await client
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+
+    if (profile == null) {
+      throw Exception('No account found with email $email');
+    }
+
+    final targetUserId = profile['id'] as String;
+
+    // 2. Insert rewards record
+    await client.from('rewards').insert({
+      'user_id': targetUserId,
+      'amount': amount,
+      'message': message,
+      'is_claimed': false,
+    });
+
+    // 3. Create notification for the user
+    await client.from('notifications').insert({
+      'user_id': targetUserId,
+      'title': 'Bug Bounty Reward Received! 🎉',
+      'body': 'You have been awarded ₹${amount.toStringAsFixed(0)}: $message',
+      'is_read': false,
+      'action_type': 'reward',
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> checkUnclaimedRewards() async {
+    final user = currentUser;
+    if (user == null) return [];
+    final rows = await client
+        .from('rewards')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_claimed', false);
+    return (rows as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<void> claimReward(String rewardId, double amount) async {
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+
+    // 1. Mark reward as claimed
+    await client.from('rewards').update({
+      'is_claimed': true,
+    }).eq('id', rewardId);
+
+    // 2. Add to user profile wallet balance
+    final profile = await getUserProfile();
+    if (profile != null) {
+      final newBalance = profile.walletBalance + amount;
+      await client.from('profiles').update({
+        'wallet_balance': newBalance,
+      }).eq('id', user.id);
+    }
+  }
 }

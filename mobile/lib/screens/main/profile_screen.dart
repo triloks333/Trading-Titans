@@ -17,6 +17,7 @@ import 'watchlist_screen.dart';
 import 'notifications_screen.dart';
 import 'refer_earn_screen.dart';
 import 'support_tickets_screen.dart';
+import 'admin_reward_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -111,8 +112,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.gavel_outlined, 'Terms & Conditions', () => _showTerms(context)),
             _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
-            if (user?.isAdmin == true)
+            if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
+              _menuItem(context, Icons.card_giftcard, 'Give Reward', const AdminRewardScreen()),
+            ],
 
             const SizedBox(height: AppSpacing.md),
             OutlinedButton(
