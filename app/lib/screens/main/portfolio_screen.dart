@@ -5,6 +5,8 @@ import '../../models/portfolio.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import 'stock_detail_screen.dart';
+import 'order_entry_screen.dart';
+import '../../models/quote.dart';
 import '../../utils/lot_size.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -390,6 +392,59 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   ),
                 ],
               ),
+              if (!isClosed) ...[
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        backgroundColor: AppColors.bearLight,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tag)),
+                      ),
+                      onPressed: () async {
+                        final quote = Quote(
+                          symbol: h.symbol,
+                          yfSymbol: h.symbol,
+                          name: h.name,
+                          price: h.currentPrice,
+                          previousClose: h.previousClose,
+                          change: h.currentPrice - h.previousClose,
+                          changePct: h.previousClose > 0 
+                              ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 
+                              : 0.0,
+                          currency: 'INR',
+                          market: h.market,
+                        );
+                        
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => OrderEntryScreen(
+                              quote: quote,
+                              isBuy: h.quantity < 0, // buy to cover if quantity is negative (short), sell to close if positive (long)
+                              instrumentType: h.instrumentType,
+                              strikePrice: h.strikePrice,
+                              optionType: h.optionType,
+                              expiryDate: h.expiryDate,
+                              prefilledQuantity: h.quantity.abs(),
+                            ),
+                          ),
+                        );
+                        _load();
+                      },
+                      child: Text(
+                        'EXIT',
+                        style: GoogleFonts.inter(
+                          color: AppColors.bear,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

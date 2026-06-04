@@ -18,6 +18,7 @@ class OrderEntryScreen extends StatefulWidget {
   final double? strikePrice;
   final String? optionType;
   final String? expiryDate;
+  final double? prefilledQuantity;
 
   const OrderEntryScreen({
     super.key,
@@ -27,6 +28,7 @@ class OrderEntryScreen extends StatefulWidget {
     this.strikePrice,
     this.optionType,
     this.expiryDate,
+    this.prefilledQuantity,
   });
 
   @override
@@ -34,7 +36,7 @@ class OrderEntryScreen extends StatefulWidget {
 }
 
 class _OrderEntryScreenState extends State<OrderEntryScreen> {
-  final TextEditingController _qtyController = TextEditingController(text: '1');
+  late final TextEditingController _qtyController;
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _triggerPriceController = TextEditingController();
   final TextEditingController _disclosedQtyController = TextEditingController(text: '0');
@@ -56,6 +58,22 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   @override
   void initState() {
     super.initState();
+    
+    double initialQty = 1.0;
+    if (widget.prefilledQuantity != null) {
+      if (widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE') {
+        final lotSize = getOptionLotSize(widget.quote.symbol);
+        initialQty = widget.prefilledQuantity! / lotSize;
+      } else {
+        initialQty = widget.prefilledQuantity!;
+      }
+    }
+    
+    final qtyStr = _isCrypto 
+        ? initialQty.toString() 
+        : initialQty.toInt().toString();
+
+    _qtyController = TextEditingController(text: qtyStr);
     _qtyController.addListener(_updateState);
     _priceController.addListener(_updateState);
     _moneyController.addListener(_updateState);

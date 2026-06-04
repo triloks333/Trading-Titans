@@ -1385,6 +1385,10 @@ class SupabaseService {
         }
 
         final total = execPrice * quantity;
+        final bool isDerivative = instrumentType == 'FUTURE' || instrumentType == 'OPTION';
+        final double marginPct = isDerivative ? 0.15 : 1.0;
+        final double marginRequired = total * marginPct;
+
         final profile = await getUserProfile();
         if (profile == null) continue;
 
@@ -1399,10 +1403,10 @@ class SupabaseService {
               .eq('market', market)
               .maybeSingle();
           if (existing == null) {
-            if (profile.walletBalance < total) continue;
+            if (profile.walletBalance < marginRequired) continue;
             await client
                 .from('profiles')
-                .update({'wallet_balance': profile.walletBalance - total})
+                .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
                 .eq('id', user.id);
             await client.from('holdings').insert({
               'user_id': user.id,
@@ -1459,14 +1463,15 @@ class SupabaseService {
 
               if (remainingBuyQty > 0) {
                 final remainingTotal = remainingBuyQty * execPrice;
+                final remainingMargin = remainingTotal * marginPct;
                 final updatedProfile = await getUserProfile();
                 if (updatedProfile != null &&
-                    updatedProfile.walletBalance >= remainingTotal) {
+                    updatedProfile.walletBalance >= remainingMargin) {
                   await client
                       .from('profiles')
                       .update({
                         'wallet_balance':
-                            updatedProfile.walletBalance - remainingTotal,
+                            updatedProfile.walletBalance - (isDerivative ? remainingMargin : remainingTotal),
                       })
                       .eq('id', user.id);
                   await client.from('holdings').insert({
@@ -1484,10 +1489,10 @@ class SupabaseService {
                 }
               }
             } else {
-              if (profile.walletBalance < total) continue;
+              if (profile.walletBalance < marginRequired) continue;
               await client
                   .from('profiles')
-                  .update({'wallet_balance': profile.walletBalance - total})
+                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
                   .eq('id', user.id);
               final nq = oq + quantity;
               final na = nq > 0
@@ -1511,9 +1516,11 @@ class SupabaseService {
               .maybeSingle();
           if (existing == null) {
             // Open new short position
+            if (profile.walletBalance < marginRequired) continue;
+            final double walletDelta = isDerivative ? -marginRequired : total;
             await client
                 .from('profiles')
-                .update({'wallet_balance': profile.walletBalance + total})
+                .update({'wallet_balance': profile.walletBalance + walletDelta})
                 .eq('id', user.id);
             await client.from('holdings').insert({
               'user_id': user.id,
@@ -1542,7 +1549,7 @@ class SupabaseService {
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        profile.walletBalance + (sellQty * execPrice),
+                        profile.walletBalance + (isDerivative ? (sellQty * oa * marginPct + realizedPnl) : (sellQty * execPrice)),
                     'total_realized_pnl':
                         profile.totalRealizedPnl + realizedPnl,
                   })
@@ -1567,13 +1574,15 @@ class SupabaseService {
 
               if (remainingSellQty > 0) {
                 final remainingTotal = remainingSellQty * execPrice;
+                final remainingMargin = remainingTotal * marginPct;
                 final updatedProfile = await getUserProfile();
-                if (updatedProfile != null) {
+                if (updatedProfile != null &&
+                    updatedProfile.walletBalance >= remainingMargin) {
                   await client
                       .from('profiles')
                       .update({
                         'wallet_balance':
-                            updatedProfile.walletBalance + remainingTotal,
+                            updatedProfile.walletBalance - remainingMargin,
                       })
                       .eq('id', user.id);
                   await client.from('holdings').insert({
@@ -1592,9 +1601,10 @@ class SupabaseService {
               }
             } else {
               // Adding to short position
+              if (profile.walletBalance < marginRequired) continue;
               await client
                   .from('profiles')
-                  .update({'wallet_balance': profile.walletBalance + total})
+                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : -total)})
                   .eq('id', user.id);
               final nq = oq - quantity;
               final oqAbs = oq.abs();
