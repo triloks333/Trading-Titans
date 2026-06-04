@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/portfolio.dart';
 import '../../services/supabase_service.dart';
+import '../../services/auth_service.dart';
 import 'stock_detail_screen.dart';
 import '../../utils/lot_size.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 
 class PortfolioScreen extends StatefulWidget {
@@ -39,6 +41,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     try {
       final holdings = await _supabase.getHoldings();
       if (mounted) {
+        // Refresh auth state to update wallet balance & overall user info/PnL
+        try {
+          final auth = Provider.of<AuthService>(context, listen: false);
+          await auth.refreshUser();
+        } catch (_) {}
+
         setState(() {
           _holdings = holdings;
           _loading = false;
@@ -55,6 +63,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     try {
       final holdings = await _supabase.getHoldings();
       if (mounted) {
+        try {
+          final auth = Provider.of<AuthService>(context, listen: false);
+          await auth.refreshUser();
+        } catch (_) {}
+
         setState(() {
           _holdings = holdings;
         });
@@ -299,6 +312,23 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                             ],
                           ],
                         ),
+                        const SizedBox(height: 2),
+                        Builder(
+                          builder: (context) {
+                            final priceDiff = h.currentPrice - h.previousClose;
+                            final pct = h.previousClose > 0 ? (priceDiff / h.previousClose) * 100 : 0.0;
+                            final isPctPositive = pct >= 0;
+                            return Text(
+                              'LTP: ₹${h.currentPrice.toStringAsFixed(2)} (${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%)',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isPctPositive ? AppColors.bull : AppColors.bear,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 2),
                         Builder(
                           builder: (context) {
                             if (isClosed) {

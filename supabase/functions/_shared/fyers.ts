@@ -23,7 +23,7 @@ function getServiceClient() {
 }
 
 export function toFyersSymbol(sym: string): string {
-  const s = sym.toUpperCase().trim();
+  const s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
   if (s.includes(":")) return s;
   if (s === "NIFTY" || s === "NIFTY 50" || s === "^NSEI") return "NSE:NIFTY50-INDEX";
   if (s === "BANKNIFTY" || s === "BANK NIFTY" || s === "^NSEBANK") return "NSE:NIFTYBANK-INDEX";
@@ -34,7 +34,7 @@ export function toFyersSymbol(sym: string): string {
 }
 
 function toFyersOptionUnderlying(sym: string): string {
-  const s = sym.toUpperCase().trim();
+  const s = sym.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
   if (s.includes(":")) return s;
   if (s === "NIFTY" || s === "NIFTY 50" || s === "^NSEI") return "NSE:NIFTY50-INDEX";
   if (s === "BANKNIFTY" || s === "BANK NIFTY" || s === "^NSEBANK") return "NSE:NIFTYBANK-INDEX";

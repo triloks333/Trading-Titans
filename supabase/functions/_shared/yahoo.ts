@@ -271,11 +271,14 @@ export async function searchStocks(query: string): Promise<{ symbol: string; nam
       return true;
     })
     .slice(0, 25)
-    .map((q: any) => ({
-      symbol: q.symbol ?? "",
-      name: q.longName ?? q.shortName ?? q.symbol ?? "",
-      market: "stock",
-    }));
+    .map((q: any) => {
+      const sym = (q.symbol ?? "").toUpperCase().replace(".NS", "").replace(".BO", "");
+      return {
+        symbol: sym,
+        name: q.longName ?? q.shortName ?? q.symbol ?? "",
+        market: "stock",
+      };
+    });
 }
 
 export async function whatIfStock(
