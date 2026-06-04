@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 antialiased overflow-x-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Titans | Join the Waitlist</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        titan: {
+                            50: '#f0fbf7',
+                            500: '#00f5a0',
+                            600: '#00d486',
+                            950: '#020f0a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Glassmorphism Styling -->
+    <style>
+        .glass-panel {
+            background: rgba(10, 10, 14, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glow-border:hover {
+            border-color: rgba(0, 245, 160, 0.35);
+            box-shadow: 0 0 30px rgba(0, 245, 160, 0.15);
+        }
+        /* Custom scrollbar elimination */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        .countdown-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="h-full relative font-sans overflow-hidden">
+    <!-- Three.js Interactive Particle Canvas background -->
+    <div id="canvas-container" class="absolute inset-0 z-0 pointer-events-auto"></div>
+
+    <!-- Layout Container -->
+    <main class="relative z-10 min-h-screen flex flex-col justify-between px-6 py-8 lg:px-16 max-w-7xl mx-auto pointer-events-none">
+        
+        <!-- Header -->
+        <header class="w-full flex justify-between items-center py-2 pointer-events-auto">
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-titan-500 to-cyan-400 flex items-center justify-center font-black text-black shadow-lg shadow-titan-500/20 text-lg">T</div>
+                <span class="text-xl font-bold tracking-wider uppercase bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Trading Titans</span>
+            </div>
+            <div class="glass-panel px-4 py-2 rounded-full text-xs font-semibold text-titan-500 flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-titan-500 animate-pulse"></span>
+                LAUNCHING ON PLAYSTORE
+            </div>
+        </header>
+
+        <!-- Main waitlist block -->
+        <div class="w-full grid grid-cols-1 lg:grid-cols-12 gap-12 my-auto py-8 items-center">
+            
+            <!-- Left Info Panel -->
+            <div class="lg:col-span-7 space-y-6 text-left pointer-events-auto">
+                <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight">
+                    Real Market. <br>
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-titan-500 via-cyan-400 to-blue-500">
+                        Zero Risk.
+                    </span>
+                </h1>
+                <p class="text-lg text-slate-400 max-w-xl leading-relaxed">
+                    Practice trading options, indices, and futures with real-time market data feed and zero risk. Test strategies with 15% margin layout just like Groww and Zerodha.
+                </p>
+
+                <!-- Countdown Timer -->
+                <div class="pt-4">
+                    <p class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-3">Live on Play Store in:</p>
+                    <div id="countdown" class="flex gap-4">
+                        <div class="countdown-card px-5 py-4 rounded-xl min-w-[80px] text-center">
+                            <span id="days" class="block text-3xl font-extrabold text-titan-500">20</span>
+                            <span class="text-[10px] uppercase tracking-widest text-slate-500">Days</span>
+                        </div>
+                        <div class="countdown-card px-5 py-4 rounded-xl min-w-[80px] text-center">
+                            <span id="hours" class="block text-3xl font-extrabold text-slate-100">00</span>
+                            <span class="text-[10px] uppercase tracking-widest text-slate-500">Hours</span>
+                        </div>
+                        <div class="countdown-card px-5 py-4 rounded-xl min-w-[80px] text-center">
+                            <span id="minutes" class="block text-3xl font-extrabold text-slate-100">00</span>
+                            <span class="text-[10px] uppercase tracking-widest text-slate-500">Mins</span>
+                        </div>
+                        <div class="countdown-card px-5 py-4 rounded-xl min-w-[80px] text-center">
+                            <span id="seconds" class="block text-3xl font-extrabold text-slate-100">00</span>
+                            <span class="text-[10px] uppercase tracking-widest text-slate-500">Secs</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Waitlist Signup Form Card -->
+            <div class="lg:col-span-5 pointer-events-auto">
+                <div class="glass-panel glow-border p-8 rounded-2xl transition-all duration-300 shadow-2xl relative overflow-hidden">
+                    <div class="absolute -right-16 -top-16 w-32 h-32 bg-titan-500/10 rounded-full blur-3xl"></div>
+                    
+                    <h3 class="text-2xl font-bold mb-2">Join Waitlist</h3>
+                    <p class="text-sm text-slate-400 mb-6 leading-relaxed">Enter your email address to get notified instantly when the beta goes live.</p>
+
+                    <form id="waitlist-form" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email Address</label>
+                            <input type="email" id="waitlist-email" required placeholder="your.name@example.com" 
+                                class="w-full bg-slate-900/60 border border-slate-800 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-titan-500 transition-all text-sm">
+                        </div>
+                        <button type="submit" id="submit-btn"
+                            class="w-full bg-gradient-to-r from-titan-500 to-cyan-400 hover:from-titan-600 hover:to-cyan-500 text-slate-950 font-bold py-3.5 px-6 rounded-lg transition-all transform hover:-translate-y-0.5 shadow-lg shadow-titan-500/15 text-sm uppercase tracking-widest">
+                            Join Waitlist
+                        </button>
+                    </form>
+
+                    <div id="success-state" class="hidden text-center py-6 space-y-4">
+                        <div class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-titan-500/10 text-titan-500 shadow-inner">
+                            <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-bold text-slate-200">You're on the list!</h4>
+                            <p class="text-sm text-slate-400 mt-1">Thank you. We will send you an exclusive download invitation link soon.</p>
+                        </div>
+                    </div>
+                    
+                    <div id="error-message" class="hidden mt-4 text-xs text-red-500 text-center"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="w-full border-t border-slate-900/60 pt-6 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-slate-500 pointer-events-auto">
+            <p>&copy; 2026 Trading Titans Inc. All rights reserved.</p>
+            <div class="flex gap-6">
+                <a href="#" class="hover:text-slate-300 transition-colors">Privacy Policy</a>
+                <a href="#" class="hover:text-slate-300 transition-colors">Terms of Service</a>
+                <a href="#" class="hover:text-slate-300 transition-colors">Support</a>
+            </div>
+        </footer>
+    </main>
+
+    <!-- Three.js Background Particle Scene -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // --- 1. COUNTDOWN TIMER LOGIC ---
+        // Countdown of exactly 20 days from current view
+        const countdownDuration = 20 * 24 * 60 * 60 * 1000;
+        const targetTime = Date.now() + countdownDuration;
+
+        function updateCountdown() {
+            const now = Date.now();
+            const diff = targetTime - now;
+            
+            if (diff <= 0) {
+                document.getElementById('days').innerText = '0';
+                document.getElementById('hours').innerText = '00';
+                document.getElementById('minutes').innerText = '00';
+                document.getElementById('seconds').innerText = '00';
+                return;
+            }
+
+            const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+            document.getElementById('days').innerText = d;
+            document.getElementById('hours').innerText = h.toString().padLeft ? h.toString().padStart(2, '0') : h;
+            document.getElementById('minutes').innerText = m.toString().padLeft ? m.toString().padStart(2, '0') : m;
+            document.getElementById('seconds').innerText = s.toString().padLeft ? s.toString().padStart(2, '0') : s;
+        }
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+
+        // --- 2. THREE.JS 3D PARTICLE NETWORK LOGIC ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0a0e, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.z = 32;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = false;
+        controls.enablePan = false;
+
+        const particleCount = 2500;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        const radius = 16;
+        for (let i = 0; i < particleCount; i++) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = u * 2.0 * Math.PI;
+            const phi = Math.acos(2.0 * v - 1.0);
+            
+            positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+            positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+            positions[i * 3 + 2] = radius * Math.cos(phi);
+
+            // Shading gradient from Titan green to teal/cyan
+            colors[i * 3] = 0.0;
+            colors[i * 3 + 1] = THREE.MathUtils.lerp(0.96, 0.4, u);
+            colors[i * 3 + 2] = THREE.MathUtils.lerp(0.62, 0.9, u);
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const createParticleTexture = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 16;
+            canvas.height = 16;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 16, 16);
+            return new THREE.CanvasTexture(canvas);
+        };
+
+        const material = new THREE.PointsMaterial({
+            size: 0.3,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.75,
+            map: createParticleTexture(),
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const particleSphere = new THREE.Points(geometry, material);
+        scene.add(particleSphere);
+
+        const mouse = new THREE.Vector2();
+        const targetRotation = new THREE.Vector2();
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            targetRotation.y = mouse.x * 0.25;
+            targetRotation.x = -mouse.y * 0.25;
+        });
+
+        const clock = new THREE.Clock();
+        const animate = () => {
+            requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
+
+            particleSphere.rotation.y = elapsed * 0.04;
+            particleSphere.rotation.y += (targetRotation.y - particleSphere.rotation.y) * 0.05;
+            particleSphere.rotation.x += (targetRotation.x - particleSphere.rotation.x) * 0.05;
+
+            const posAttr = geometry.attributes.position;
+            for (let i = 0; i < particleCount; i++) {
+                const x = posAttr.getX(i);
+                const y = posAttr.getY(i);
+                const z = posAttr.getZ(i);
+
+                const offset = Math.sin(elapsed * 1.2 + (x + y + z) * 0.06) * 0.015;
+                posAttr.setX(i, x + offset * (x / radius));
+                posAttr.setY(i, y + offset * (y / radius));
+                posAttr.setZ(i, z + offset * (z / radius));
+            }
+            posAttr.needsUpdate = true;
+
+            controls.update();
+            renderer.render(scene, camera);
+        };
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 3. SUPABASE WAITLIST SUBMISSION LOGIC ---
+        // Setup direct client REST submission to Supabase API
+        const supabaseUrl = "https://bftvimnhpoiuoyryyiff.supabase.co";
+        const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak";
+
+        document.getElementById('waitlist-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const emailInput = document.getElementById('waitlist-email');
+            const submitBtn = document.getElementById('submit-btn');
+            const errorMsg = document.getElementById('error-message');
+            
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Joining...";
+            errorMsg.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${supabaseUrl}/rest/v1/waitlist`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': supabaseAnonKey,
+                        'Authorization': `Bearer ${supabaseAnonKey}`,
+                        'Prefer': 'return=representation'
+                    },
+                    body: JSON.stringify({ email: emailInput.value })
+                });
+
+                if (response.ok) {
+                    document.getElementById('waitlist-form').classList.add('hidden');
+                    document.getElementById('success-state').classList.remove('hidden');
+                } else {
+                    const errJson = await response.json();
+                    if (errJson.message && errJson.message.includes("duplicate")) {
+                        errorMsg.innerText = "You have already joined the waitlist!";
+                    } else {
+                        errorMsg.innerText = errJson.message || "Failed to submit. Please try again.";
+                    }
+                    errorMsg.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorMsg.innerText = "Connection error. Please try again later.";
+                errorMsg.classList.remove('hidden');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Join Waitlist";
+            }
+        });
+    </script>
+</body>
+</html>
