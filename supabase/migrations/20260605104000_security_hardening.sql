@@ -36,3 +36,18 @@ DROP POLICY IF EXISTS "Allow users to view their status" ON public.waitlist;
 -- Drop the broad SELECT policy on support_attachments to prevent public listing of support files.
 -- Because the bucket is public, files can still be accessed via direct URL, but listing files is blocked.
 DROP POLICY IF EXISTS "Allow public read support_attachments" ON storage.objects;
+
+-- 5. Harden backend token tables (rls_enabled_no_policy)
+-- To resolve the lint warnings for tables that should only be accessed by the backend/service_role:
+-- We explicitly define a "No access" RLS policy for the public/authenticated APIs.
+-- This satisfies the linter while keeping the tables 100% blocked for all client-side requests.
+-- (The service_role key automatically bypasses RLS, so the backend remains fully functional).
+
+DROP POLICY IF EXISTS "Block public reads on fyers_tokens" ON public.fyers_tokens;
+CREATE POLICY "Block public reads on fyers_tokens" ON public.fyers_tokens FOR ALL TO PUBLIC USING (false);
+
+DROP POLICY IF EXISTS "Block public reads on upstox_states" ON public.upstox_states;
+CREATE POLICY "Block public reads on upstox_states" ON public.upstox_states FOR ALL TO PUBLIC USING (false);
+
+DROP POLICY IF EXISTS "Block public reads on upstox_tokens" ON public.upstox_tokens;
+CREATE POLICY "Block public reads on upstox_tokens" ON public.upstox_tokens FOR ALL TO PUBLIC USING (false);
