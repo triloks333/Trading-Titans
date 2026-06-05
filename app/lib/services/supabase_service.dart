@@ -1090,17 +1090,21 @@ class SupabaseService {
           final coverQty = quantity > -oldQuantity ? -oldQuantity : quantity;
           final remainingBuyQty = quantity - coverQty;
 
-          if (profile.walletBalance < (coverQty * execPrice)) {
-            throw Exception('Insufficient wallet balance to cover short');
-          }
-
           realizedPnl += (oldAvg - execPrice) * coverQty;
+
+          final double resultingBalance = profile.walletBalance +
+              (isDerivative
+                  ? (coverQty * oldAvg * marginPct + realizedPnl)
+                  : -(coverQty * execPrice));
+
+          if (resultingBalance < 0) {
+            throw Exception('Insufficient wallet balance to cover short position.');
+          }
 
           await client
               .from('profiles')
               .update({
-                'wallet_balance':
-                    profile.walletBalance - (coverQty * execPrice),
+                'wallet_balance': resultingBalance,
                 'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
               })
               .eq('id', user.id);

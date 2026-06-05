@@ -53,12 +53,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   String _validity = 'DAY';
   
   bool _isLoading = false;
+  Map<String, dynamic>? _existingHolding;
 
   bool get _isCrypto => widget.quote.market == 'crypto';
 
   @override
   void initState() {
     super.initState();
+    _loadHolding();
     
     double initialQty = 1.0;
     if (widget.prefilledQuantity != null) {
@@ -78,6 +80,27 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     _qtyController.addListener(_updateState);
     _priceController.addListener(_updateState);
     _moneyController.addListener(_updateState);
+  }
+
+  Future<void> _loadHolding() async {
+    try {
+      final user = SupabaseService().currentUser;
+      if (user == null) return;
+      final existing = await SupabaseService().client
+          .from('holdings')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', widget.quote.symbol)
+          .eq('market', widget.quote.market)
+          .maybeSingle();
+      if (mounted && existing != null) {
+        setState(() {
+          _existingHolding = Map<String, dynamic>.from(existing as Map);
+        });
+      }
+    } catch (_) {
+    } finally {
+    }
   }
 
   @override
@@ -122,7 +145,37 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     if (_inputByMoney && _isCrypto) {
       return double.tryParse(_moneyController.text) ?? 0.0;
     }
-    return _quantityValue * _lotSize * _price;
+    
+    final orderQty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    final isDerivative = widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE';
+    final marginPct = isDerivative ? 0.15 : 1.0;
+    
+    final existingQty = _existingHolding != null 
+        ? (_existingHolding!['quantity'] as num).toDouble() 
+        : 0.0;
+        
+    if (existingQty != 0.0) {
+      if (existingQty > 0 && !widget.isBuy) {
+        final netQty = existingQty - orderQty;
+        if (netQty >= 0) {
+          return 0.0;
+        } else {
+          final shortQty = netQty.abs();
+          return shortQty * _price * marginPct;
+        }
+      }
+      if (existingQty < 0 && widget.isBuy) {
+        final netQty = existingQty + orderQty;
+        if (netQty <= 0) {
+          return 0.0;
+        } else {
+          final longQty = netQty;
+          return longQty * _price * marginPct;
+        }
+      }
+    }
+    
+    return orderQty * _price * marginPct;
   }
 
   Future<void> _submitOrder() async {
@@ -749,7 +802,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                             Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
                             Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
                             Flexible(
-                              child: Text(AppFormat.formatINR(walletBalance), style: GoogleFonts.inter(color: _marginRequired > walletBalance && widget.isBuy ? AppColors.bear : color, fontSize: 12, fontWeight: _marginRequired > walletBalance && widget.isBuy ? FontWeight.bold : FontWeight.normal)),
+                              child: Text(AppFormat.formatINR(walletBalance), style: GoogleFonts.inter(color: _marginRequired > walletBalance ? AppColors.bear : color, fontSize: 12, fontWeight: _marginRequired > walletBalance ? FontWeight.bold : FontWeight.normal)),
                             ),
                           ],
                         ),
@@ -781,7 +834,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   ],
                   const SizedBox(height: 12),
                   // Show insufficient balance warning + top up button
-                  if (_marginRequired > walletBalance && widget.isBuy && _quantityValue > 0) ...[
+                  if (_marginRequired > walletBalance && _quantityValue > 0) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
