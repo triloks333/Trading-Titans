@@ -8,6 +8,8 @@ import 'screens/auth/login_screen.dart';
 import 'screens/main/main_navigation.dart';
 import 'package:showcaseview/showcaseview.dart';
 
+import 'services/theme_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -22,14 +24,22 @@ class TradingTitansApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthService()..initialize(),
-      child: Consumer<AuthService>(
-        builder: (context, auth, child) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthService()..initialize()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
+      ],
+      child: Consumer2<AuthService, ThemeProvider>(
+        builder: (context, auth, theme, child) {
+          // Keep AppColors flag updated
+          AppColors.isDark = theme.isDarkMode;
+
           if (auth.isInitializing) {
             return MaterialApp(
               title: 'Trading Titans',
               theme: AppTheme.lightTheme,
+              darkTheme: AppTheme.darkTheme,
+              themeMode: theme.themeMode,
               home: const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               ),
@@ -40,6 +50,8 @@ class TradingTitansApp extends StatelessWidget {
           return MaterialApp(
             title: 'Trading Titans',
             theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: theme.themeMode,
             home: auth.isAuthenticated
                 // ignore: deprecated_member_use
                 ? ShowCaseWidget(builder: (context) => const MainNavigation())

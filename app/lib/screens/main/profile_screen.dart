@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme.dart';
+import '../../services/theme_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/crown_logo.dart';
@@ -112,6 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.gavel_outlined, 'Terms & Conditions', () => _showTerms(context)),
             _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
+            _menuItemAction(context, Icons.palette_outlined, 'App Theme', () => _showThemeSelector(context)),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
@@ -611,6 +613,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Text(label, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13)),
         Text(value, style: GoogleFonts.inter(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
       ],
+    );
+  }
+
+  void _showThemeSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) {
+        final themeProvider = Provider.of<ThemeProvider>(context);
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.birch,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Choose Theme',
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _buildThemeOption(context, themeProvider, ThemeMode.light, 'Light Mode', Icons.light_mode_outlined),
+                _buildThemeOption(context, themeProvider, ThemeMode.dark, 'Dark Mode', Icons.dark_mode_outlined),
+                _buildThemeOption(context, themeProvider, ThemeMode.system, 'System Mode', Icons.settings_brightness_outlined),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildThemeOption(
+    BuildContext context,
+    ThemeProvider themeProvider,
+    ThemeMode mode,
+    String title,
+    IconData icon,
+  ) {
+    final isSelected = themeProvider.themeMode == mode;
+    final color = isSelected ? AppColors.imperialGold : AppColors.ink;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InkWell(
+        onTap: () {
+          themeProvider.setThemeMode(mode);
+          Navigator.pop(context);
+        },
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: isSelected ? AppColors.imperialGold : AppColors.birch,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            color: isSelected ? AppColors.goldPale : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 22, color: color),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: color,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_circle, color: AppColors.imperialGold, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
