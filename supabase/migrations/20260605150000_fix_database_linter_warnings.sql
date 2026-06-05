@@ -34,3 +34,9 @@ GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO anon;
 GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO authenticated;
 
+-- 5. Update notifications insert policy to allow admins to broadcast/send notifications to anyone
+DROP POLICY IF EXISTS "Users can insert own notifications" ON public.notifications;
+CREATE POLICY "Users can insert own notifications" ON public.notifications 
+  FOR INSERT 
+  WITH CHECK ((auth_uid() = user_id) OR is_admin());
+
