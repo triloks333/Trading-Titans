@@ -4,7 +4,6 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { About } from './components/About';
 import { Features } from './components/Features';
-import { Analytics } from '@vercel/analytics/react';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'home' | 'about' | 'features'>('home');
@@ -19,7 +18,6 @@ function App() {
           {currentPage === 'features' && <Features key="features" />}
         </AnimatePresence>
       </main>
-      <Analytics />
     </div>
   );
 }
