@@ -1,36 +1,60 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { corsHeaders, handleCors } from "../_shared/cors.ts";
-import { searchStocks } from "../_shared/yahoo.ts";
-import { searchCrypto } from "../_shared/coingecko.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const CURATED_STOCKS = [
-  { symbol: "RELIANCE", name: "Reliance Industries", market: "stock" },
-  { symbol: "TCS", name: "Tata Consultancy Services", market: "stock" },
-  { symbol: "HDFCBANK", name: "HDFC Bank", market: "stock" },
-  { symbol: "INFY", name: "Infosys", market: "stock" },
-  { symbol: "ICICIBANK", name: "ICICI Bank", market: "stock" },
-  { symbol: "HINDUNILVR", name: "Hindustan Unilever", market: "stock" },
-  { symbol: "ITC", name: "ITC Limited", market: "stock" },
-  { symbol: "SBIN", name: "State Bank of India", market: "stock" },
-  { symbol: "BHARTIARTL", name: "Bharti Airtel", market: "stock" },
-  { symbol: "KOTAKBANK", name: "Kotak Mahindra Bank", market: "stock" },
-  { symbol: "LT", name: "Larsen & Toubro", market: "stock" },
-  { symbol: "AXISBANK", name: "Axis Bank", market: "stock" },
-  { symbol: "ASIANPAINT", name: "Asian Paints", market: "stock" },
-  { symbol: "MARUTI", name: "Maruti Suzuki", market: "stock" },
-  { symbol: "BAJFINANCE", name: "Bajaj Finance", market: "stock" },
-  { symbol: "WIPRO", name: "Wipro", market: "stock" },
-  { symbol: "HCLTECH", name: "HCL Technologies", market: "stock" },
-  { symbol: "ULTRACEMCO", name: "UltraTech Cement", market: "stock" },
-  { symbol: "TITAN", name: "Titan Company", market: "stock" },
-  { symbol: "SUNPHARMA", name: "Sun Pharmaceutical", market: "stock" },
-  { symbol: "TMCV", name: "Tata Motors - Commercial", market: "stock" },
-  { symbol: "TMPV", name: "Tata Motors - Passenger", market: "stock" },
-  { symbol: "ADANIENT", name: "Adani Enterprises", market: "stock" },
-  { symbol: "NTPC", name: "NTPC", market: "stock" },
-  { symbol: "ETERNAL", name: "Eternal (Zomato)", market: "stock" },
-  { symbol: "PAYTM", name: "One97 Communications (Paytm)", market: "stock" },
-];
+// Inline CORS helpers
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
+  "Access-Control-Max-Age": "86400",
+};
+
+export function handleCors(req: Request): Response | null {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  return null;
+}
+
+// Inline Crypto Search (Coingecko)
+const CG_BASE = "https://api.coingecko.com/api/v3";
+let _cgList: { id: string; symbol: string; name: string }[] = [];
+let _cgListTime = 0;
+
+async function getCgList(): Promise<{ id: string; symbol: string; name: string }[]> {
+  const now = Date.now();
+  if (_cgList.length > 0 && now - _cgListTime < 3600000) return _cgList;
+  try {
+    const res = await fetch(`${CG_BASE}/coins/list`, { headers: { Accept: "application/json" } });
+    if (res.ok) {
+      _cgList = await res.json();
+      _cgListTime = now;
+    }
+  } catch {
+    // fallback or ignore
+  }
+  return _cgList;
+}
+
+async function searchCrypto(
+  query: string
+): Promise<{ symbol: string; name: string; market: string; id: string }[]> {
+  const q = query.toLowerCase();
+  const list = await getCgList();
+  const results: { symbol: string; name: string; market: string; id: string }[] = [];
+
+  for (const c of list) {
+    if (
+      c.symbol.toLowerCase() === q ||
+      c.name.toLowerCase().includes(q) ||
+      c.id.toLowerCase().includes(q)
+    ) {
+      results.push({ symbol: c.symbol.toUpperCase(), name: c.name, market: "crypto", id: c.id });
+      if (results.length >= 25) break;
+    }
+  }
+  return results;
+}
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -45,22 +69,42 @@ serve(async (req) => {
     let results: Record<string, unknown>[] = [];
 
     if (market === "stock") {
-      // Search curated list first
-      results = CURATED_STOCKS.filter(
-        (s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
-      ).slice(0, 25);
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+      const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-      // If few results, also search Yahoo Finance
-      if (results.length < 5 && q.length >= 1) {
-        try {
-          const yfResults = await searchStocks(query);
-          for (const yf of yfResults) {
-            if (!results.some((r) => r.symbol === yf.symbol)) {
-              results.push(yf);
+      if (q.length > 0) {
+        // Query instruments table in Supabase
+        const { data, error } = await supabase
+          .from("instruments")
+          .select("symbol, name, market, instrument_type, expiry_date, strike_price, option_type, lot_size")
+          .or(`symbol.ilike.%${q}%,name.ilike.%${q}%`)
+          .order("symbol")
+          .limit(40);
+
+        if (error) {
+          console.error("Database search error:", error);
+        } else if (data) {
+          results = data.map((item) => {
+            // Check for design guideline mapping (ZOMATO -> ETERNAL)
+            const sym = item.symbol.toUpperCase();
+            let finalSymbol = item.symbol;
+            let finalName = item.name;
+            if (sym.includes("ZOMATO")) {
+              finalSymbol = item.symbol.replace("ZOMATO", "ETERNAL");
+              finalName = item.name.replace("Zomato", "Eternal");
             }
-          }
-        } catch {
-          // fallback to curated only
+            return {
+              symbol: finalSymbol,
+              name: finalName,
+              market: item.market,
+              instrument_type: item.instrument_type,
+              expiry_date: item.expiry_date,
+              strike_price: item.strike_price,
+              option_type: item.option_type,
+              lot_size: item.lot_size,
+            };
+          });
         }
       }
     } else {

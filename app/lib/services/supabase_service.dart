@@ -633,7 +633,7 @@ class SupabaseService {
           currentPrice: currentPrice,
           previousClose: previousClose,
           invested: invested,
-          current: currentValue,
+          current: invested + pnl,
           pnl: pnl,
           pnlPct: pnlPct,
           dayPnl: dayPnl,

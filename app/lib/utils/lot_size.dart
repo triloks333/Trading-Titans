@@ -2,13 +2,14 @@
 /// Lot sizes are the same for both futures and options of the same underlying.
 /// Based on NSE contract specifications (revised effective Dec 30, 2025).
 int getOptionLotSize(String symbol) {
-  final cleanSym = symbol.toUpperCase().trim();
+  var cleanSym = symbol.toUpperCase().trim();
   
-  // Extract underlying symbol from:
-  //   Option ticker: "ICICIBANK-2026-05-28-1250-CE" → "ICICIBANK"
-  //   Future ticker: "RELIANCE JUN FUT" → "RELIANCE"
-  //   Plain symbol:  "NIFTY" → "NIFTY"
-  final underlying = cleanSym.split('-').first.split(' ').first;
+  // Strip Fyers exchange prefix if present
+  if (cleanSym.startsWith('NSE:')) {
+    cleanSym = cleanSym.substring(4);
+  } else if (cleanSym.startsWith('BSE:')) {
+    cleanSym = cleanSym.substring(4);
+  }
 
   // ── Index lot sizes (post SEBI Dec 2025 revision) ──
   // Contract value target: ₹15-20 lakh range
@@ -92,6 +93,21 @@ int getOptionLotSize(String symbol) {
     'COFORGE': 75,
     'MPHASIS': 325,
   };
+
+  // Combine all known symbols and sort by length descending to match longest prefix first
+  final allKnownUnderlyings = [
+    ...indexLotSizes.keys,
+    ...stockLotSizes.keys,
+  ]..sort((a, b) => b.length.compareTo(a.length));
+
+  for (final key in allKnownUnderlyings) {
+    if (cleanSym.startsWith(key)) {
+      return indexLotSizes[key] ?? stockLotSizes[key] ?? 100;
+    }
+  }
+
+  // Fallback to split format
+  final underlying = cleanSym.split('-').first.split(' ').first;
 
   return indexLotSizes[underlying]
       ?? stockLotSizes[underlying]
