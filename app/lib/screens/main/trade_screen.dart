@@ -181,6 +181,14 @@ class _TradeScreenState extends State<TradeScreen> {
                         final item = displayList[index];
                         final symbol = item['symbol'] as String? ?? '';
                         final name = item['name'] as String? ?? '';
+                        // Use display_symbol for cleaner UI (without NSE: and -EQ)
+                        var displaySymbol = item['display_symbol'] as String? ?? symbol;
+                        // Fallback: strip NSE:/BSE: prefix for display if not provided
+                        if (displaySymbol == symbol && displaySymbol.contains(':')) {
+                          displaySymbol = displaySymbol.split(':').last;
+                        }
+                        // Strip -EQ suffix for display
+                        displaySymbol = displaySymbol.replaceAll(RegExp(r'-(EQ|SM)$'), '');
                         return GestureDetector(
                           onTap: () => StockActionSheet.show(context, symbol: symbol, market: _market, name: name),
                           child: Container(
@@ -199,7 +207,7 @@ class _TradeScreenState extends State<TradeScreen> {
                                   ),
                                   alignment: Alignment.center,
                                   child: Text(
-                                    symbol.length >= 2 ? symbol.substring(0, 2) : symbol,
+                                    displaySymbol.length >= 2 ? displaySymbol.substring(0, 2) : displaySymbol,
                                     style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
                                   ),
                                 ),
@@ -208,7 +216,7 @@ class _TradeScreenState extends State<TradeScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(symbol, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text(displaySymbol, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
                                       const SizedBox(height: 2),
                                       Text(name, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4), maxLines: 1, overflow: TextOverflow.ellipsis),
                                     ],

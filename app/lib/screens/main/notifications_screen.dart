@@ -141,6 +141,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final createdAt = n['created_at'] as String?;
     final id = n['id'] as String;
 
+    Map<String, dynamic>? actionDataMap;
+    final rawActionData = n['action_data'];
+    if (rawActionData != null) {
+      if (rawActionData is Map) {
+        actionDataMap = Map<String, dynamic>.from(rawActionData);
+      } else if (rawActionData is String) {
+        try {
+          actionDataMap = Map<String, dynamic>.from(jsonDecode(rawActionData));
+        } catch (_) {}
+      }
+    }
+    final imageUrl = actionDataMap?['image_url'] as String?;
+
     String timeAgo = '';
     if (createdAt != null) {
       final dt = DateTime.tryParse(createdAt);
@@ -200,9 +213,48 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             Text(
               body,
               style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3),
-              maxLines: 2,
+              maxLines: 4,
               overflow: TextOverflow.ellipsis,
             ),
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      insetPadding: const EdgeInsets.all(AppSpacing.md),
+                      child: Stack(
+                        alignment: Alignment.topRight,
+                        children: [
+                          InteractiveViewer(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(imageUrl, fit: BoxFit.contain),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    imageUrl,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               timeAgo,

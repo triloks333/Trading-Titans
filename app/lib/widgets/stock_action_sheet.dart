@@ -47,6 +47,15 @@ class _StockActionSheetState extends State<StockActionSheet> {
   bool _loading = true;
   bool _isWatched = false;
 
+  /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM)
+  static String _cleanSymbol(String sym) {
+    var s = sym;
+    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
+      s = s.substring(4);
+    }
+    return s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -158,7 +167,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            widget.symbol,
+                            _cleanSymbol(widget.symbol),
                             style: GoogleFonts.inter(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

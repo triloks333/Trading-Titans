@@ -41,16 +41,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final holdings = await _supabase.getHoldings();
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final results = await Future.wait([
+        _supabase.getHoldings(),
+        auth.refreshUser(),
+      ]);
       if (mounted) {
-        // Refresh auth state to update wallet balance & overall user info/PnL
-        try {
-          final auth = Provider.of<AuthService>(context, listen: false);
-          await auth.refreshUser();
-        } catch (_) {}
-
         setState(() {
-          _holdings = holdings;
+          _holdings = results[0] as List<Holding>;
           _loading = false;
         });
       }
@@ -63,15 +61,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Future<void> _refresh() async {
     try {
-      final holdings = await _supabase.getHoldings();
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final results = await Future.wait([
+        _supabase.getHoldings(),
+        auth.refreshUser(),
+      ]);
       if (mounted) {
-        try {
-          final auth = Provider.of<AuthService>(context, listen: false);
-          await auth.refreshUser();
-        } catch (_) {}
-
         setState(() {
-          _holdings = holdings;
+          _holdings = results[0] as List<Holding>;
         });
       }
     } catch (_) {}

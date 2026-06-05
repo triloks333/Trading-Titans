@@ -58,6 +58,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         throw Exception('Failed to load option chain');
       }
 
+      // Check if API returned an error with derivative_type info
+      if (data['error'] != null) {
+        throw Exception(data['error'] as String);
+      }
+
       final expiries = List<String>.from(data['expiries'] ?? []);
       final chains = data['chains'] as List<dynamic>? ?? [];
       final futures = data['futures'] as List<dynamic>? ?? [];
@@ -74,6 +79,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         _spotPrice = spot;
         _change = change;
         _changePct = changePct;
+
+        // For crypto, auto-switch to futures since options aren't available
+        if (widget.market == 'crypto' && chains.isEmpty && futures.isNotEmpty) {
+          _derivativeType = 'futures';
+        }
 
         if (_expiries.isNotEmpty) {
           _selectedExpiry ??= _expiries.first;
@@ -158,6 +168,17 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       return '${(value / 100000).toStringAsFixed(1)}L';
     } else if (value >= 1000) {
       return '${(value / 1000).toStringAsFixed(1)}k';
+    }
+    return value.toString();
+  }
+
+  String _formatVolume(int value) {
+    if (value >= 10000000) {
+      return '${(value / 10000000).toStringAsFixed(1)}Cr';
+    } else if (value >= 100000) {
+      return '${(value / 100000).toStringAsFixed(1)}L';
+    } else if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}K';
     }
     return value.toString();
   }
@@ -641,10 +662,16 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.info_outline, size: 48, color: AppColors.ink4),
+                    Icon(
+                      widget.market == 'crypto' ? Icons.currency_bitcoin : Icons.info_outline,
+                      size: 48,
+                      color: widget.market == 'crypto' ? AppColors.imperialGold : AppColors.ink4,
+                    ),
                     const SizedBox(height: 16),
                     Text(
-                      _error!,
+                      widget.market == 'crypto'
+                          ? 'Options not available for crypto'
+                          : _error!,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         color: AppColors.ink,
@@ -654,7 +681,9 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Please check your connection or try again later.',
+                      widget.market == 'crypto'
+                          ? 'Crypto markets only support perpetual futures contracts. You can trade futures from the stock detail screen.'
+                          : 'Please check your connection or try again later.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
                         color: AppColors.ink4,
@@ -663,7 +692,9 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: _loadOptionChain,
+                      onPressed: widget.market == 'crypto'
+                          ? () => Navigator.pop(context)
+                          : _loadOptionChain,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.imperialGold,
                         foregroundColor: Colors.white,
@@ -676,7 +707,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                         ),
                       ),
                       child: Text(
-                        'Retry',
+                        widget.market == 'crypto' ? 'Go Back' : 'Retry',
                         style: GoogleFonts.inter(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1027,22 +1058,43 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  Expanded(
-                    child: _futureMeta(
-                      'Mark',
-                      markPrice == null
-                          ? '--'
-                          : markPrice.toStringAsFixed(markPrice < 10 ? 4 : 2),
+                  if (widget.market == 'crypto') ...[
+                    // Crypto futures: show mark price and funding rate
+                    Expanded(
+                      child: _futureMeta(
+                        'Mark',
+                        markPrice == null
+                            ? '--'
+                            : markPrice.toStringAsFixed(markPrice < 10 ? 4 : 2),
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: _futureMeta(
-                      'Funding',
-                      funding == null
-                          ? '--'
-                          : '${(funding * 100).toStringAsFixed(4)}%',
+                    Expanded(
+                      child: _futureMeta(
+                        'Funding',
+                        funding == null
+                            ? '--'
+                            : '${(funding * 100).toStringAsFixed(4)}%',
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    // Stock futures: show volume and day range
+                    Expanded(
+                      child: _futureMeta(
+                        'Volume',
+                        future['volume'] != null
+                            ? _formatVolume((future['volume'] as num).toInt())
+                            : '--',
+                      ),
+                    ),
+                    Expanded(
+                      child: _futureMeta(
+                        'Day Range',
+                        future['low'] != null && future['high'] != null
+                            ? '₹${(future['low'] as num).toStringAsFixed(0)} - ₹${(future['high'] as num).toStringAsFixed(0)}'
+                            : '--',
+                      ),
+                    ),
+                  ],
                   Expanded(
                     child: _futureMeta(
                       'Expiry',

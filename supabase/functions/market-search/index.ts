@@ -74,11 +74,15 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
       if (q.length > 0) {
-        // Query instruments table in Supabase
+        // Query instruments table — ONLY tradeable instruments
+        // This filters out bonds (-NE, -ND), indexes (-INDEX), SGB (-SG),
+        // government securities (-GS, -GB, -ST, -TB), and mutual funds (-MF)
         const { data, error } = await supabase
           .from("instruments")
           .select("symbol, name, market, instrument_type, expiry_date, strike_price, option_type, lot_size")
+          .eq("tradeable", true)
           .or(`symbol.ilike.%${q}%,name.ilike.%${q}%`)
+          .order("instrument_type", { ascending: true })  // EQUITY first, then FUTURE, OPTION
           .order("symbol")
           .limit(40);
 
@@ -94,8 +98,17 @@ serve(async (req) => {
               finalSymbol = item.symbol.replace("ZOMATO", "ETERNAL");
               finalName = item.name.replace("Zomato", "Eternal");
             }
+
+            // Extract clean symbol for display (remove NSE: prefix and -EQ suffix)
+            // e.g., "NSE:TATACHEM-EQ" → "TATACHEM"
+            let displaySymbol = finalSymbol;
+            if (displaySymbol.startsWith("NSE:") || displaySymbol.startsWith("BSE:")) {
+              displaySymbol = displaySymbol.substring(4);
+            }
+
             return {
               symbol: finalSymbol,
+              display_symbol: displaySymbol,
               name: finalName,
               market: item.market,
               instrument_type: item.instrument_type,

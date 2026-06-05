@@ -185,6 +185,11 @@ class _TradingViewChartState extends State<TradingViewChart> {
       sym = 'ETERNAL';
     }
 
+    // Strip Fyers equity suffixes (-EQ, -SM, -BE, -BZ) for TradingView
+    // Fyers uses NSE:TATACHEM-EQ, TradingView uses NSE:TATACHEM
+    final fyersSuffixPattern = RegExp(r'-(EQ|SM|BE|BZ)$');
+    sym = sym.replaceAll(fyersSuffixPattern, '');
+
     // Normalize exchange prefixes
     final spaceMatch = RegExp(r'^(NSE|BSE)[\s\-](.+)$').firstMatch(sym);
     if (spaceMatch != null) {

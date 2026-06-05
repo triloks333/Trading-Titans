@@ -10,6 +10,7 @@ import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/swipe_button.dart';
 import '../../utils/lot_size.dart';
+import 'wallet_screen.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   final Quote quote;
@@ -738,14 +739,20 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(_inputByMoney && _isCrypto ? 'Amount ' : 'Margin ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
-                          Text(AppFormat.formatINR(_marginRequired), style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
-                          Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
-                          Text(AppFormat.formatINR(walletBalance), style: GoogleFonts.inter(color: color, fontSize: 12)),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Text(_inputByMoney && _isCrypto ? 'Amount ' : 'Margin ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                            Flexible(
+                              child: Text(AppFormat.formatINR(_marginRequired), style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                            Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
+                            Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                            Flexible(
+                              child: Text(AppFormat.formatINR(walletBalance), style: GoogleFonts.inter(color: _marginRequired > walletBalance && widget.isBuy ? AppColors.bear : color, fontSize: 12, fontWeight: _marginRequired > walletBalance && widget.isBuy ? FontWeight.bold : FontWeight.normal)),
+                            ),
+                          ],
+                        ),
                       ),
                       Container(
                         width: 32,
@@ -772,13 +779,81 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       ],
                     ),
                   ],
-                  const SizedBox(height: 16),
-                  SwipeButton(
-                    text: widget.isBuy ? 'SWIPE TO BUY' : 'SWIPE TO SELL',
-                    color: color,
-                    isLoading: _isLoading,
-                    onSwipeComplete: _submitOrder,
-                  ),
+                  const SizedBox(height: 12),
+                  // Show insufficient balance warning + top up button
+                  if (_marginRequired > walletBalance && widget.isBuy && _quantityValue > 0) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.bear.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.bear.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.account_balance_wallet_outlined, color: AppColors.bear, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Insufficient Balance',
+                                  style: GoogleFonts.inter(
+                                    color: AppColors.bear,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'You need ${AppFormat.formatINR(_marginRequired - walletBalance)} more to place this order.',
+                                  style: GoogleFonts.inter(
+                                    color: AppColors.ink3,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              // Navigate to wallet screen
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const WalletScreen(),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.bull,
+                              foregroundColor: AppColors.pureWhite,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              'TOP UP',
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    SwipeButton(
+                      text: widget.isBuy ? 'SWIPE TO BUY' : 'SWIPE TO SELL',
+                      color: color,
+                      isLoading: _isLoading,
+                      onSwipeComplete: _submitOrder,
+                    ),
+                  ],
                 ],
               ),
             ),

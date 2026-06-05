@@ -41,16 +41,20 @@ serve(async (req) => {
 
       // Equity format: 
       // 0: token, 1: name, 2: inst_type, 3: lot, 4: tick, 9: symbol
+      const sym = r[9].trim();
+      // Only -EQ and -SM suffixed stocks are tradeable equities
+      const isTradeable = sym.endsWith("-EQ") || sym.endsWith("-SM");
       instruments.push({
         fyers_token: r[0].trim(),
-        symbol: r[9].trim(),
+        symbol: sym,
         name: r[1].trim(),
         market: "stock",
         instrument_type: "EQUITY",
         expiry_date: null,
         strike_price: null,
         option_type: null,
-        lot_size: Number(r[3]) || 1
+        lot_size: Number(r[3]) || 1,
+        tradeable: isTradeable
       });
     }
 
@@ -104,7 +108,8 @@ serve(async (req) => {
         expiry_date: expiryDate,
         strike_price: strike,
         option_type: finalOptType,
-        lot_size: Number(r[3]) || 1
+        lot_size: Number(r[3]) || 1,
+        tradeable: true  // All F&O instruments are tradeable
       });
     }
 

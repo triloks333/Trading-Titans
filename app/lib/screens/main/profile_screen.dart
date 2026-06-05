@@ -114,7 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
-              _menuItem(context, Icons.card_giftcard, 'Give Reward', const AdminRewardScreen()),
+              _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
             ],
 
             const SizedBox(height: AppSpacing.md),

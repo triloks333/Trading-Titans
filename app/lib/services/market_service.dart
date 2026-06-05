@@ -117,7 +117,16 @@ class MarketService {
   static const String _cgBase = 'https://api.coingecko.com/api/v3';
 
   static String _yfSymbol(String sym) {
-    final s = sym.toUpperCase().trim();
+    var s = sym.toUpperCase().trim();
+
+    // Strip exchange prefix (NSE:, BSE:)
+    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
+      s = s.substring(4);
+    }
+
+    // Strip Fyers equity suffixes (-EQ, -SM, -BE, -BZ)
+    s = s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
+
     if (s.endsWith('.NS') ||
         s.endsWith('.BO') ||
         ['^NSEI', '^BSESN', '^NSEBANK'].contains(s)) {
@@ -320,6 +329,14 @@ class MarketService {
           .timeout(_timeout);
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      }
+      // Parse error responses that may contain derivative_type info
+      if (response.statusCode == 404) {
+        try {
+          final errorBody = jsonDecode(response.body);
+          // Return the error body so the UI can handle it
+          return errorBody;
+        } catch (_) {}
       }
     } catch (_) {}
     return null;

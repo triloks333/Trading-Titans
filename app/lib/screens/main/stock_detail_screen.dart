@@ -81,12 +81,21 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool get _isUp => (_quote?.change ?? 0) >= 0;
   Color get _changeColor => _isUp ? AppColors.bull : AppColors.bear;
 
+  /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM)
+  String get _displaySymbol {
+    var s = widget.symbol;
+    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
+      s = s.substring(4);
+    }
+    return s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = _quote;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.symbol),
+        title: Text(_displaySymbol),
         backgroundColor: AppColors.parchment,
         actions: [
           IconButton(

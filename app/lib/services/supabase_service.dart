@@ -967,12 +967,12 @@ class SupabaseService {
       name = quote.name;
     } else {
       final liveQuote = await MarketService.quote(symbol, market);
-      if (liveQuote != null) {
+      if (liveQuote != null && liveQuote.price > 0) {
         currentPrice = liveQuote.price;
         name = liveQuote.name;
       } else {
-        if (price == null) {
-          throw Exception('Live derivative quote unavailable');
+        if (price == null || price <= 0) {
+          throw Exception('Live derivative quote unavailable. Please try again.');
         }
         currentPrice = price;
         if (instrumentType == 'FUTURE') {
@@ -981,6 +981,11 @@ class SupabaseService {
           name = '$symbol $expiryDate $strikePrice $optionType';
         }
       }
+    }
+
+    // Critical guard: never allow orders at price 0
+    if (currentPrice <= 0) {
+      throw Exception('Cannot place order: price is ₹0. Quote may be temporarily unavailable.');
     }
 
     bool executeImmediately = isMarket;
@@ -1921,6 +1926,62 @@ class SupabaseService {
       await client.from('profiles').update({
         'wallet_balance': newBalance,
       }).eq('id', user.id);
+    }
+  }
+
+  Future<void> sendCustomNotification({
+    required String email,
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) async {
+    final profile = await client
+        .from('profiles')
+        .select('id')
+        .eq('email', email.trim().toLowerCase())
+        .maybeSingle();
+
+    if (profile == null) {
+      throw Exception('No account found with email $email');
+    }
+
+    final targetUserId = profile['id'] as String;
+
+    await client.from('notifications').insert({
+      'user_id': targetUserId,
+      'title': title,
+      'body': body,
+      'is_read': false,
+      'action_type': 'custom',
+      if (imageUrl != null) 'action_data': {'image_url': imageUrl},
+    });
+  }
+
+  Future<void> sendBroadcastNotification({
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) async {
+    final profiles = await client.from('profiles').select('id');
+    if (profiles == null) return;
+    final list = profiles as List<dynamic>;
+    if (list.isEmpty) return;
+
+    final inserts = list.map((profile) {
+      final userId = profile['id'] as String;
+      return {
+        'user_id': userId,
+        'title': title,
+        'body': body,
+        'is_read': false,
+        'action_type': 'broadcast',
+        if (imageUrl != null) 'action_data': {'image_url': imageUrl},
+      };
+    }).toList();
+
+    for (var i = 0; i < inserts.length; i += 100) {
+      final chunk = inserts.sublist(i, i + 100 > inserts.length ? inserts.length : i + 100);
+      await client.from('notifications').insert(chunk);
     }
   }
 }

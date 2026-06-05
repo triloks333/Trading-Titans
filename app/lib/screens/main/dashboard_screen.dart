@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:showcaseview/showcaseview.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
+import '../../widgets/titan_showcase.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/quote.dart';
@@ -14,6 +17,7 @@ import 'subscribe_screen.dart';
 import 'trade_screen.dart';
 import 'whatif_screen.dart';
 import 'orders_screen.dart';
+import 'notifications_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -29,6 +33,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Quote> _watchlist = [];
   List<Quote> _overview = [];
   Timer? _pollTimer;
+  int _unreadNotificationsCount = 0;
+
+  // Showcase Keys
+  final GlobalKey _totalValueKey = GlobalKey();
+  final GlobalKey _actionsKey = GlobalKey();
+  final GlobalKey _pulseKey = GlobalKey();
+  final GlobalKey _notificationsKey = GlobalKey();
+  final GlobalKey _guideKey = GlobalKey();
 
   @override
   void initState() {
@@ -44,34 +56,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _refreshPrices() async {
-    final overview = await SupabaseService().getMarketOverview();
-    final holdings = await SupabaseService().getHoldings();
-    final watchlist = await SupabaseService().getWatchlist();
-    if (mounted) {
-      setState(() {
-        _overview = overview;
-        _holdings = holdings;
-        _watchlist = watchlist;
-      });
-    }
+    try {
+      final results = await Future.wait([
+        SupabaseService().getMarketOverview(),
+        SupabaseService().getHoldings(),
+        SupabaseService().getWatchlist(),
+        _loadUnreadNotificationsCount(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _overview = results[0] as List<Quote>;
+          _holdings = results[1] as List<Holding>;
+          _watchlist = results[2] as List<Quote>;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
       final auth = context.read<AuthService>();
-      final holdings = await SupabaseService().getHoldings();
-      final watchlist = await SupabaseService().getWatchlist();
-      final overview = await SupabaseService().getMarketOverview();
-      await auth.refreshUser();
-      setState(() {
-        _holdings = holdings;
-        _watchlist = watchlist;
-        _overview = overview;
-      });
+      final results = await Future.wait([
+        SupabaseService().getMarketOverview(),
+        SupabaseService().getHoldings(),
+        SupabaseService().getWatchlist(),
+        auth.refreshUser(),
+        _loadUnreadNotificationsCount(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _overview = results[0] as List<Quote>;
+          _holdings = results[1] as List<Holding>;
+          _watchlist = results[2] as List<Quote>;
+        });
+      }
+    } catch (_) {
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+      final res = await Supabase.instance.client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+      if (mounted) {
+        setState(() {
+          _unreadNotificationsCount = (res as List).length;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _startGuide() {
+    ShowCaseWidget.of(context).startShowCase([
+      _guideKey,
+      _notificationsKey,
+      _totalValueKey,
+      _actionsKey,
+      _pulseKey,
+    ]);
   }
 
   String _formatValue(double value) {
@@ -120,58 +172,129 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                             ],
                           ),
-                          GestureDetector(
-                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
-                            child: Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: AppColors.cream,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.birch),
+                          Row(
+                            children: [
+                              // Guide Button (Question Mark)
+                              TitanShowcase(
+                                showcaseKey: _guideKey,
+                                title: 'Interactive Guide',
+                                description: 'Tap this question mark to launch the tour guide again anytime you want a walkthrough.',
+                                child: GestureDetector(
+                                  onTap: _startGuide,
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cream,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: AppColors.birch),
+                                    ),
+                                    child: const Icon(Icons.help_outline, size: 20, color: AppColors.ink2),
+                                  ),
+                                ),
                               ),
-                              child: const Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
-                            ),
+                              const SizedBox(width: AppSpacing.xs),
+                              // Notification Button
+                              TitanShowcase(
+                                showcaseKey: _notificationsKey,
+                                title: 'System Notifications',
+                                description: 'View system messages, custom alerts, and real-time order fill updates here.',
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+                                    _loadUnreadNotificationsCount();
+                                  },
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.cream,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: AppColors.birch),
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        const Icon(Icons.notifications_outlined, size: 20, color: AppColors.ink2),
+                                        if (_unreadNotificationsCount > 0)
+                                          Positioned(
+                                            top: 8,
+                                            right: 8,
+                                            child: Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              // Order History Button
+                              GestureDetector(
+                                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.cream,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.birch),
+                                  ),
+                                  child: const Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Container(
-                        padding: const EdgeInsets.all(AppSpacing.xl),
-                        decoration: AppCard.primary,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('TOTAL PORTFOLIO VALUE', style: AppText.sectionLabel),
-                            const SizedBox(height: 4),
-                            Text(_formatValue(totalValue), style: AppText.valueLarge),
-                            const SizedBox(height: AppSpacing.sm),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                              decoration: AppCard.badge(isPositive ? AppColors.bullLight : AppColors.bearLight),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                      TitanShowcase(
+                        showcaseKey: _totalValueKey,
+                        title: 'Portfolio Value',
+                        description: 'This card displays your total account value, current active holdings valuation, and your overall unrealized profit and loss (P&L) in real-time.',
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          decoration: AppCard.primary,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('TOTAL PORTFOLIO VALUE', style: AppText.sectionLabel),
+                              const SizedBox(height: 4),
+                              Text(_formatValue(totalValue), style: AppText.valueLarge),
+                              const SizedBox(height: AppSpacing.sm),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+                                decoration: AppCard.badge(isPositive ? AppColors.bullLight : AppColors.bearLight),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(isPositive ? Icons.trending_up : Icons.trending_down, size: 14, color: isPositive ? AppColors.bull : AppColors.bear),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${_formatValue(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
+                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.lg),
+                              Row(
                                 children: [
-                                  Icon(isPositive ? Icons.trending_up : Icons.trending_down, size: 14, color: isPositive ? AppColors.bull : AppColors.bear),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${_formatValue(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
-                                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
-                                  ),
+                                  _buildStatBox('Wallet', _formatValue(user?.walletBalance ?? 0.0)),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  _buildStatBox('Invested', _formatValue(investedValue)),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  _buildStatBox('Holdings', '${_holdings.length}'),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: AppSpacing.lg),
-                            Row(
-                              children: [
-                                _buildStatBox('Wallet', _formatValue(user?.walletBalance ?? 0.0)),
-                                const SizedBox(width: AppSpacing.sm),
-                                _buildStatBox('Invested', _formatValue(investedValue)),
-                                const SizedBox(width: AppSpacing.sm),
-                                _buildStatBox('Holdings', '${_holdings.length}'),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
@@ -199,33 +322,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                       const SizedBox(height: AppSpacing.lg),
-                      Row(
-                        children: [
-                          _buildActionTile(Icons.search, 'Trade', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TradeScreen()))),
-                          const SizedBox(width: AppSpacing.sm),
-                          _buildActionTile(Icons.lightbulb_outline, 'What-If', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WhatIfScreen()))),
-                          const SizedBox(width: AppSpacing.sm),
-                          _buildActionTile(Icons.medical_services_outlined, 'Autopsy', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AutopsyScreen()))),
-                          const SizedBox(width: AppSpacing.sm),
-                          _buildActionTile(Icons.bar_chart, 'Analytics', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
-                        ],
+                      TitanShowcase(
+                        showcaseKey: _actionsKey,
+                        title: 'Advanced Analytics & Simulation',
+                        description: 'Access tools like the What-If trade simulator, position Autopsy, and detailed portfolio Analytics to refine your strategy.',
+                        child: Row(
+                          children: [
+                            _buildActionTile(Icons.search, 'Trade', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TradeScreen()))),
+                            const SizedBox(width: AppSpacing.sm),
+                            _buildActionTile(Icons.lightbulb_outline, 'What-If', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WhatIfScreen()))),
+                            const SizedBox(width: AppSpacing.sm),
+                            _buildActionTile(Icons.medical_services_outlined, 'Autopsy', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AutopsyScreen()))),
+                            const SizedBox(width: AppSpacing.sm),
+                            _buildActionTile(Icons.bar_chart, 'Analytics', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      Text('Market Pulse', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                      const SizedBox(height: AppSpacing.sm),
-                      SizedBox(
-                        height: 120,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _overview.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-                          itemBuilder: (context, index) {
-                            final quote = _overview[index];
-                            return GestureDetector(
-                              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: quote.symbol, market: quote.market, name: quote.name))),
-                              child: _buildTickerCard(quote.displayName ?? quote.name, _formatValue(quote.price), '${quote.changePct.toStringAsFixed(2)}%', quote.changePct >= 0),
-                            );
-                          },
+                      TitanShowcase(
+                        showcaseKey: _pulseKey,
+                        title: 'Market Pulse',
+                        description: 'Follow major stock indices and crypto tickers in real-time to track overall market sentiment.',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Market Pulse', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                            const SizedBox(height: AppSpacing.sm),
+                            SizedBox(
+                              height: 120,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _overview.length,
+                                separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
+                                itemBuilder: (context, index) {
+                                  final quote = _overview[index];
+                                  return GestureDetector(
+                                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: quote.symbol, market: quote.market, name: quote.name))),
+                                    child: _buildTickerCard(quote.displayName ?? quote.name, _formatValue(quote.price), '${quote.changePct.toStringAsFixed(2)}%', quote.changePct >= 0),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       if (_holdings.isNotEmpty) ...[
