@@ -194,7 +194,7 @@ export const Hero: React.FC = () => {
               </form>
             ) : (
               <div className="bg-black text-[#9fff00] rounded-xl px-5 py-4 text-sm font-semibold text-center border border-zinc-800 shadow-md">
-                ✓ You're on the list! Verification sent.
+                ✓ You're on the list! We'll notify you as soon as access opens up.
               </div>
             )}
             {errorMsg && (
