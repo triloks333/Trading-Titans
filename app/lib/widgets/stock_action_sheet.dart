@@ -132,7 +132,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
       expand: false,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
+          decoration:       BoxDecoration(
             color: AppColors.pureWhite,
             borderRadius: BorderRadius.vertical(
               top: Radius.circular(AppRadius.xl),
@@ -284,7 +284,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      const Divider(height: 1, color: AppColors.birch),
+                            Divider(height: 1, color: AppColors.birch),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -348,7 +348,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      const Divider(height: 1, color: AppColors.birch),
+                            Divider(height: 1, color: AppColors.birch),
                       const SizedBox(height: AppSpacing.xl),
                       _buildMarketStats(),
                     ],

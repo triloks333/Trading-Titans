@@ -25,9 +25,9 @@ class SubscribeScreen extends StatelessWidget {
           children: [
             Text('Current balance', style: TextStyle(color: AppColors.ink4, fontSize: 13)),
             const SizedBox(height: AppSpacing.xs),
-            Text('₹${wallet.toStringAsFixed(0)}', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.ink)),
+            Text('₹${wallet.toStringAsFixed(0)}', style:       TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.ink)),
             const SizedBox(height: AppSpacing.lg),
-            const Text('Select a demo top-up plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  Text('Select a demo top-up plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
             const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ListView(
@@ -61,23 +61,23 @@ class SubscribeScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
               decoration: BoxDecoration(color: AppColors.imperialGold, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: const Text('MOST POPULAR', style: TextStyle(color: AppColors.pureWhite, fontSize: 10)),
+              child:       Text('MOST POPULAR', style: TextStyle(color: AppColors.pureWhite, fontSize: 10)),
             ),
           if (popular) const SizedBox(height: AppSpacing.sm),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          Text(title, style:       TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.xs),
-          Text('₹$cash demo cash', style: const TextStyle(color: AppColors.ink4)),
+          Text('₹$cash demo cash', style:       TextStyle(color: AppColors.ink4)),
           const SizedBox(height: AppSpacing.lg),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('₹$price', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Text('₹$price', style:       TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ElevatedButton(
                 onPressed: () {
                   _showGooglePlayPaywall(context, title, price, cash);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold),
-                child: const Text('Top up', style: TextStyle(color: AppColors.pureWhite)),
+                child:       Text('Top up', style: TextStyle(color: AppColors.pureWhite)),
               ),
             ],
           ),

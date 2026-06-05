@@ -164,10 +164,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.name, style: const TextStyle(color: AppColors.ink4, fontSize: 13)),
+          Text(widget.name, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           const SizedBox(height: AppSpacing.sm),
           Text('₹${q.price.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              style:       TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.sm),
           Row(children: [
             Container(
@@ -182,7 +182,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text(q.market.toUpperCase(), style: const TextStyle(color: AppColors.ink4)),
+            Text(q.market.toUpperCase(), style:       TextStyle(color: AppColors.ink4)),
           ]),
         ],
       ),
@@ -247,7 +247,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Key Stats',
+                Text('Key Stats',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.md),
           _statRow('Previous Close', '₹${q.previousClose.toStringAsFixed(2)}'),
@@ -270,7 +270,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.ink4, fontSize: 13)),
+          Text(label, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           Text(value,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -297,14 +297,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Your Position',
+                Text('Your Position',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.sm),
           Text('Quantity ${_holding!.quantity.toStringAsFixed(4)}',
-              style: const TextStyle(color: AppColors.ink4)),
+              style:       TextStyle(color: AppColors.ink4)),
           const SizedBox(height: AppSpacing.xs),
           Text('Avg price ₹${_holding!.avgPrice.toStringAsFixed(2)}',
-              style: const TextStyle(color: AppColors.ink4)),
+              style:       TextStyle(color: AppColors.ink4)),
         ],
       ),
     );
@@ -316,7 +316,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        icon: const Icon(Icons.layers_outlined, color: AppColors.pureWhite),
+        icon:       Icon(Icons.layers_outlined, color: AppColors.pureWhite),
         label: Text('VIEW OPTION CHAIN', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         onPressed: () async {
           await Navigator.push(
@@ -345,7 +345,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        icon: const Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
+        icon:       Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
         label: Text('VIEW CHART', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         onPressed: () async {
           await Navigator.push(
@@ -398,7 +398,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       decoration: BoxDecoration(
         color: AppColors.warmWhite,
-        border: const Border(top: BorderSide(color: AppColors.birch)),
+        border:       Border(top: BorderSide(color: AppColors.birch)),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(0, -2), blurRadius: 8),
         ],

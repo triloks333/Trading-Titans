@@ -430,10 +430,10 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(q.name, style: const TextStyle(color: AppColors.ink4, fontSize: 13)),
+          Text(q.name, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           const SizedBox(height: AppSpacing.sm),
           Text('₹${q.price.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              style:       TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.sm),
           Row(children: [
             Container(
@@ -448,7 +448,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text('UNDERLYING: ${widget.underlyingSymbol} (₹${widget.underlyingSpotPrice.toStringAsFixed(2)})', style: const TextStyle(color: AppColors.ink4, fontSize: 11)),
+            Text('UNDERLYING: ${widget.underlyingSymbol} (₹${widget.underlyingSpotPrice.toStringAsFixed(2)})', style:       TextStyle(color: AppColors.ink4, fontSize: 11)),
           ]),
         ],
       ),
@@ -546,7 +546,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        icon: const Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
+        icon:       Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
         label: Text('VIEW CHART', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         onPressed: () async {
           await Navigator.push(
@@ -593,7 +593,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+                    Expanded(
                 child: Text('Contract Details',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ),
@@ -656,7 +656,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+                    Expanded(
                 child: Text('Option Greeks',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ),
@@ -754,7 +754,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.ink4, fontSize: 13)),
+          Text(label, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           Text(value,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -784,7 +784,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Row(
             children: [
-              const Expanded(
+                    Expanded(
                 child: Text('Your Position',
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ),
@@ -814,7 +814,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               )),
           const SizedBox(height: AppSpacing.xs),
           Text('Avg price: ₹${_holding!.avgPrice.toStringAsFixed(2)}',
-              style: const TextStyle(color: AppColors.ink4)),
+              style:       TextStyle(color: AppColors.ink4)),
           // P&L display
           if (_quote != null) ...[
             const SizedBox(height: AppSpacing.xs),
@@ -887,7 +887,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       decoration: BoxDecoration(
         color: AppColors.warmWhite,
-        border: const Border(top: BorderSide(color: AppColors.birch)),
+        border:       Border(top: BorderSide(color: AppColors.birch)),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(0, -2), blurRadius: 8),
         ],

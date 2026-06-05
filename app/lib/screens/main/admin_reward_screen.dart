@@ -182,7 +182,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         decoration: InputDecoration(
                           hintText: 'user@example.com',
                           hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                          border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                          border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                           focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
@@ -201,7 +201,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                           hintText: 'e.g. 5000',
                           hintStyle: GoogleFonts.inter(color: AppColors.ink5),
                           prefixText: '₹ ',
-                          border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                          border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                           focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
@@ -220,7 +220,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         decoration: InputDecoration(
                           hintText: 'e.g. Thanks for reporting the critical bug! Keep up the good work.',
                           hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                          border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                          border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                           focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
@@ -238,7 +238,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           child: _submittingReward
-                              ? const SizedBox(
+                              ?       SizedBox(
                                   height: 20,
                                   width: 20,
                                   child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
@@ -299,7 +299,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                           decoration: InputDecoration(
                             hintText: 'user@example.com',
                             hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                            border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                            border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                             focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                           ),
                           validator: (v) {
@@ -319,7 +319,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         decoration: InputDecoration(
                           hintText: 'e.g. Critical System Update',
                           hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                          border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                          border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                           focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
@@ -337,7 +337,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         decoration: InputDecoration(
                           hintText: 'e.g. Our servers are undergoing maintenance tonight...',
                           hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                          border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                          border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                           focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
@@ -391,7 +391,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                           label: Text('Select Image', style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                            side: const BorderSide(color: AppColors.birch),
+                            side:       BorderSide(color: AppColors.birch),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                           ),
                         ),
@@ -406,7 +406,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           child: _submittingNotify
-                              ? const SizedBox(
+                              ?       SizedBox(
                                   height: 20,
                                   width: 20,
                                   child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),

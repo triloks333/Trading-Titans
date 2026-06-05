@@ -145,7 +145,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                                 _symbol,
                                 style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
                               ),
-                              const Icon(Icons.arrow_drop_down, color: AppColors.ink3),
+                                    Icon(Icons.arrow_drop_down, color: AppColors.ink3),
                             ],
                           ),
                         ),
@@ -168,7 +168,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       child: _busy
-                          ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2))
+                          ?       SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2))
                           : Text('Calculate', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                     ),
                   ),
@@ -276,11 +276,11 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
             fillColor: AppColors.cream,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.birch),
+              borderSide:       BorderSide(color: AppColors.birch),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.birch),
+              borderSide:       BorderSide(color: AppColors.birch),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -372,7 +372,7 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
-      decoration: const BoxDecoration(
+      decoration:       BoxDecoration(
         color: AppColors.pureWhite,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -399,7 +399,7 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
                   style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.ink3),
+                  icon:       Icon(Icons.close, color: AppColors.ink3),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
@@ -416,7 +416,7 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.search, size: 18, color: AppColors.ink4),
+                      Icon(Icons.search, size: 18, color: AppColors.ink4),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: TextField(

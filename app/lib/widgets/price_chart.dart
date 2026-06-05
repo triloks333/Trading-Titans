@@ -11,7 +11,7 @@ class PriceChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (points.isEmpty) {
-      return const SizedBox(
+      return       SizedBox(
         height: 200,
         child: Center(child: Text('No data', style: TextStyle(color: AppColors.ink4))),
       );
@@ -50,7 +50,7 @@ class PriceChart extends StatelessWidget {
                 getTitlesWidget: (value, meta) {
                   return Text(
                     '₹${value.toStringAsFixed(0)}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.ink4),
+                    style:       TextStyle(fontSize: 10, color: AppColors.ink4),
                   );
                 },
               ),

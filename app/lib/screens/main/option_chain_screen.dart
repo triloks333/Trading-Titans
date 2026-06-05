@@ -268,7 +268,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.cream,
-        border: const Border(top: BorderSide(color: AppColors.birch, width: 1)),
+        border:       Border(top: BorderSide(color: AppColors.birch, width: 1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.06),
@@ -415,7 +415,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        border: atmBorder ?? const Border(bottom: BorderSide(color: AppColors.parchment, width: 0.5)),
+        border: atmBorder ??       Border(bottom: BorderSide(color: AppColors.parchment, width: 0.5)),
       ),
       child: Row(
         children: [
@@ -791,7 +791,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       ),
                     ),
                   ),
-                  const Divider(height: 1, color: AppColors.birch),
+                        Divider(height: 1, color: AppColors.birch),
                 ],
                 Expanded(
                   child: _derivativeType == 'futures'
@@ -842,7 +842,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                 ],
                               ),
                             ),
-                            const Divider(height: 1, color: AppColors.birch),
+                                  Divider(height: 1, color: AppColors.birch),
                             // Table Header
                             Container(
                               color: AppColors.cream,
@@ -917,7 +917,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                 ],
                               ),
                             ),
-                            const Divider(height: 1, color: AppColors.birch),
+                                  Divider(height: 1, color: AppColors.birch),
                             // Option Rows List
                             Expanded(
                               child: LayoutBuilder(

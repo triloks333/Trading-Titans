@@ -1,40 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/theme.dart';
 
-class ThemeProvider extends ChangeNotifier {
-  static const String _themeKey = 'theme_mode';
-  ThemeMode _themeMode = ThemeMode.system;
+class ThemeService extends ChangeNotifier {
+  static final ThemeService _instance = ThemeService._internal();
+  factory ThemeService() => _instance;
+  ThemeService._internal();
+
+  ThemeMode _themeMode = ThemeMode.light;
 
   ThemeMode get themeMode => _themeMode;
 
   bool get isDarkMode {
     if (_themeMode == ThemeMode.system) {
-      return WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+      try {
+        final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+        return brightness == Brightness.dark;
+      } catch (_) {
+        return false;
+      }
     }
     return _themeMode == ThemeMode.dark;
   }
 
   Future<void> initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedMode = prefs.getString(_themeKey);
-    if (savedMode != null) {
-      _themeMode = ThemeMode.values.firstWhere(
-        (e) => e.toString() == savedMode,
-        orElse: () => ThemeMode.system,
-      );
-      AppColors.isDark = isDarkMode;
+    try {
+      WidgetsBinding.instance.platformDispatcher.onPlatformBrightnessChanged = () {
+        if (_themeMode == ThemeMode.system) {
+          notifyListeners();
+        }
+      };
+      final prefs = await SharedPreferences.getInstance();
+      final modeStr = prefs.getString('theme_mode') ?? 'light';
+      switch (modeStr) {
+        case 'dark':
+          _themeMode = ThemeMode.dark;
+          break;
+        case 'system':
+          _themeMode = ThemeMode.system;
+          break;
+        case 'light':
+        default:
+          _themeMode = ThemeMode.light;
+          break;
+      }
       notifyListeners();
-    } else {
-      AppColors.isDark = isDarkMode;
-    }
+    } catch (_) {}
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
-    AppColors.isDark = isDarkMode;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeKey, mode.toString());
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String modeStr = 'light';
+      if (mode == ThemeMode.dark) modeStr = 'dark';
+      if (mode == ThemeMode.system) modeStr = 'system';
+      await prefs.setString('theme_mode', modeStr);
+    } catch (_) {}
   }
 }

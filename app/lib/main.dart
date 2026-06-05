@@ -4,11 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
 import 'core/supabase_config.dart';
 import 'services/auth_service.dart';
+import 'services/theme_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/main/main_navigation.dart';
 import 'package:showcaseview/showcaseview.dart';
-
-import 'services/theme_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,19 +26,16 @@ class TradingTitansApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()..initialize()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()..initialize()),
+        ChangeNotifierProvider(create: (_) => ThemeService()..initialize()),
       ],
-      child: Consumer2<AuthService, ThemeProvider>(
-        builder: (context, auth, theme, child) {
-          // Keep AppColors flag updated
-          AppColors.isDark = theme.isDarkMode;
-
+      child: Consumer2<AuthService, ThemeService>(
+        builder: (context, auth, themeService, child) {
           if (auth.isInitializing) {
             return MaterialApp(
               title: 'Trading Titans',
               theme: AppTheme.lightTheme,
               darkTheme: AppTheme.darkTheme,
-              themeMode: theme.themeMode,
+              themeMode: themeService.themeMode,
               home: const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               ),
@@ -51,7 +47,7 @@ class TradingTitansApp extends StatelessWidget {
             title: 'Trading Titans',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: theme.themeMode,
+            themeMode: themeService.themeMode,
             home: auth.isAuthenticated
                 // ignore: deprecated_member_use
                 ? ShowCaseWidget(builder: (context) => const MainNavigation())

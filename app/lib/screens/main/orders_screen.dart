@@ -261,7 +261,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         final totalValue = order.total;
         
         return Container(
-          decoration: const BoxDecoration(
+          decoration:       BoxDecoration(
             color: AppColors.pureWhite,
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(24),
@@ -351,7 +351,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              const Divider(color: AppColors.birch, height: 1),
+                    Divider(color: AppColors.birch, height: 1),
               const SizedBox(height: 24),
               _buildDetailGrid([
                 _buildGridItem('Quantity', order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)),
@@ -370,7 +370,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 _buildGridItem('Executed At', order.isExecuted ? localizedExecuted : '--'),
               ]),
               const SizedBox(height: 24),
-              const Divider(color: AppColors.birch, height: 1),
+                    Divider(color: AppColors.birch, height: 1),
               const SizedBox(height: 20),
               InkWell(
                 onTap: () {
@@ -388,7 +388,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.fingerprint_rounded, size: 18, color: AppColors.ink4),
+                            Icon(Icons.fingerprint_rounded, size: 18, color: AppColors.ink4),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -400,7 +400,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Icon(Icons.copy_rounded, size: 16, color: AppColors.ink4),
+                            Icon(Icons.copy_rounded, size: 16, color: AppColors.ink4),
                     ],
                   ),
                 ),
@@ -527,7 +527,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
-                decoration: const BoxDecoration(
+                decoration:       BoxDecoration(
                   color: AppColors.pureWhite,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(24),

@@ -42,7 +42,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
           }
           final rows = snapshot.data ?? [];
           if (rows.isEmpty) {
-            return const Center(child: Text('No traders on the leaderboard yet.', style: TextStyle(color: AppColors.ink4)));
+            return       Center(child: Text('No traders on the leaderboard yet.', style: TextStyle(color: AppColors.ink4)));
           }
           return RefreshIndicator(
             onRefresh: () async => setState(() {}),
@@ -136,7 +136,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
                                         color: AppColors.imperialGold,
                                         borderRadius: BorderRadius.circular(AppRadius.tag),
                                       ),
-                                      child: const Text('You',
+                                      child:       Text('You',
                                           style: TextStyle(color: AppColors.pureWhite, fontSize: 10, fontWeight: FontWeight.bold)),
                                     ),
                                   ],

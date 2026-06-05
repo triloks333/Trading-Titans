@@ -340,7 +340,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             Container(
                               width: 32,
                               height: 32,
-                              decoration: const BoxDecoration(
+                              decoration:       BoxDecoration(
                                 color: AppColors.goldPale,
                                 shape: BoxShape.circle,
                               ),
@@ -425,7 +425,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.birch),
+                              side:       BorderSide(color: AppColors.birch),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(AppRadius.md),
                               ),

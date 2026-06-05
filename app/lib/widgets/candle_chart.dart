@@ -46,7 +46,7 @@ class _CandleChartState extends State<CandleChart> {
             height: 280,
             child: InteractiveChart(
               candles: chartData,
-              style: const ChartStyle(
+              style:       ChartStyle(
                 priceGainColor: AppColors.bull,
                 priceLossColor: AppColors.bear,
                 volumeColor: Color(0x33000000), // Unused if volume is null

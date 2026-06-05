@@ -286,7 +286,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.md),
-          const Divider(height: 1, color: AppColors.birch),
+                Divider(height: 1, color: AppColors.birch),
           const SizedBox(height: AppSpacing.sm),
           // Bottom row: email + resolve checkbox
           Row(

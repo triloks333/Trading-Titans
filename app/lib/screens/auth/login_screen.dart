@@ -59,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: AppSpacing.xxl),
                 const CrownLogo(size: 84),
                 const SizedBox(height: AppSpacing.lg),
-                const Text('Trading Titans', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      Text('Trading Titans', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
                 const Text('Trade Bold. Lose Nothing.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
@@ -70,15 +70,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Welcome back, Titan', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                            Text('Welcome back, Titan', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
-                      const Text('Sign in to your trading desk', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
+                            Text('Sign in to your trading desk', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
-                      const Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                            Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_emailController, 'you@example.com', false),
                       const SizedBox(height: AppSpacing.md),
-                      const Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                            Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_passwordController, '••••••••', true, isPassword: true),
                       if (_error != null) ...[
@@ -89,13 +89,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ElevatedButton(
                         onPressed: _busy ? null : _submit,
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold, minimumSize: const Size.fromHeight(52)),
-                        child: _busy ? const CircularProgressIndicator(color: AppColors.pureWhite) : const Text('Sign In', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
+                        child: _busy ?       CircularProgressIndicator(color: AppColors.pureWhite) :       Text('Sign In', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('New to the desk?', style: TextStyle(color: AppColors.ink4)),
+                                Text('New to the desk?', style: TextStyle(color: AppColors.ink4)),
                           TextButton(
                             onPressed: () {
                               Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));

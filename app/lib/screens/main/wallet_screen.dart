@@ -97,7 +97,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 ],
                               ),
                             ),
-                            const Icon(Icons.arrow_circle_right, size: 28, color: AppColors.pureWhite),
+                                  Icon(Icons.arrow_circle_right, size: 28, color: AppColors.pureWhite),
                           ],
                         ),
                       ),

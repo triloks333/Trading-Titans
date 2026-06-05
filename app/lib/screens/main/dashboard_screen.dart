@@ -189,7 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       shape: BoxShape.circle,
                                       border: Border.all(color: AppColors.birch),
                                     ),
-                                    child: const Icon(Icons.help_outline, size: 20, color: AppColors.ink2),
+                                    child:       Icon(Icons.help_outline, size: 20, color: AppColors.ink2),
                                   ),
                                 ),
                               ),
@@ -215,7 +215,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     child: Stack(
                                       alignment: Alignment.center,
                                       children: [
-                                        const Icon(Icons.notifications_outlined, size: 20, color: AppColors.ink2),
+                                              Icon(Icons.notifications_outlined, size: 20, color: AppColors.ink2),
                                         if (_unreadNotificationsCount > 0)
                                           Positioned(
                                             top: 8,
@@ -246,7 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     shape: BoxShape.circle,
                                     border: Border.all(color: AppColors.birch),
                                   ),
-                                  child: const Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
+                                  child:       Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
                                 ),
                               ),
                             ],
@@ -316,7 +316,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.arrow_forward, color: AppColors.parchment, size: 20),
+                                      Icon(Icons.arrow_forward, color: AppColors.parchment, size: 20),
                               ],
                             ),
                           ),
@@ -475,7 +475,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 36,
                 height: 36,
                 margin: const EdgeInsets.only(bottom: 4),
-                decoration: const BoxDecoration(
+                decoration:       BoxDecoration(
                   color: AppColors.goldPale,
                   shape: BoxShape.circle,
                 ),

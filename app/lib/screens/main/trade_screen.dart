@@ -146,7 +146,7 @@ class _TradeScreenState extends State<TradeScreen> {
               decoration: AppCard.primary,
               child: Row(
                 children: [
-                  const Icon(Icons.search, size: 18, color: AppColors.ink4),
+                        Icon(Icons.search, size: 18, color: AppColors.ink4),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: TextField(
@@ -281,7 +281,7 @@ class _LivePriceWidgetState extends State<_LivePriceWidget> {
       return const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (_quote == null) {
-      return const Icon(Icons.chevron_right, size: 18, color: AppColors.ink4);
+      return       Icon(Icons.chevron_right, size: 18, color: AppColors.ink4);
     }
     final isPositive = _quote!.change >= 0;
     return Column(

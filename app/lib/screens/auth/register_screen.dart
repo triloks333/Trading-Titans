@@ -97,7 +97,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: AppSpacing.xxl),
                 const CrownLogo(size: 72),
                 const SizedBox(height: AppSpacing.lg),
-                const Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
                 const Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
@@ -108,19 +108,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                            Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
-                      const Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
+                            Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
-                      const Text('Full Name', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                            Text('Full Name', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_nameController, 'Arjun Mehra', false),
                       const SizedBox(height: AppSpacing.md),
-                      const Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                            Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_emailController, 'you@example.com', false),
                       const SizedBox(height: AppSpacing.md),
-                      const Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                            Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_passwordController, 'Min. 8 chars (letters, digits & symbols)', true, isPassword: true),
                       const SizedBox(height: AppSpacing.md),
@@ -137,7 +137,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 });
                               },
                               activeColor: AppColors.imperialGold,
-                              side: const BorderSide(color: AppColors.birch),
+                              side:       BorderSide(color: AppColors.birch),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
@@ -153,7 +153,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       if (_hasReferral) ...[
                         const SizedBox(height: AppSpacing.md),
-                        const Text('Referral Code', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                              Text('Referral Code', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                         const SizedBox(height: AppSpacing.xs),
                         _buildField(_referralController, 'e.g. TT-XXXXXX', false),
                       ],
@@ -165,13 +165,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ElevatedButton(
                         onPressed: _busy ? null : _submit,
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold, minimumSize: const Size.fromHeight(52)),
-                        child: _busy ? const CircularProgressIndicator(color: AppColors.pureWhite) : const Text('Create Account', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
+                        child: _busy ?       CircularProgressIndicator(color: AppColors.pureWhite) :       Text('Create Account', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('Already have an account?', style: TextStyle(color: AppColors.ink4)),
+                                Text('Already have an account?', style: TextStyle(color: AppColors.ink4)),
                           TextButton(
                             onPressed: () {
                               Navigator.of(context).pop();

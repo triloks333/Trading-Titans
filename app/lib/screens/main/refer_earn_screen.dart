@@ -99,7 +99,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
         backgroundColor: AppColors.pureWhite,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.ink),
+          icon:       Icon(Icons.arrow_back_ios_new, color: AppColors.ink),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -354,7 +354,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                       ),
                       child: Column(
                         children: [
-                          const Icon(Icons.people_outline, size: 48, color: AppColors.ink4),
+                                Icon(Icons.people_outline, size: 48, color: AppColors.ink4),
                           const SizedBox(height: AppSpacing.md),
                           Text(
                             'No referred friends yet',

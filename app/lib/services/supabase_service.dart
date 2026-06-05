@@ -1980,7 +1980,6 @@ class SupabaseService {
     String? imageUrl,
   }) async {
     final profiles = await client.from('profiles').select('id');
-    if (profiles == null) return;
     final list = profiles as List<dynamic>;
     if (list.isEmpty) return;
 

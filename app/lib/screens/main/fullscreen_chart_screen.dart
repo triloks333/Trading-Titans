@@ -95,7 +95,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
         scrolledUnderElevation: 0.5,
         leadingWidth: 48,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded, color: AppColors.ink),
+          icon:       Icon(Icons.close_rounded, color: AppColors.ink),
           onPressed: () => Navigator.of(context).pop(),
         ),
         titleSpacing: 0,
@@ -114,7 +114,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.search_rounded, size: 16, color: AppColors.ink4),
+                            Icon(Icons.search_rounded, size: 16, color: AppColors.ink4),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -142,7 +142,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.chevron_left_rounded, size: 16, color: AppColors.ink),
+                          Icon(Icons.chevron_left_rounded, size: 16, color: AppColors.ink),
                     Text(
                       'Watchlist 1',
                       style: GoogleFonts.inter(
@@ -151,7 +151,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.ink),
+                          Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.ink),
                   ],
                 ),
               ),
@@ -176,11 +176,11 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(Icons.close_rounded, color: AppColors.ink),
+                icon:       Icon(Icons.close_rounded, color: AppColors.ink),
                 onPressed: () => Navigator.of(context).pop(),
               ),
               IconButton(
-                icon: const Icon(Icons.refresh_rounded, color: AppColors.ink),
+                icon:       Icon(Icons.refresh_rounded, color: AppColors.ink),
                 onPressed: _refreshChart,
               ),
               TextButton.icon(

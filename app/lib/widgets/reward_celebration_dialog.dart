@@ -106,7 +106,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 // Celebration Icon / Emote
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: const BoxDecoration(
+                  decoration:       BoxDecoration(
                     color: AppColors.goldPale,
                     shape: BoxShape.circle,
                   ),

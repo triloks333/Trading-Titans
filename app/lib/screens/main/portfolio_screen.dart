@@ -371,7 +371,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-              const Divider(height: 1, color: AppColors.cream),
+                    Divider(height: 1, color: AppColors.cream),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [

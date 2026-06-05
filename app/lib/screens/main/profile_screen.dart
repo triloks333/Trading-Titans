@@ -5,9 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/theme.dart';
-import '../../services/theme_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
 import '../../widgets/crown_logo.dart';
 import 'subscribe_screen.dart';
 import 'orders_screen.dart';
@@ -32,6 +32,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final user = auth.user;
+    final themeService = context.watch<ThemeService>();
+    
+    String themeName = 'Light Mode';
+    if (themeService.themeMode == ThemeMode.dark) themeName = 'Dark Mode';
+    if (themeService.themeMode == ThemeMode.system) themeName = 'System Default';
 
     return Scaffold(
       body: SafeArea(
@@ -113,7 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.gavel_outlined, 'Terms & Conditions', () => _showTerms(context)),
             _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
-            _menuItemAction(context, Icons.palette_outlined, 'App Theme', () => _showThemeSelector(context)),
+            _menuItemActionWithSubtitle(context, Icons.palette_outlined, 'App Theme', themeName, () => _showThemeSelector(context)),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
@@ -150,7 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         },
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
-          side: const BorderSide(color: AppColors.birch),
+          side:       BorderSide(color: AppColors.birch),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           backgroundColor: AppColors.pureWhite,
         ),
@@ -159,7 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icon(icon, size: 20, color: AppColors.ink2),
             const SizedBox(width: AppSpacing.md),
             Expanded(child: Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500))),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
+                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
           ],
         ),
       ),
@@ -173,7 +178,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
-          side: const BorderSide(color: AppColors.birch),
+          side:       BorderSide(color: AppColors.birch),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           backgroundColor: AppColors.pureWhite,
         ),
@@ -182,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Icon(icon, size: 20, color: AppColors.ink2),
             const SizedBox(width: AppSpacing.md),
             Expanded(child: Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500))),
-            const Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
+                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
           ],
         ),
       ),
@@ -305,7 +310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Enter feature name...',
                     hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                   ),
                 ),
@@ -319,7 +324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Describe the feature in detail...',
                     hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                   ),
                 ),
@@ -368,7 +373,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: Text('Select Image', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      side: const BorderSide(color: AppColors.birch),
+                      side:       BorderSide(color: AppColors.birch),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                     ),
                   ),
@@ -420,7 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: submitting
-                        ? const SizedBox(
+                        ?       SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
@@ -474,7 +479,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Enter issue name...',
                     hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                   ),
                 ),
@@ -488,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   decoration: InputDecoration(
                     hintText: 'Describe the bug or issue...',
                     hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
+                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                   ),
                 ),
@@ -537,7 +542,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: Text('Select Image', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      side: const BorderSide(color: AppColors.birch),
+                      side:       BorderSide(color: AppColors.birch),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                     ),
                   ),
@@ -589,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: submitting
-                        ? const SizedBox(
+                        ?       SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
@@ -606,16 +611,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _detailRow(String label, String value, {Color? valueColor}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13)),
-        Text(value, style: GoogleFonts.inter(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
-      ],
-    );
-  }
-
   void _showThemeSelector(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -624,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
       builder: (context) {
-        final themeProvider = Provider.of<ThemeProvider>(context);
+        final themeService = context.watch<ThemeService>();
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -646,15 +641,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   'Choose Theme',
                   style: GoogleFonts.inter(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: AppColors.ink,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _buildThemeOption(context, themeProvider, ThemeMode.light, 'Light Mode', Icons.light_mode_outlined),
-                _buildThemeOption(context, themeProvider, ThemeMode.dark, 'Dark Mode', Icons.dark_mode_outlined),
-                _buildThemeOption(context, themeProvider, ThemeMode.system, 'System Mode', Icons.settings_brightness_outlined),
+                _themeOption(
+                  context,
+                  icon: Icons.light_mode_outlined,
+                  title: 'Light Mode',
+                  isSelected: themeService.themeMode == ThemeMode.light,
+                  onTap: () {
+                    themeService.setThemeMode(ThemeMode.light);
+                    Navigator.pop(context);
+                  },
+                ),
+                _themeOption(
+                  context,
+                  icon: Icons.dark_mode_outlined,
+                  title: 'Dark Mode',
+                  isSelected: themeService.themeMode == ThemeMode.dark,
+                  onTap: () {
+                    themeService.setThemeMode(ThemeMode.dark);
+                    Navigator.pop(context);
+                  },
+                ),
+                _themeOption(
+                  context,
+                  icon: Icons.settings_brightness_outlined,
+                  title: 'System Default',
+                  isSelected: themeService.themeMode == ThemeMode.system,
+                  onTap: () {
+                    themeService.setThemeMode(ThemeMode.system);
+                    Navigator.pop(context);
+                  },
+                ),
               ],
             ),
           ),
@@ -663,54 +685,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildThemeOption(
-    BuildContext context,
-    ThemeProvider themeProvider,
-    ThemeMode mode,
-    String title,
-    IconData icon,
-  ) {
-    final isSelected = themeProvider.themeMode == mode;
-    final color = isSelected ? AppColors.imperialGold : AppColors.ink;
-
+  Widget _themeOption(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: InkWell(
-        onTap: () {
-          themeProvider.setThemeMode(mode);
-          Navigator.pop(context);
-        },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.md),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.md),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: isSelected ? AppColors.imperialGold : AppColors.birch,
-              width: isSelected ? 1.5 : 1.0,
-            ),
-            borderRadius: BorderRadius.circular(AppRadius.md),
             color: isSelected ? AppColors.goldPale : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: isSelected ? AppColors.goldBorder : Colors.transparent,
+            ),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 22, color: color),
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected ? AppColors.imperialGold : AppColors.ink2,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
                   title,
                   style: GoogleFonts.inter(
-                    color: color,
+                    color: isSelected ? AppColors.imperialGold : AppColors.ink,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 15,
+                    fontSize: 14,
                   ),
                 ),
               ),
               if (isSelected)
-                Icon(Icons.check_circle, color: AppColors.imperialGold, size: 20),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.imperialGold,
+                  size: 20,
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _menuItemActionWithSubtitle(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.lg),
+          side:       BorderSide(color: AppColors.birch),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+          backgroundColor: AppColors.pureWhite,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: AppColors.ink2),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text(subtitle, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                ],
+              ),
+            ),
+                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value, {Color? valueColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13)),
+        Text(value, style: GoogleFonts.inter(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
+      ],
     );
   }
 }
