@@ -122,7 +122,10 @@ export const Hero: React.FC = () => {
             animate={{ opacity: 1, y: 0 }} 
             transition={{ duration: 0.8 }}
             className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-none text-[#1a1a1a] select-none"
-            style={{ fontFamily: 'var(--font-display), sans-serif' }}
+            style={{ 
+              fontFamily: 'var(--font-display), sans-serif',
+              textShadow: '0 0 40px rgba(255, 255, 255, 0.95), 0 0 15px rgba(255, 255, 255, 0.9), 0 0 5px rgba(255, 255, 255, 0.6)'
+            }}
           >
             rebuild your <br />
             <span className="text-[#8e8e8e]">trading mentality with</span> <br />
