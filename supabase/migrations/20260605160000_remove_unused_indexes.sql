@@ -1,0 +1,25 @@
+-- Remove unused indexes flagged by Supabase database linter (unused_index)
+DROP INDEX IF EXISTS public.idx_rewards_created_at;
+DROP INDEX IF EXISTS public.idx_referral_commissions_created_at;
+DROP INDEX IF EXISTS public.idx_rewards_user_id;
+DROP INDEX IF EXISTS public.idx_notifications_user_id;
+DROP INDEX IF EXISTS public.idx_orders_created_at;
+DROP INDEX IF EXISTS public.idx_holdings_created_at;
+DROP INDEX IF EXISTS public.idx_watchlist_created_at;
+DROP INDEX IF EXISTS public.idx_notifications_created_at;
+DROP INDEX IF EXISTS public.idx_trade_autopsies_created_at;
+DROP INDEX IF EXISTS public.idx_support_tickets_created_at;
+DROP INDEX IF EXISTS public.idx_orders_user_status;
+DROP INDEX IF EXISTS public.idx_orders_user_symbol;
+DROP INDEX IF EXISTS public.idx_crypto_prices_symbol_time;
+DROP INDEX IF EXISTS public.idx_profiles_referred_by;
+DROP INDEX IF EXISTS public.idx_referral_commissions_referred_id;
+DROP INDEX IF EXISTS public.idx_waitlist_referred_by;
+DROP INDEX IF EXISTS public.idx_trade_autopsies_user;
+DROP INDEX IF EXISTS public.idx_holdings_user_id;
+DROP INDEX IF EXISTS public.idx_referral_commissions_referrer;
+DROP INDEX IF EXISTS public.idx_instruments_tradeable;
+DROP INDEX IF EXISTS public.idx_pnl_history_user_created;
+DROP INDEX IF EXISTS public.idx_crypto_holdings_user_id;
+DROP INDEX IF EXISTS public.idx_crypto_holdings_created_at;
+DROP INDEX IF EXISTS public.idx_instruments_search_trgm;
