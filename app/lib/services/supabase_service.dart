@@ -959,17 +959,26 @@ class SupabaseService {
     double limitPrice = price ?? 0.0;
     double currentPrice = 0.0;
     String name = symbol;
+    bool isQuoteAvailable = false;
 
     if (instrumentType == 'EQUITY') {
       final quote = await MarketService.quote(symbol, market);
-      if (quote == null) throw Exception('Market quote unavailable');
-      currentPrice = quote.price;
-      name = quote.name;
+      if (quote != null && quote.price > 0) {
+        currentPrice = quote.price;
+        name = quote.name;
+        isQuoteAvailable = true;
+      } else {
+        if (price == null || price <= 0) {
+          throw Exception('Market quote unavailable');
+        }
+        currentPrice = price;
+      }
     } else {
       final liveQuote = await MarketService.quote(symbol, market);
       if (liveQuote != null && liveQuote.price > 0) {
         currentPrice = liveQuote.price;
         name = liveQuote.name;
+        isQuoteAvailable = true;
       } else {
         if (price == null || price <= 0) {
           throw Exception('Live derivative quote unavailable. Please try again.');
@@ -990,10 +999,14 @@ class SupabaseService {
 
     bool executeImmediately = isMarket;
     if (!isMarket) {
-      if (side == 'buy') {
-        executeImmediately = (currentPrice <= limitPrice);
+      if (isQuoteAvailable) {
+        if (side == 'buy') {
+          executeImmediately = (currentPrice <= limitPrice);
+        } else {
+          executeImmediately = (currentPrice >= limitPrice);
+        }
       } else {
-        executeImmediately = (currentPrice >= limitPrice);
+        executeImmediately = false;
       }
     }
 
