@@ -57,17 +57,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _refreshPrices() async {
     try {
-      final results = await Future.wait([
-        SupabaseService().getMarketOverview(),
-        SupabaseService().getHoldings(),
-        SupabaseService().getWatchlist(),
-        _loadUnreadNotificationsCount(),
+      List<Quote> overview = _overview;
+      List<Holding> holdings = _holdings;
+      List<Quote> watchlist = _watchlist;
+
+      await Future.wait([
+        SupabaseService().getMarketOverview().then((val) => overview = val).catchError((_) => _overview),
+        SupabaseService().getHoldings().then((val) => holdings = val).catchError((_) => _holdings),
+        SupabaseService().getWatchlist().then((val) => watchlist = val).catchError((_) => _watchlist),
+        _loadUnreadNotificationsCount().catchError((_) {}),
       ]);
+
       if (mounted) {
         setState(() {
-          _overview = results[0] as List<Quote>;
-          _holdings = results[1] as List<Holding>;
-          _watchlist = results[2] as List<Quote>;
+          _overview = overview;
+          _holdings = holdings;
+          _watchlist = watchlist;
         });
       }
     } catch (_) {}
@@ -77,18 +82,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _loading = true);
     try {
       final auth = context.read<AuthService>();
-      final results = await Future.wait([
-        SupabaseService().getMarketOverview(),
-        SupabaseService().getHoldings(),
-        SupabaseService().getWatchlist(),
-        auth.refreshUser(),
-        _loadUnreadNotificationsCount(),
+      List<Quote> overview = [];
+      List<Holding> holdings = [];
+      List<Quote> watchlist = [];
+
+      await Future.wait([
+        SupabaseService().getMarketOverview().then((val) => overview = val).catchError((_) => <Quote>[]),
+        SupabaseService().getHoldings().then((val) => holdings = val).catchError((_) => <Holding>[]),
+        SupabaseService().getWatchlist().then((val) => watchlist = val).catchError((_) => <Quote>[]),
+        auth.refreshUser().catchError((_) {}),
+        _loadUnreadNotificationsCount().catchError((_) {}),
       ]);
+
       if (mounted) {
         setState(() {
-          _overview = results[0] as List<Quote>;
-          _holdings = results[1] as List<Holding>;
-          _watchlist = results[2] as List<Quote>;
+          _overview = overview;
+          _holdings = holdings;
+          _watchlist = watchlist;
         });
       }
     } catch (_) {
