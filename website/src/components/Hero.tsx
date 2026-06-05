@@ -20,10 +20,8 @@ export const Hero: React.FC = () => {
   const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak";
 
   useEffect(() => {
-    // Set target date 20 days from current date (June 4, 2026) -> June 24, 2026
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + 20);
-    targetDate.setHours(0, 0, 0, 0);
+    // Set static target date of June 24, 2026 IST
+    const targetDate = new Date('2026-06-24T00:00:00+05:30');
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
@@ -99,6 +97,9 @@ export const Hero: React.FC = () => {
         </video>
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#EDEEF5] to-transparent"></div>
         <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-[#EDEEF5] to-transparent"></div>
+        
+        {/* Semi-transparent white spotlight behind the heading text to lift readability */}
+        <div className="absolute top-[10%] left-[-10%] md:left-[5%] w-[80%] md:w-[50%] h-[60%] bg-white/70 blur-[130px] rounded-full"></div>
       </div>
 
       {/* Grid Container for Layout */}
@@ -124,17 +125,17 @@ export const Hero: React.FC = () => {
             className="text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-none text-[#1a1a1a] select-none"
             style={{ 
               fontFamily: 'var(--font-display), sans-serif',
-              textShadow: '0 0 40px rgba(255, 255, 255, 0.95), 0 0 15px rgba(255, 255, 255, 0.9), 0 0 5px rgba(255, 255, 255, 0.6)'
+              textShadow: '0 0 45px rgba(255, 255, 255, 0.98), 0 0 20px rgba(255, 255, 255, 0.95), 0 0 5px rgba(255, 255, 255, 0.8)'
             }}
           >
             rebuild your <br />
-            <span className="text-[#8e8e8e]">trading mentality with</span> <br />
+            <span className="text-[#3c3c3d]">trading mentality with</span> <br />
             <span className="text-black">trading titans</span> <br />
-            <span className="text-[#8e8e8e]">0% risk 100% learning and</span>{' '}
+            <span className="text-[#3c3c3d]">0% risk 100% learning and</span>{' '}
             <span className="w-[42px] md:w-[62px] lg:w-[82px] h-[22px] md:h-[32px] lg:h-[38px] border-[2px] border-[#1a1a1a] rounded-full inline-flex items-center justify-center mx-1 bg-white/40 backdrop-blur-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-black"></span>
             </span>{' '}
-            <span className="text-[#8e8e8e]">mental wellbeing.</span>
+            <span className="text-[#3c3c3d]">mental wellbeing.</span>
           </motion.h1>
 
           {/* Interactive Countdown Timer */}
