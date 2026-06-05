@@ -32,6 +32,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submit() async {
+    final password = _passwordController.text;
+    
+    if (password.length < 8) {
+      setState(() {
+        _error = 'Password must be at least 8 characters long.';
+      });
+      return;
+    }
+    
+    final hasUppercase = RegExp(r'[A-Z]').hasMatch(password);
+    final hasLowercase = RegExp(r'[a-z]').hasMatch(password);
+    final hasDigits = RegExp(r'[0-9]').hasMatch(password);
+    final hasSpecialCharacters = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password);
+    
+    if (!hasUppercase || !hasLowercase || !hasDigits || !hasSpecialCharacters) {
+      setState(() {
+        _error = 'Password must contain uppercase, lowercase, numbers, and special characters.';
+      });
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -101,7 +122,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.md),
                       const Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
-                      _buildField(_passwordController, 'At least 6 characters', true, isPassword: true),
+                      _buildField(_passwordController, 'Min. 8 chars (letters, digits & symbols)', true, isPassword: true),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
