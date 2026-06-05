@@ -11,19 +11,26 @@ ALTER FUNCTION public.auth_uid() SET search_path = public;
 ALTER FUNCTION public.notify_order_executed() SET search_path = public;
 ALTER FUNCTION public.notify_balance_change() SET search_path = public;
 
--- 3. Restrict Security Definer Function execution (anon_security_definer_function_executable / authenticated_security_definer_function_executable)
-REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.is_admin() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.is_admin() FROM authenticated;
+-- 3. Change helper/trigger functions to SECURITY INVOKER to satisfy linter warnings (anon_security_definer_function_executable)
+ALTER FUNCTION public.auth_uid() SECURITY INVOKER;
+ALTER FUNCTION public.is_admin() SECURITY INVOKER;
+ALTER FUNCTION public.notify_balance_change() SECURITY INVOKER;
+ALTER FUNCTION public.notify_order_executed() SECURITY INVOKER;
 
-REVOKE EXECUTE ON FUNCTION public.auth_uid() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.auth_uid() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.auth_uid() FROM authenticated;
+-- 4. Explicitly grant execute back to PUBLIC, anon, and authenticated so RLS policies don't crash
+GRANT EXECUTE ON FUNCTION public.auth_uid() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.auth_uid() TO anon;
+GRANT EXECUTE ON FUNCTION public.auth_uid() TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION public.notify_order_executed() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.notify_order_executed() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.notify_order_executed() FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION public.notify_balance_change() FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.notify_balance_change() FROM anon;
-REVOKE EXECUTE ON FUNCTION public.notify_balance_change() FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.notify_balance_change() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.notify_balance_change() TO anon;
+GRANT EXECUTE ON FUNCTION public.notify_balance_change() TO authenticated;
+
+GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO PUBLIC;
+GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO anon;
+GRANT EXECUTE ON FUNCTION public.notify_order_executed() TO authenticated;
+
