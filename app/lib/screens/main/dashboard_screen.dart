@@ -310,13 +310,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Need more demo capital?', style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.goldLight)),
+                                      Text('Need more demo capital?', style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                                       const SizedBox(height: 2),
-                                      Text('Top-up plans from ₹199 · Up to ₹10,00,000', style: GoogleFonts.inter(fontSize: 12, color: AppColors.parchment)),
+                                      Text('Top-up plans from ₹199 · Up to ₹10,00,000', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBBD7F8))),
                                     ],
                                   ),
                                 ),
-                                      Icon(Icons.arrow_forward, color: AppColors.parchment, size: 20),
+                                const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
                               ],
                             ),
                           ),

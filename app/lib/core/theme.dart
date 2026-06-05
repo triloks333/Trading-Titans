@@ -172,9 +172,9 @@ class AppCard {
   );
 
   static BoxDecoration get darkCta => BoxDecoration(
-    color: AppColors.ink,
+    color: const Color(0xFF0B1B2B),
     borderRadius: BorderRadius.circular(AppRadius.lg),
-    border: Border.all(color: AppColors.goldBorder),
+    border: Border.all(color: const Color(0xFF233A66)),
     boxShadow: AppShadows.gold,
   );
 

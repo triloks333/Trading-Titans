@@ -91,13 +91,13 @@ class _WalletScreenState extends State<WalletScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Top-up Demo Cash', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                                  Text('Top-up Demo Cash', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                                   const SizedBox(height: 2),
-                                  Text('From ₹199 · Up to ₹10,00,000', style: GoogleFonts.inter(fontSize: 13, color: AppColors.goldLight)),
+                                  Text('From ₹199 · Up to ₹10,00,000', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFBBD7F8))),
                                 ],
                               ),
                             ),
-                                  Icon(Icons.arrow_circle_right, size: 28, color: AppColors.pureWhite),
+                            const Icon(Icons.arrow_circle_right, size: 28, color: Colors.white),
                           ],
                         ),
                       ),
