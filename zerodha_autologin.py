@@ -93,10 +93,19 @@ try:
     request_id = login_data["data"]["request_id"]
     
     # Step 2: Generate or Prompt for TOTP code
-    if ZERODHA_TOTP_SECRET:
-        totp = pyotp.TOTP(ZERODHA_TOTP_SECRET.replace(" ", ""))
-        totp_code = totp.now()
-    else:
+    totp_code = None
+    if ZERODHA_TOTP_SECRET and ZERODHA_TOTP_SECRET.strip():
+        try:
+            # Try to generate TOTP code automatically
+            clean_secret = ZERODHA_TOTP_SECRET.strip().replace(" ", "")
+            totp = pyotp.TOTP(clean_secret)
+            totp_code = totp.now()
+            print("Generated TOTP code automatically using ZERODHA_TOTP_SECRET.")
+        except Exception as e:
+            print(f"Warning: Failed to generate TOTP automatically ({e}). Falling back to manual entry.")
+            totp_code = None
+
+    if not totp_code:
         totp_code = input("Please enter the 6-digit TOTP code from your Authenticator app: ").strip()
         while len(totp_code) != 6 or not totp_code.isdigit():
             totp_code = input("Invalid code. Please enter a 6-digit numeric TOTP code: ").strip()
