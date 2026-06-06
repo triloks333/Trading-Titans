@@ -33,10 +33,10 @@ export default async function handler(req, res) {
   if (!plan) return res.status(400).json({ error: 'Invalid plan' });
   if (!user_id) return res.status(400).json({ error: 'Missing user_id' });
 
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-  const supabaseUrl = process.env.SUPABASE_URL || 'https://bftvimnhpoiuoyryyiff.supabase.co';
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const keyId = process.env.RAZORPAY_KEY_ID?.trim();
+  const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+  const supabaseUrl = (process.env.SUPABASE_URL || 'https://bftvimnhpoiuoyryyiff.supabase.co').trim();
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   if (!keySecret) return res.status(500).json({ error: 'Payment gateway not configured' });
   if (!supabaseServiceKey) return res.status(500).json({ error: 'Database not configured' });
