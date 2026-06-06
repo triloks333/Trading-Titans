@@ -6,6 +6,7 @@ import { fetchQuote as uxQuote } from "../_shared/upstox.ts";
 import { fetchQuote as fyQuote } from "../_shared/fyers.ts";
 import { fetchQuote as biQuote } from "../_shared/binance.ts";
 import { fetchQuote as cxQuote } from "../_shared/coindcx.ts";
+import { fetchQuote as zdQuote } from "../_shared/zerodha.ts";
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -41,8 +42,13 @@ serve(async (req) => {
       }
     } else {
       try {
-        quote = await fyQuote(symbol);
+        quote = await zdQuote(symbol);
       } catch (_) {}
+      if (!quote) {
+        try {
+          quote = await fyQuote(symbol);
+        } catch (_) {}
+      }
       if (!quote) {
         try {
           quote = await uxQuote(symbol);

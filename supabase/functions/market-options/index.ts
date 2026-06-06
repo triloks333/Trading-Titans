@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders, handleCors } from "../_shared/cors.ts";
+import { fetchOptionChain as zerodhaOptionChain } from "../_shared/zerodha.ts";
 import { fetchOptionChain as fyersOptionChain, generateMockFyersChainAndFutures } from "../_shared/fyers.ts";
 import { fetchFuturesChain as coindcxFuturesChain } from "../_shared/coindcx.ts";
 import { fetchQuote as yfQuote } from "../_shared/yahoo.ts";
@@ -30,9 +31,16 @@ serve(async (req) => {
       return json(futures);
     }
 
-    let chain = await fyersOptionChain(symbol, Number.isFinite(strikeCount) ? strikeCount : 25);
+    // Try Zerodha Option Chain first
+    let chain = await zerodhaOptionChain(symbol, Number.isFinite(strikeCount) ? strikeCount : 25);
+    
+    // Fall back to Fyers
     if (!chain) {
-      // Fallback: Fetch spot price from Yahoo Finance and generate mock chain & futures
+      chain = await fyersOptionChain(symbol, Number.isFinite(strikeCount) ? strikeCount : 25);
+    }
+
+    // Fall back to Yahoo Finance mock
+    if (!chain) {
       try {
         const quote = await yfQuote(symbol);
         if (quote) {
