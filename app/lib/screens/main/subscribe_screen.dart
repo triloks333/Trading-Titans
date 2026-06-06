@@ -88,9 +88,9 @@ class SubscribeScreen extends StatelessWidget {
 
   Future<void> _launchTopupUrl(BuildContext context, String email) async {
     final uri = Uri.parse('https://thetradingtitans.com/topup?email=$email');
-    if (await canLaunchUrl(uri)) {
+    try {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not launch top-up page. Please visit thetradingtitans.com/topup')),
