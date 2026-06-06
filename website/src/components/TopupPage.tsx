@@ -218,7 +218,6 @@ export const TopupPage: React.FC = () => {
           razorpay_signature: razorpayResponse.razorpay_signature,
           plan_id: plan.id,
           user_id: session.user.id,
-          access_token: session.access_token, // Pass JWT for server-side Supabase auth
         }),
       });
 
