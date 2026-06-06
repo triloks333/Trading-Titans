@@ -51,11 +51,10 @@ ZERODHA_API_SECRET = os.getenv("ZERODHA_API_SECRET") or "nczc2z30hlamkjofnzn1554
 SUPABASE_URL = os.getenv("SUPABASE_URL") or "https://bftvimnhpoiuoyryyiff.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-# Validate required variables
+# Validate required variables (TOTP Secret is optional; if missing, we will prompt for TOTP input)
 required_vars = {
     "ZERODHA_USERNAME": ZERODHA_USERNAME,
     "ZERODHA_PASSWORD": ZERODHA_PASSWORD,
-    "ZERODHA_TOTP_SECRET": ZERODHA_TOTP_SECRET,
     "ZERODHA_API_KEY": ZERODHA_API_KEY,
     "ZERODHA_API_SECRET": ZERODHA_API_SECRET,
     "SUPABASE_SERVICE_ROLE_KEY": SUPABASE_SERVICE_ROLE_KEY,
@@ -93,9 +92,14 @@ try:
         
     request_id = login_data["data"]["request_id"]
     
-    # Step 2: Generate & Submit TOTP code
-    totp = pyotp.TOTP(ZERODHA_TOTP_SECRET.replace(" ", ""))
-    totp_code = totp.now()
+    # Step 2: Generate or Prompt for TOTP code
+    if ZERODHA_TOTP_SECRET:
+        totp = pyotp.TOTP(ZERODHA_TOTP_SECRET.replace(" ", ""))
+        totp_code = totp.now()
+    else:
+        totp_code = input("Please enter the 6-digit TOTP code from your Authenticator app: ").strip()
+        while len(totp_code) != 6 or not totp_code.isdigit():
+            totp_code = input("Invalid code. Please enter a 6-digit numeric TOTP code: ").strip()
     
     payload_twofa = {
         "user_id": ZERODHA_USERNAME,
