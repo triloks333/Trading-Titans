@@ -68,7 +68,7 @@ if missing_vars:
     print("\nPlease define them in your .env file to enable automated Zerodha login.")
     sys.exit(1)
 
-print("Initiating automated headless Zerodha login...")
+print(f"Initiating automated headless Zerodha login for user {ZERODHA_USERNAME}...")
 
 try:
     session = requests.Session()
