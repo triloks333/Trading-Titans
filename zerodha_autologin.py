@@ -91,10 +91,12 @@ try:
         raise Exception(f"Zerodha login initiation failed: {login_data}")
         
     request_id = login_data["data"]["request_id"]
+    twofa_type = login_data["data"].get("twofa_type", "totp")
+    print(f"Active 2FA type returned by Zerodha: {twofa_type} (Response Data: {login_data['data']})")
     
     # Step 2: Generate or Prompt for TOTP code
     totp_code = None
-    if ZERODHA_TOTP_SECRET and ZERODHA_TOTP_SECRET.strip():
+    if twofa_type == "totp" and ZERODHA_TOTP_SECRET and ZERODHA_TOTP_SECRET.strip():
         try:
             # Try to generate TOTP code automatically
             clean_secret = ZERODHA_TOTP_SECRET.strip().replace(" ", "")
@@ -106,15 +108,15 @@ try:
             totp_code = None
 
     if not totp_code:
-        totp_code = input("Please enter the 6-digit TOTP code from your Authenticator app: ").strip()
+        totp_code = input(f"Please enter the 6-digit {twofa_type.upper()} code: ").strip()
         while len(totp_code) != 6 or not totp_code.isdigit():
-            totp_code = input("Invalid code. Please enter a 6-digit numeric TOTP code: ").strip()
+            totp_code = input(f"Invalid code. Please enter a 6-digit numeric {twofa_type.upper()} code: ").strip()
     
     payload_twofa = {
         "user_id": ZERODHA_USERNAME,
         "request_id": request_id,
         "twofa_value": totp_code,
-        "twofa_type": "totp"
+        "twofa_type": twofa_type
     }
     
     res_twofa = session.post("https://kite.zerodha.com/api/twofa", data=payload_twofa)
