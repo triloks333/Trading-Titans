@@ -159,52 +159,85 @@ export const TopupPage: React.FC = () => {
   const handleTopup = async (plan: Plan) => {
     if (!session || !profile) return;
     setPurchasingPlan(plan.id);
-    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_5gTjK4kL4b5gTj';
-    const options = {
-      key: razorpayKey, amount: plan.price * 100, currency: 'INR',
-      name: 'Trading Titans',
-      description: `${plan.name} - ₹${plan.cash.toLocaleString()} Demo Cash`,
-      image: 'https://thetradingtitans.com/app-icon.png',
-      handler: async function (response: any) { await processSuccessPayment(plan, response.razorpay_payment_id); },
-      prefill: { name: profile.name || '', email: profile.email || '' },
-      theme: { color: '#BA7517' },
-      modal: { ondismiss: function() { setPurchasingPlan(null); } }
-    };
-    const rzp = (window as any).Razorpay ? new (window as any).Razorpay(options) : null;
-    if (rzp) { rzp.open(); }
-    else {
-      alert('Razorpay Checkout SDK is loading. Simulating test payment...');
-      setTimeout(async () => { await processSuccessPayment(plan, 'mock_pay_id_' + Date.now()); }, 1500);
+
+    try {
+      // ─── Step 1: Create a server-side Razorpay order ───
+      const orderRes = await fetch('/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: plan.id, user_id: session.user.id }),
+      });
+
+      if (!orderRes.ok) {
+        const err = await orderRes.json();
+        throw new Error(err.error || 'Failed to create payment order');
+      }
+
+      const { order_id, key_id } = await orderRes.json();
+
+      // ─── Step 2: Open Razorpay Checkout with the server-created order ───
+      const options = {
+        key: key_id,
+        order_id: order_id, // Links payment to our verified order
+        name: 'Trading Titans',
+        description: `${plan.name} — ₹${plan.cash.toLocaleString()} Demo Cash`,
+        image: 'https://thetradingtitans.com/app-icon.png',
+        handler: async function (response: any) {
+          // ─── Step 3: Verify payment server-side ───
+          await verifyPayment(plan, response);
+        },
+        prefill: { name: profile.name || '', email: profile.email || '' },
+        theme: { color: '#BA7517' },
+        modal: {
+          ondismiss: function () { setPurchasingPlan(null); },
+        },
+      };
+
+      const rzp = (window as any).Razorpay ? new (window as any).Razorpay(options) : null;
+      if (rzp) {
+        rzp.open();
+      } else {
+        throw new Error('Razorpay Checkout SDK failed to load. Please refresh and try again.');
+      }
+    } catch (err: any) {
+      console.error('Top-up error:', err);
+      alert(err.message || 'Something went wrong. Please try again.');
+      setPurchasingPlan(null);
     }
   };
 
-  const processSuccessPayment = async (plan: Plan, paymentId: string) => {
+  const verifyPayment = async (plan: Plan, razorpayResponse: any) => {
     try {
-      const newBalance = (profile.wallet_balance || 0) + plan.cash;
-      const { error: walletError } = await supabase.from('profiles')
-        .update({ wallet_balance: newBalance, subscription_active: true, plan: plan.id })
-        .eq('id', session.user.id);
-      if (walletError) throw walletError;
-      if (profile.referred_by) {
-        const commissionAmount = 0.2 * plan.price;
-        await supabase.from('referral_commissions').insert({
-          referrer_id: profile.referred_by, referred_id: session.user.id,
-          package_name: plan.name, package_price: plan.price,
-          commission_amount: commissionAmount, status: 'unclaimed'
-        });
-      }
-      await supabase.from('notifications').insert({
-        user_id: session.user.id, title: 'Wallet Topped Up! 💰',
-        body: `Successfully purchased ${plan.name}. ₹${plan.cash.toLocaleString()} demo cash credited. Transaction ID: ${paymentId}`,
-        is_read: false, action_type: 'custom'
+      // Send the Razorpay response to our server for cryptographic verification
+      const verifyRes = await fetch('/api/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          razorpay_order_id: razorpayResponse.razorpay_order_id,
+          razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+          razorpay_signature: razorpayResponse.razorpay_signature,
+          plan_id: plan.id,
+          user_id: session.user.id,
+          access_token: session.access_token, // Pass JWT for server-side Supabase auth
+        }),
       });
-      setCreditedAmount(plan.cash);
-      setProfile((prev: any) => ({ ...prev, wallet_balance: newBalance }));
+
+      const result = await verifyRes.json();
+
+      if (!verifyRes.ok || !result.success) {
+        throw new Error(result.error || 'Payment verification failed');
+      }
+
+      // Payment verified & wallet credited server-side — update local UI
+      setCreditedAmount(result.credited);
+      setProfile((prev: any) => ({ ...prev, wallet_balance: result.new_balance }));
       setPaymentSuccess(true);
-    } catch (err) {
-      console.error('Failed to credit payment:', err);
-      alert('Payment succeeded but crediting failed. Please contact support.');
-    } finally { setPurchasingPlan(null); }
+    } catch (err: any) {
+      console.error('Payment verification error:', err);
+      alert('Payment was received but verification encountered an issue. Your money is safe — please contact support if the balance is not updated.');
+    } finally {
+      setPurchasingPlan(null);
+    }
   };
 
   const formatCash = (n: number) => {
