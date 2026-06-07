@@ -33,6 +33,12 @@ function App() {
           {currentPage === 'features' && <Features key="features" />}
         </AnimatePresence>
       </main>
+      <footer className="bg-[#E2E4EC] py-6 px-4 text-center border-t border-[#D0D4DF]">
+        <div className="max-w-4xl mx-auto text-xs text-[#525E75] font-medium leading-relaxed">
+          <strong>Trading Titans is a virtual paper-trading simulation game for educational purposes only. We do not provide real financial advice, real trading execution, or real payouts.</strong>
+          <div className="mt-2 text-[10px] text-[#7888A3]">© {new Date().getFullYear()} Trading Titans. All rights reserved.</div>
+        </div>
+      </footer>
     </div>
   );
 }

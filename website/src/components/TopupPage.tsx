@@ -667,12 +667,27 @@ export const TopupPage: React.FC = () => {
               <span style={{ color: '#2D4676' }}>•</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#627D98', fontWeight: 600 }}>
                 <img src="/app-icon.png" alt="" style={{ width: '16px', height: '16px', borderRadius: '4px' }} />
-                Powered by Razorpay
+                Secure Payments Enabled
               </span>
               <span style={{ color: '#2D4676' }}>•</span>
               <span style={{ fontSize: '12px', color: '#627D98', fontWeight: 600 }}>
                 Instant Credit to Wallet
               </span>
+            </div>
+
+            {/* Legal Disclaimer */}
+            <div style={{
+              textAlign: 'center',
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255,255,255,0.04)',
+              fontSize: '11px',
+              color: '#627D98',
+              lineHeight: '1.6',
+              maxWidth: '800px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}>
+              <strong>Trading Titans is a virtual paper-trading simulation game for educational purposes only. We do not provide real financial advice, real trading execution, or real payouts.</strong>
             </div>
           </div>
         )}
