@@ -19,6 +19,20 @@ serve(async (req) => {
       return json({ error: "symbol required" }, 400);
     }
 
+    function normalizeSymbol(sym: string): string {
+      let s = sym.toUpperCase().trim();
+      const colonIndex = s.indexOf(":");
+      if (colonIndex !== -1) {
+        s = s.substring(colonIndex + 1);
+      }
+      if (s.endsWith("-EQ")) s = s.substring(0, s.length - 3);
+      if (s.endsWith("-BE")) s = s.substring(0, s.length - 3);
+      if (s.endsWith("-SM")) s = s.substring(0, s.length - 3);
+      return s;
+    }
+
+    const normalized = normalizeSymbol(symbol);
+
     if (market === "crypto") {
       const futures = await coindcxFuturesChain(symbol);
       if (!futures) {
@@ -31,33 +45,66 @@ serve(async (req) => {
       return json(futures);
     }
 
+    const resolvedStrikeCount = Number.isFinite(strikeCount) ? strikeCount : 25;
+    const providerErrors: Record<string, string> = {};
+
     // Try Zerodha Option Chain first
-    let chain = await zerodhaOptionChain(symbol, Number.isFinite(strikeCount) ? strikeCount : 25);
-    
+    let chain = null;
+    try {
+      const zerodhaChain = await zerodhaOptionChain(normalized, resolvedStrikeCount);
+      if (zerodhaChain) {
+        chain = zerodhaChain;
+      }
+    } catch (err) {
+      providerErrors.zerodha = String(err?.message ?? err);
+      console.error("Zerodha option chain failed:", err);
+    }
+
     // Fall back to Fyers
     if (!chain) {
-      chain = await fyersOptionChain(symbol, Number.isFinite(strikeCount) ? strikeCount : 25);
+      try {
+        const fyersChain = await fyersOptionChain(normalized, resolvedStrikeCount);
+        if (fyersChain) {
+          chain = fyersChain;
+        }
+      } catch (err) {
+        providerErrors.fyers = String(err?.message ?? err);
+        console.error("Fyers option chain failed:", err);
+      }
     }
 
     // Fall back to Yahoo Finance mock
     if (!chain) {
       try {
-        const quote = await yfQuote(symbol);
+        const quote = await yfQuote(normalized);
         if (quote) {
           const spotPrice = (quote.price as number) ?? 100.0;
           const change = (quote.change as number) ?? 0.0;
           const changePct = (quote.change_pct as number) ?? 0.0;
-          chain = generateMockFyersChainAndFutures(symbol, spotPrice, change, changePct, strikeCount);
+          const mockChain = generateMockFyersChainAndFutures(normalized, spotPrice, change, changePct, resolvedStrikeCount);
+          if (mockChain) {
+            chain = { ...mockChain, source: "yahoo_mock" };
+          }
         }
-      } catch (_) {}
+      } catch (err) {
+        providerErrors.yahoo = String(err?.message ?? err);
+        console.error("Yahoo mock fallback failed:", err);
+      }
     }
 
     if (!chain) {
       return json({
-        error: "Fyers option chain unavailable and fallback failed. Check Fyers auth/token or try an F&O-enabled NSE/BSE symbol.",
+        error: "Option chain providers all failed. Verify Fyers/Zerodha auth or use a valid NSE/BSE F&O symbol.",
         derivative_type: "options",
-        source: "fyers",
+        source: "fallback",
+        tried_providers: Object.keys(providerErrors),
+        details: providerErrors,
       }, 404);
+    }
+
+    // Explicitly preference and label as NSE in metadata
+    if (typeof chain === "object" && chain !== null) {
+      (chain as any).exchange = "NSE";
     }
 
     return json(chain);

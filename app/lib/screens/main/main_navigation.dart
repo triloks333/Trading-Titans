@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/reward_celebration_dialog.dart';
+import '../../widgets/update_dialogs.dart';
 import 'dashboard_screen.dart';
 import 'trade_screen.dart';
 import 'portfolio_screen.dart';
@@ -31,7 +32,27 @@ class _MainNavigationState extends State<MainNavigation> {
     // Check for unclaimed rewards every 10 seconds
     _rewardCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkRewards());
     // Initial check after a brief load delay
-    Future.delayed(const Duration(seconds: 2), () => _checkRewards());
+    Future.delayed(const Duration(seconds: 2), () {
+      _checkRewards();
+      _checkSoftUpdate();
+    });
+  }
+
+  void _checkSoftUpdate() {
+    final auth = context.read<AuthService>();
+    if (auth.needsSoftUpdate && mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogCtx) => SoftUpdateDialog(
+          updateUrl: auth.updateUrl,
+          releaseNotes: auth.latestVersionNotes,
+          onDismiss: () {
+            auth.dismissSoftUpdate();
+          },
+        ),
+      );
+    }
   }
 
   @override

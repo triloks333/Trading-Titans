@@ -117,7 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _startGuide() {
-    ShowCaseWidget.of(context).startShowCase([
+    ShowcaseView.get().startShowCase([
       _guideKey,
       _notificationsKey,
       _totalValueKey,

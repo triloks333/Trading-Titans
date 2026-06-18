@@ -7,9 +7,9 @@ import '../../core/theme.dart';
 import '../../models/quote.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/fo_instruments_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/swipe_button.dart';
-import '../../utils/lot_size.dart';
 import 'wallet_screen.dart';
 
 class OrderEntryScreen extends StatefulWidget {
@@ -20,6 +20,8 @@ class OrderEntryScreen extends StatefulWidget {
   final String? optionType;
   final String? expiryDate;
   final double? prefilledQuantity;
+  final bool isExitOrder; // true when launched from portfolio Exit button
+  final double? marginUsed; // capital blocked for F&O positions (for disclaimer)
 
   const OrderEntryScreen({
     super.key,
@@ -30,6 +32,8 @@ class OrderEntryScreen extends StatefulWidget {
     this.optionType,
     this.expiryDate,
     this.prefilledQuantity,
+    this.isExitOrder = false,
+    this.marginUsed,
   });
 
   @override
@@ -55,18 +59,29 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _existingHolding;
 
+  /// Real-market lot size for F&O contracts (e.g. RELIANCE = 500, NIFTY = 75).
+  /// Loaded asynchronously from the instruments table. Defaults to 1 until
+  /// loaded (and stays 1 for equities/crypto which trade in single units).
+  int _foLotSize = 1;
+
   bool get _isCrypto => widget.quote.market == 'crypto';
+
+  bool get _isDerivative =>
+      widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE';
 
   @override
   void initState() {
     super.initState();
     _loadHolding();
-    
+    _loadLotSize();
+
     double initialQty = 1.0;
     if (widget.prefilledQuantity != null) {
-      if (widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE') {
-        final lotSize = getOptionLotSize(widget.quote.symbol);
-        initialQty = widget.prefilledQuantity! / lotSize;
+      if (_isDerivative) {
+        // prefilledQuantity is the position's total units (lots * lotSize).
+        // The real lot size loads asynchronously in _loadLotSize(), which then
+        // recomputes this field into whole lots. Start from the raw value.
+        initialQty = widget.prefilledQuantity!;
       } else {
         initialQty = widget.prefilledQuantity!;
       }
@@ -76,30 +91,69 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         ? initialQty.toString() 
         : initialQty.toInt().toString();
 
+    _priceController.text = widget.quote.price.toStringAsFixed(2);
     _qtyController = TextEditingController(text: qtyStr);
     _qtyController.addListener(_updateState);
     _priceController.addListener(_updateState);
     _moneyController.addListener(_updateState);
   }
 
+  /// Fetches the real-market lot size for the contract and, for exit/prefilled
+  /// flows, converts the prefilled total-unit quantity back into whole lots.
+  Future<void> _loadLotSize() async {
+    if (!_isDerivative) return;
+    try {
+      final ls = await FoInstrumentsService().getLotSize(widget.quote.symbol);
+      if (!mounted || ls <= 0) return;
+      setState(() {
+        _foLotSize = ls;
+        if (widget.prefilledQuantity != null) {
+          final lots = (widget.prefilledQuantity! / ls).round();
+          _qtyController.text = (lots < 1 ? 1 : lots).toString();
+        }
+      });
+    } catch (_) {
+      // Keep the default lot size of 1 on failure; order can still proceed.
+    }
+  }
+
   Future<void> _loadHolding() async {
     try {
       final user = SupabaseService().currentUser;
       if (user == null) return;
-      final existing = await SupabaseService().client
-          .from('holdings')
-          .select()
-          .eq('user_id', user.id)
-          .eq('symbol', widget.quote.symbol)
-          .eq('market', widget.quote.market)
-          .maybeSingle();
+      
+      Map<String, dynamic>? existing;
+      if (widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE') {
+        final res = await SupabaseService().client
+            .from('fo_positions')
+            .select()
+            .eq('user_id', user.id)
+            .eq('symbol', widget.quote.symbol)
+            .eq('instrument_type', widget.instrumentType)
+            .eq('is_settled', false)
+            .maybeSingle();
+        if (res != null) {
+          existing = Map<String, dynamic>.from(res as Map);
+        }
+      } else {
+        final res = await SupabaseService().client
+            .from('holdings')
+            .select()
+            .eq('user_id', user.id)
+            .eq('symbol', widget.quote.symbol)
+            .eq('market', widget.quote.market)
+            .maybeSingle();
+        if (res != null) {
+          existing = Map<String, dynamic>.from(res as Map);
+        }
+      }
+      
       if (mounted && existing != null) {
         setState(() {
-          _existingHolding = Map<String, dynamic>.from(existing as Map);
+          _existingHolding = existing;
         });
       }
     } catch (_) {
-    } finally {
     }
   }
 
@@ -130,8 +184,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   }
 
   int get _lotSize {
-    if (widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE') {
-      return getOptionLotSize(widget.quote.symbol);
+    if (_isDerivative) {
+      return _foLotSize; // real-market lot size loaded from instruments table
     }
     return 1;
   }
@@ -142,6 +196,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   }
 
   double get _marginRequired {
+    // Exit orders (closing existing positions) never require new capital
+    if (widget.isExitOrder) return 0.0;
+
     if (_inputByMoney && _isCrypto) {
       return double.tryParse(_moneyController.text) ?? 0.0;
     }
@@ -203,6 +260,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         strikePrice: widget.strikePrice,
         optionType: widget.optionType,
         expiryDate: widget.expiryDate,
+        isExitOrder: widget.isExitOrder,
       );
 
       await authProvider.refreshUser(); // Update wallet balance
@@ -212,13 +270,15 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         NotificationService().showNotification(
           id: order.id.hashCode,
           title: 'Order Executed',
-          body: '${order.side.toUpperCase()} ${order.quantity} ${order.symbol} filled at ₹${order.price.toStringAsFixed(2)}',
+          body: 'Your ${order.side} order for ${order.quantity} ${order.symbol} at ₹${order.price.toStringAsFixed(2)} has been executed.',
+          category: NotificationCategory.orderExecuted,
         );
       } else if (order.isPending) {
         NotificationService().showNotification(
           id: order.id.hashCode,
           title: 'Order Placed (Pending)',
           body: '${order.side.toUpperCase()} ${order.quantity} ${order.symbol} placed at ₹${order.price.toStringAsFixed(2)}',
+          category: NotificationCategory.orderPending,
         );
       }
 
@@ -302,6 +362,245 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Map<String, double> get _chargesPreview {
+    final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    if (qty <= 0) {
+      return {
+        'brokerage': 0, 'stamp_duty': 0, 'stt': 0,
+        'exchange_charges': 0, 'gst': 0, 'tax_charges': 0, 'total_charges': 0
+      };
+    }
+    return SupabaseService().calculateTransactionCharges(
+      instrumentType: widget.instrumentType,
+      side: widget.isBuy ? 'buy' : 'sell',
+      quantity: qty,
+      price: _price,
+      isIntraday: _isIntraday,
+    );
+  }
+
+  Widget _buildChargeBreakdownPanel(Color color) {
+    final charges = _chargesPreview;
+    final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    final price = _price;
+    final totalValue = qty * price;
+    final totalCharges = charges['total_charges'] ?? 0.0;
+
+    final brokerage = charges['brokerage'] ?? 0.0;
+    final stampDuty = charges['stamp_duty'] ?? 0.0;
+    final stt = charges['stt'] ?? 0.0;
+    final exchangeCharges = charges['exchange_charges'] ?? 0.0;
+    final gst = charges['gst'] ?? 0.0;
+
+    if (qty <= 0) return const SizedBox.shrink();
+
+    final isDeriv = widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION';
+    final marginUsed = widget.marginUsed ?? 0.0;
+    
+    double grandTotal = totalValue + (widget.isBuy ? totalCharges : 0);
+    double estimatedPnl = 0.0;
+
+    if (widget.isExitOrder) {
+      if (_existingHolding != null) {
+        final avgPrice = (_existingHolding!['avg_price'] ?? _existingHolding!['avg_entry_price'] as num?)?.toDouble() ?? 0.0;
+        if (avgPrice > 0) {
+          final sideSign = widget.isBuy ? -1 : 1;
+          estimatedPnl = (price - avgPrice) * qty * sideSign;
+        }
+      }
+      if (isDeriv) {
+        if (marginUsed > 0) {
+          grandTotal = marginUsed + estimatedPnl - totalCharges;
+        } else {
+          grandTotal = totalValue - totalCharges; // Long option close (receive premium value)
+        }
+      } else {
+        grandTotal = totalValue - totalCharges;
+      }
+    } else if (isDeriv && !widget.isExitOrder) {
+      final isOptionBuy = widget.instrumentType == 'OPTION' && widget.isBuy;
+      final marginRequired = isOptionBuy ? totalValue : (totalValue * 0.15);
+      grandTotal = marginRequired + totalCharges;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.receipt_long_rounded, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(
+                'ORDER SUMMARY',
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  letterSpacing: 0.7,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'VIRTUAL MONEY',
+                  style: GoogleFonts.inter(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFFE65100),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildBillRow(
+            '${_isCrypto ? _quantityValue.toStringAsFixed(6) : qty.toStringAsFixed(0)} ${widget.quote.symbol} × ₹${price.toStringAsFixed(2)}',
+            '₹${totalValue.toStringAsFixed(2)}',
+            AppColors.ink,
+            isMain: true,
+          ),
+          if (isDeriv) ...[
+            const SizedBox(height: 4),
+            _buildBillRow(
+              'Contract / Notional Value',
+              '₹${totalValue.toStringAsFixed(2)}',
+              AppColors.ink3,
+            ),
+          ],
+          if (widget.isExitOrder) ...[
+            if (marginUsed > 0) ...[
+              const SizedBox(height: 4),
+              _buildBillRow(
+                'Margin to Release (~15%)',
+                '₹${marginUsed.toStringAsFixed(2)}',
+                AppColors.ink3,
+              ),
+            ] else ...[
+              const SizedBox(height: 4),
+              _buildBillRow(
+                isDeriv ? 'Est. Premium Value to Receive' : 'Est. Holding Value to Receive',
+                '₹${totalValue.toStringAsFixed(2)}',
+                AppColors.ink3,
+              ),
+            ],
+            const SizedBox(height: 4),
+            _buildBillRow(
+              'Est. P&L (LTP vs Entry)',
+              '${estimatedPnl >= 0 ? "+" : "-"} ₹${estimatedPnl.abs().toStringAsFixed(2)}',
+              estimatedPnl >= 0 ? AppColors.bull : AppColors.bear,
+            ),
+          ] else ...[
+            if (isDeriv && (widget.instrumentType == 'FUTURE' || !widget.isBuy)) ...[
+              const SizedBox(height: 4),
+              _buildBillRow(
+                'Initial Margin Required (15%)',
+                '₹${(totalValue * 0.15).toStringAsFixed(2)}',
+                AppColors.ink3,
+              ),
+            ],
+          ],
+          const SizedBox(height: 6),
+          Container(height: 0.5, color: AppColors.birch),
+          const SizedBox(height: 6),
+          _buildBillRow('Brokerage', '+ ₹${brokerage.toStringAsFixed(2)}', AppColors.ink3),
+          if (stampDuty > 0) ...[
+            const SizedBox(height: 4),
+            _buildBillRow('Stamp Duty', '+ ₹${stampDuty.toStringAsFixed(2)}', AppColors.ink3),
+          ],
+          if (stt > 0) ...[
+            const SizedBox(height: 4),
+            _buildBillRow('STT', '+ ₹${stt.toStringAsFixed(2)}', AppColors.ink3),
+          ],
+          if (exchangeCharges > 0) ...[
+            const SizedBox(height: 4),
+            _buildBillRow('Exchange Charges', '+ ₹${exchangeCharges.toStringAsFixed(2)}', AppColors.ink3),
+          ],
+          if (gst > 0) ...[
+            const SizedBox(height: 4),
+            _buildBillRow('GST (18%)', '+ ₹${gst.toStringAsFixed(2)}', AppColors.ink3),
+          ],
+          const SizedBox(height: 8),
+          Container(height: 1.5, color: color.withValues(alpha: 0.25)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                widget.isExitOrder 
+                    ? (grandTotal >= 0 ? 'You Receive (approx.)' : 'Total Payable')
+                    : (widget.isBuy ? 'Total Payable' : 'You Receive (approx.)'),
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.ink,
+                ),
+              ),
+              Text(
+                '₹${grandTotal.abs().toStringAsFixed(2)}',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: widget.isExitOrder
+                      ? (estimatedPnl >= 0 ? AppColors.bull : AppColors.bear)
+                      : (grandTotal >= 0 ? AppColors.bull : AppColors.bear),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Charges: ₹${totalCharges.toStringAsFixed(2)} • Deducted from virtual cash only',
+            style: GoogleFonts.inter(
+              fontSize: 10,
+              color: AppColors.ink5,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBillRow(String label, String value, Color valueColor, {bool isMain = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: isMain ? 12 : 11,
+              fontWeight: isMain ? FontWeight.w600 : FontWeight.w500,
+              color: isMain ? AppColors.ink2 : AppColors.ink4,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: isMain ? 12 : 11,
+            fontWeight: isMain ? FontWeight.w700 : FontWeight.w600,
+            color: valueColor,
+          ),
+        ),
+      ],
     );
   }
 
@@ -395,8 +694,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Product Type (hide for crypto)
-                      if (!_isCrypto) ...[
+                      // Product Type toggle — hidden for exit orders
+                      if (!_isCrypto && !widget.isExitOrder) ...[
                         Row(
                           children: [
                             _buildToggleTab(
@@ -429,6 +728,51 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                           ),
                         ],
                         const SizedBox(height: 24),
+                      ],
+                      // Exit order banner (replaces the product type tabs)
+                      if (widget.isExitOrder && !_isCrypto) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.bear.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.bear.withValues(alpha: 0.15)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.exit_to_app_rounded, size: 14, color: AppColors.bear),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Closing existing position — no additional margin required',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.bear,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                               // 15% margin disclaimer for F&O
+                              if (widget.marginUsed != null &&
+                                  (widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION')) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Your margin blocked: ₹${widget.marginUsed!.toStringAsFixed(0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    color: AppColors.ink3,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                       ],
                       
                       // Quantity section
@@ -540,7 +884,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    widget.instrumentType == 'OPTION'
+                                    _isDerivative
                                         ? 'Qty (Lots)'
                                         : 'Quantity',
                                     style: GoogleFonts.inter(
@@ -549,7 +893,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  if (widget.instrumentType == 'OPTION')
+                                  if (_isDerivative)
                                     Text(
                                       '1 Lot = $_lotSize qty',
                                       style: GoogleFonts.inter(
@@ -774,7 +1118,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           
           // FOOTER
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             decoration: BoxDecoration(
               color: AppColors.pureWhite,
               boxShadow: [
@@ -789,6 +1133,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Live charges breakdown — shown when quantity > 0
+                  if (_quantityValue > 0)
+                    _buildChargeBreakdownPanel(color),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -907,6 +1254,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       onSwipeComplete: _submitOrder,
                     ),
                   ],
+                  const SizedBox(height: 8),
                 ],
               ),
             ),

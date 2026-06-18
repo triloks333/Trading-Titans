@@ -2,14 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
+import '../../models/order.dart';
 
 class AutopsyScreen extends StatelessWidget {
   const AutopsyScreen({super.key});
 
+  Order? _findMatchingOrder(List<Order> orders, String symbol, double pnl) {
+    for (final o in orders) {
+      if (o.symbol == symbol && (o.realizedPnl - pnl).abs() < 0.05) {
+        return o;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: SupabaseService().getAutopsy(),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        SupabaseService().getAutopsy(),
+        SupabaseService().getOrders(),
+      ]),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
@@ -32,7 +45,10 @@ class AutopsyScreen extends StatelessWidget {
           );
         }
 
-        final data = snapshot.data ?? {};
+        final results = snapshot.data ?? [{}, <Order>[]];
+        final data = (results[0] as Map<String, dynamic>?) ?? {};
+        final orders = (results[1] as List<Order>?) ?? [];
+        
         final insights = (data['insights'] as List<dynamic>?) ?? [];
         final profits = insights.where((i) => i['type'] == 'profit').toList();
         final losses = insights.where((i) => i['type'] == 'loss').toList();
@@ -62,9 +78,9 @@ class AutopsyScreen extends StatelessWidget {
             ),
             body: TabBarView(
               children: [
-                _buildInsightList(context, data['summary'] as String?, insights),
-                _buildInsightList(context, data['summary'] as String?, profits, filterType: 'profit'),
-                _buildInsightList(context, data['summary'] as String?, losses, filterType: 'loss'),
+                _buildInsightList(context, data['summary'] as String?, insights, orders),
+                _buildInsightList(context, data['summary'] as String?, profits, orders, filterType: 'profit'),
+                _buildInsightList(context, data['summary'] as String?, losses, orders, filterType: 'loss'),
               ],
             ),
           ),
@@ -73,7 +89,7 @@ class AutopsyScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInsightList(BuildContext context, String? summary, List<dynamic> list, {String? filterType}) {
+  Widget _buildInsightList(BuildContext context, String? summary, List<dynamic> list, List<Order> orders, {String? filterType}) {
     if (list.isEmpty) {
       return Center(
         child: Column(
@@ -141,6 +157,13 @@ class AutopsyScreen extends StatelessWidget {
               final insight = list[index] as Map<String, dynamic>;
               final isProfit = insight['type'] == 'profit';
               final pnlAmount = (insight['pnl'] as num?)?.toDouble() ?? 0.0;
+              final matchedOrder = _findMatchingOrder(orders, insight['symbol'] as String? ?? '', pnlAmount);
+              
+              // Populate charges from API if present, otherwise fall back to matching local order record
+              final totalCharges = (insight['total_charges'] as num?)?.toDouble() ?? (matchedOrder?.totalCharges ?? 0.0);
+              
+              // Put totalCharges back into the insight map so the Builder down the line can retrieve it!
+              insight['total_charges'] = totalCharges;
               
               return Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -193,26 +216,135 @@ class AutopsyScreen extends StatelessWidget {
                       style: GoogleFonts.inter(color: AppColors.ink3, fontSize: 13),
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          isProfit 
-                            ? 'Realized Profit' 
-                            : 'Realized Loss',
-                          style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
-                        ),
-                        Text(
-                          isProfit 
-                            ? '+₹${pnlAmount.toStringAsFixed(2)}' 
-                            : '-₹${pnlAmount.abs().toStringAsFixed(2)}', 
-                          style: GoogleFonts.inter(
-                            color: isProfit ? AppColors.bull : AppColors.bear, 
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          )
-                        ),
-                      ],
+                    Builder(
+                      builder: (context) {
+                        final totalCharges = (insight['total_charges'] as num?)?.toDouble() ?? 0.0;
+                        final netPnl = pnlAmount - totalCharges;
+                        final isNetProfit = netPnl > 0;
+                        
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  isProfit ? 'Gross Realized Profit' : 'Gross Realized Loss',
+                                  style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                                ),
+                                Text(
+                                  isProfit 
+                                    ? '+₹${pnlAmount.toStringAsFixed(2)}' 
+                                    : '-₹${pnlAmount.abs().toStringAsFixed(2)}', 
+                                  style: GoogleFonts.inter(
+                                    color: isProfit ? AppColors.bull : AppColors.bear, 
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  )
+                                ),
+                              ],
+                            ),
+                            if (totalCharges > 0) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Transaction Charges ',
+                                        style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.birch.withValues(alpha: 0.3),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'DEMO ONLY',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.ink4,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Text(
+                                    '-₹${totalCharges.toStringAsFixed(2)}',
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.bear,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Divider(color: AppColors.birch, height: 1),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    isNetProfit ? 'Net Realized Profit' : 'Net Realized Loss',
+                                    style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  Text(
+                                    isNetProfit 
+                                      ? '+₹${netPnl.toStringAsFixed(2)}' 
+                                      : '-₹${netPnl.abs().toStringAsFixed(2)}', 
+                                    style: GoogleFonts.inter(
+                                      color: isNetProfit ? AppColors.bull : AppColors.bear, 
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    )
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isNetProfit 
+                                      ? AppColors.bullLight.withValues(alpha: 0.15) 
+                                      : AppColors.bearLight.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isNetProfit 
+                                        ? AppColors.bull.withValues(alpha: 0.2) 
+                                        : AppColors.bear.withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      isNetProfit ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                      color: isNetProfit ? AppColors.bull : AppColors.bear,
+                                      size: 18,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        pnlAmount > 0
+                                            ? 'Charges reduced your return by ${((totalCharges / pnlAmount) * 100).toStringAsFixed(1)}% (Deducted from virtual cash).'
+                                            : 'Charges increased this loss by ₹${totalCharges.toStringAsFixed(2)} (Deducted from virtual cash).',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isNetProfit ? AppColors.bull : AppColors.bear,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Container(

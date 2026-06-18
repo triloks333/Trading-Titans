@@ -28,6 +28,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool _isWatched = false;
   Holding? _holding;
   Timer? _pollTimer;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -47,8 +48,25 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Future<void> _refreshQuote() async {
-    final quote = await MarketService.quote(widget.symbol, widget.market);
-    if (mounted) setState(() => _quote = quote);
+    try {
+      final quote = await MarketService.quote(widget.symbol, widget.market);
+      if (mounted) {
+        setState(() {
+          _quote = quote;
+          if (quote != null) {
+            _hasError = false;
+          } else if (_quote == null) {
+            _hasError = true;
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted && _quote == null) {
+        setState(() {
+          _hasError = true;
+        });
+      }
+    }
   }
 
 
@@ -105,7 +123,45 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ],
       ),
       body: q == null
-          ? const Center(child: CircularProgressIndicator())
+          ? (_hasError
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.xl),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.bear),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          'Unable to load price data',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          'Please check your connection or try again.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.ink4),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _hasError = false;
+                            });
+                            _loadData();
+                          },
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.ink,
+                            foregroundColor: AppColors.pureWhite,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : const Center(child: CircularProgressIndicator()))
           : SafeArea(
               top: false,
               child: Column(
@@ -252,6 +308,22 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           const SizedBox(height: AppSpacing.md),
           _statRow('Previous Close', '₹${q.previousClose.toStringAsFixed(2)}'),
           _divider(),
+          if (q.open != null) ...[
+            _statRow('Open', '₹${q.open!.toStringAsFixed(2)}'),
+            _divider(),
+          ],
+          if (q.dayHigh != null) ...[
+            _statRow('High', '₹${q.dayHigh!.toStringAsFixed(2)}'),
+            _divider(),
+          ],
+          if (q.dayLow != null) ...[
+            _statRow('Low', '₹${q.dayLow!.toStringAsFixed(2)}'),
+            _divider(),
+          ],
+          if (q.volume != null && q.volume! > 0) ...[
+            _statRow('Volume', q.volume!.toString()),
+            _divider(),
+          ],
           _statRow('Day Change',
               '${_isUp ? '+' : ''}${q.change.toStringAsFixed(2)} (${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%)',
               valueColor: _changeColor),

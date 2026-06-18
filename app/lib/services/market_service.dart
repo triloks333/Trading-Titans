@@ -12,6 +12,7 @@ class MarketService {
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
     'Authorization': 'Bearer $supabaseAnonKey',
+    'apikey': supabaseAnonKey,
   };
 
   static Future<List<Quote>> getMarketOverview() async {
@@ -29,8 +30,30 @@ class MarketService {
 
   static final Map<String, Map<String, dynamic>> _quoteCache = {};
 
+  static String normalizeSymbol(String sym, String market) {
+    var s = sym.toUpperCase().trim();
+    if (market == 'stock') {
+      if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
+        s = s.substring(4);
+      }
+      s = s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
+      
+      // Do not split by space/hyphen if it's an F&O instrument
+      final isFO = s.contains('FUT') || s.contains('CE') || s.contains('PE') || s.contains(RegExp(r'\d{2}[A-Z]{3}'));
+      if (!s.startsWith('^') && !isFO) {
+        if (s.contains('-')) {
+          s = s.split('-')[0];
+        } else if (s.contains(' ')) {
+          s = s.split(' ')[0];
+        }
+      }
+    }
+    return s;
+  }
+
   static Future<Quote?> quote(String symbol, String market, {bool forceRefresh = false}) async {
-    final cacheKey = '$symbol\x1F$market';
+    final normSym = normalizeSymbol(symbol, market);
+    final cacheKey = '$normSym\x1F$market';
     final now = DateTime.now();
     if (!forceRefresh && _quoteCache.containsKey(cacheKey)) {
       final cached = _quoteCache[cacheKey]!;
@@ -44,7 +67,7 @@ class MarketService {
       final response = await http
           .get(
             Uri.parse(
-              '$_functionsBase/market-quote?symbol=${Uri.encodeQueryComponent(symbol)}&market=${Uri.encodeQueryComponent(market)}',
+              '$_functionsBase/market-quote?symbol=${Uri.encodeQueryComponent(normSym)}&market=${Uri.encodeQueryComponent(market)}',
             ),
             headers: _headers,
           )
@@ -95,11 +118,12 @@ class MarketService {
     String market,
     String range,
   ) async {
+    final normSym = normalizeSymbol(symbol, market);
     try {
       final response = await http
           .get(
             Uri.parse(
-              '$_functionsBase/market-history?symbol=${Uri.encodeQueryComponent(symbol)}&market=${Uri.encodeQueryComponent(market)}&range=${Uri.encodeQueryComponent(range)}',
+              '$_functionsBase/market-history?symbol=${Uri.encodeQueryComponent(normSym)}&market=${Uri.encodeQueryComponent(market)}&range=${Uri.encodeQueryComponent(range)}',
             ),
             headers: _headers,
           )
@@ -318,25 +342,33 @@ class MarketService {
     String symbol, {
     String market = 'stock',
   }) async {
+    final normSym = normalizeSymbol(symbol, market);
     try {
       final response = await http
           .get(
             Uri.parse(
-              '$_functionsBase/market-options?symbol=${Uri.encodeQueryComponent(symbol)}&market=${Uri.encodeQueryComponent(market)}',
+              '$_functionsBase/market-options?symbol=${Uri.encodeQueryComponent(normSym)}&market=${Uri.encodeQueryComponent(market)}',
             ),
             headers: _headers,
           )
           .timeout(_timeout);
+
+      final body = response.body;
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(body);
       }
-      // Parse error responses that may contain derivative_type info
-      if (response.statusCode == 404) {
-        try {
-          final errorBody = jsonDecode(response.body);
-          // Return the error body so the UI can handle it
-          return errorBody;
-        } catch (_) {}
+
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        return {'error': decoded.toString(), 'status': response.statusCode};
+      } catch (_) {
+        return {
+          'error': 'Option chain request failed',
+          'status': response.statusCode,
+        };
       }
     } catch (_) {}
     return null;

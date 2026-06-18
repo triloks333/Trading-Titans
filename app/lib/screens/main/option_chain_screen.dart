@@ -626,14 +626,39 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              _derivativeType == 'futures'
-                  ? '${widget.underlyingSymbol} Futures'
-                  : '${widget.underlyingSymbol} Option Chain',
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _derivativeType == 'futures'
+                      ? '${widget.underlyingSymbol} Futures'
+                      : '${widget.underlyingSymbol} Option Chain',
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (widget.market == 'stock') ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                    decoration: BoxDecoration(
+                      color: AppColors.bull.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: AppColors.bull.withValues(alpha: 0.4), width: 0.5),
+                    ),
+                    child: Text(
+                      'NSE',
+                      style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.bull,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             Text(
               'Spot: ₹${_spotPrice.toStringAsFixed(2)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',

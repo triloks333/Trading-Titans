@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "523187364753",
+    "project_id": "trading-titans-8375f",
+    "storage_bucket": "trading-titans-8375f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:523187364753:android:c35e7998501eb72e2b3030",
+        "android_client_info": {
+          "package_name": "com.kwm.tradingtitans"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA4yCaTzAFs5C4ZS3dxBNZgHj5TTQ1AnVI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

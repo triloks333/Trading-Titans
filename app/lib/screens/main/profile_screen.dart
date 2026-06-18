@@ -19,6 +19,7 @@ import 'notifications_screen.dart';
 import 'refer_earn_screen.dart';
 import 'support_tickets_screen.dart';
 import 'admin_reward_screen.dart';
+import 'community_wishlist_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -117,6 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.privacy_tip_outlined, 'Privacy Policy', () => _showPrivacyPolicy(context)),
             _menuItemAction(context, Icons.gavel_outlined, 'Terms & Conditions', () => _showTerms(context)),
             _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
+            _menuItem(context, Icons.forum_outlined, 'Community Wishlist', const CommunityWishlistScreen()),
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
             _menuItemActionWithSubtitle(context, Icons.palette_outlined, 'App Theme', themeName, () => _showThemeSelector(context)),
             if (user?.isAdmin == true) ...[
@@ -279,6 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     XFile? pickedImage;
     Uint8List? pickedBytes;
     bool submitting = false;
+    List<Map<String, dynamic>> similarFeatures = [];
 
     showModalBottomSheet(
       context: context,
@@ -307,6 +310,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: titleController,
+                  onChanged: (val) async {
+                    if (val.trim().length >= 5) {
+                      final results = await SupabaseService().searchSimilarFeatures(val.trim());
+                      setModalState(() {
+                        similarFeatures = results;
+                      });
+                    } else {
+                      setModalState(() {
+                        similarFeatures = [];
+                      });
+                    }
+                  },
                   decoration: InputDecoration(
                     hintText: 'Enter feature name...',
                     hintStyle: GoogleFonts.inter(color: AppColors.ink5),
@@ -314,6 +329,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                   ),
                 ),
+                if (similarFeatures.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldPale,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.goldBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Similar requests found. Upvote instead?',
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
+                        ),
+                        const SizedBox(height: 6),
+                        ...similarFeatures.map((f) => Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '- ${f['title']}',
+                                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
+                                  );
+                                },
+                                child: Text(
+                                  'View & Upvote',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.imperialGold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 
                 Text('Description', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
@@ -393,6 +462,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               );
                               return;
                             }
+                            if (title.length < 5 || desc.length < 10) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Title must be at least 5 chars, Description at least 10 chars.')),
+                              );
+                              return;
+                            }
                             
                             setModalState(() => submitting = true);
                             final messenger = ScaffoldMessenger.of(context);
@@ -401,22 +476,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               if (pickedImage != null && pickedBytes != null) {
                                 imageUrl = await SupabaseService().uploadTicketAttachment(pickedImage!.path, pickedBytes!);
                               }
-                              await SupabaseService().submitSupportTicket(
-                                type: 'feature',
+                              await SupabaseService().submitFeatureRequest(
                                 title: title,
-                                content: desc,
+                                description: desc,
                                 imageUrl: imageUrl,
                               );
                               if (context.mounted) {
                                 Navigator.of(context).pop();
                                 messenger.showSnackBar(
-                                  const SnackBar(content: Text('Thank you! Your feature request has been submitted.')),
+                                  const SnackBar(content: Text('Thank you! Your feature request has been submitted to the wishlist.')),
                                 );
                               }
                             } catch (e) {
                               setModalState(() => submitting = false);
                               messenger.showSnackBar(
-                                SnackBar(content: Text('Error submitting request: $e')),
+                                SnackBar(content: Text('Error: ${e.toString().replaceAll("Exception:", "")}')),
                               );
                             }
                           },

@@ -1,13 +1,17 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart' as app_models;
 import '../models/portfolio.dart';
 import '../models/order.dart';
 import '../models/quote.dart';
+import '../models/position_model.dart';
 import '../core/market_hours.dart';
 import 'market_service.dart';
+import 'fo_instruments_service.dart';
+import 'firebase_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -15,6 +19,157 @@ class SupabaseService {
   SupabaseService._internal();
 
   final SupabaseClient client = Supabase.instance.client;
+
+  Map<String, dynamic>? _activeChargeConfig;
+  String? _activeChargeConfigId;
+
+  static const Map<String, dynamic> defaultChargeRates = {
+    "equity_brokerage_rate": 0.0005,
+    "equity_brokerage_max": 20.00,
+    "fo_brokerage_flat": 20.00,
+    "stamp_duty_delivery": 0.00015,
+    "stamp_duty_intraday": 0.00003,
+    "stamp_duty_options": 0.00003,
+    "stamp_duty_futures": 0.00002,
+    "stt_delivery": 0.001,
+    "stt_intraday_sell": 0.00025,
+    "stt_options_sell": 0.000625,
+    "stt_futures_sell": 0.000125,
+    "exchange_delivery": 0.0000322,
+    "exchange_options": 0.00053,
+    "exchange_futures": 0.000019,
+    "gst_rate": 0.18,
+    "clearing_fee_rate": 0.000002,
+    "sebi_regulatory_fee_rate": 0.000001,
+    "turnover_tax_rate": 0.000001,
+    "dp_charges_flat": 13.50,
+    "other_broker_fee_flat": 0.0
+  };
+
+  Future<void> fetchActiveChargeConfig() async {
+    try {
+      final res = await client
+          .from('charge_configurations')
+          .select('id, config')
+          .order('effective_from', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res != null) {
+        _activeChargeConfigId = res['id'] as String?;
+        _activeChargeConfig = Map<String, dynamic>.from(res['config'] as Map);
+      }
+    } catch (e) {
+      debugPrint('Failed to load charge configurations: $e');
+    }
+  }
+
+  Map<String, double> calculateTransactionCharges({
+    required String instrumentType,
+    required String side,
+    required double quantity,
+    required double price,
+    required bool isIntraday,
+  }) {
+    final config = _activeChargeConfig ?? defaultChargeRates;
+    final totalValue = price * quantity;
+
+    double brokerage = 0.0;
+    double stampDuty = 0.0;
+    double stt = 0.0;
+    double exchangeCharges = 0.0;
+
+    if (instrumentType == 'EQUITY') {
+      final rate = (config['equity_brokerage_rate'] as num?)?.toDouble() ?? 0.0005;
+      final maxB = (config['equity_brokerage_max'] as num?)?.toDouble() ?? 20.0;
+      brokerage = totalValue * rate;
+      if (brokerage > maxB) brokerage = maxB;
+
+      if (side == 'buy') {
+        final sdRate = isIntraday
+            ? ((config['stamp_duty_intraday'] as num?)?.toDouble() ?? 0.00003)
+            : ((config['stamp_duty_delivery'] as num?)?.toDouble() ?? 0.00015);
+        stampDuty = totalValue * sdRate;
+      }
+
+      if (isIntraday) {
+        if (side == 'sell') {
+          final sttRate = (config['stt_intraday_sell'] as num?)?.toDouble() ?? 0.00025;
+          stt = totalValue * sttRate;
+        }
+      } else {
+        final sttRate = (config['stt_delivery'] as num?)?.toDouble() ?? 0.001;
+        stt = totalValue * sttRate;
+      }
+
+      final exRate = (config['exchange_delivery'] as num?)?.toDouble() ?? 0.0000322;
+      exchangeCharges = totalValue * exRate;
+
+    } else if (instrumentType == 'FUTURE') {
+      brokerage = (config['fo_brokerage_flat'] as num?)?.toDouble() ?? 20.0;
+
+      if (side == 'buy') {
+        final sdRate = (config['stamp_duty_futures'] as num?)?.toDouble() ?? 0.00002;
+        stampDuty = totalValue * sdRate;
+      }
+
+      if (side == 'sell') {
+        final sttRate = (config['stt_futures_sell'] as num?)?.toDouble() ?? 0.000125;
+        stt = totalValue * sttRate;
+      }
+
+      final exRate = (config['exchange_futures'] as num?)?.toDouble() ?? 0.000019;
+      exchangeCharges = totalValue * exRate;
+
+    } else if (instrumentType == 'OPTION') {
+      brokerage = (config['fo_brokerage_flat'] as num?)?.toDouble() ?? 20.0;
+
+      if (side == 'buy') {
+        final sdRate = (config['stamp_duty_options'] as num?)?.toDouble() ?? 0.00003;
+        stampDuty = totalValue * sdRate;
+      }
+
+      if (side == 'sell') {
+        final sttRate = (config['stt_options_sell'] as num?)?.toDouble() ?? 0.000625;
+        stt = totalValue * sttRate;
+      }
+
+      final exRate = (config['exchange_options'] as num?)?.toDouble() ?? 0.00053;
+      exchangeCharges = totalValue * exRate;
+    }
+
+    final clearingFeeRate = (config['clearing_fee_rate'] as num?)?.toDouble() ?? 0.000002;
+    final sebiFeeRate = (config['sebi_regulatory_fee_rate'] as num?)?.toDouble() ?? 0.000001;
+    final turnoverTaxRate = (config['turnover_tax_rate'] as num?)?.toDouble() ?? 0.000001;
+    final dpChargesFlat = (config['dp_charges_flat'] as num?)?.toDouble() ?? 13.50;
+    final otherBrokerFeeFlat = (config['other_broker_fee_flat'] as num?)?.toDouble() ?? 0.0;
+
+    final clearingFee = totalValue * clearingFeeRate;
+    final sebiRegulatoryFee = totalValue * sebiFeeRate;
+    final turnoverTax = totalValue * turnoverTaxRate;
+    final dpCharges = (instrumentType == 'EQUITY' && side == 'sell' && !isIntraday) ? dpChargesFlat : 0.0;
+    final otherBrokerFee = otherBrokerFeeFlat;
+
+    final gstRate = (config['gst_rate'] as num?)?.toDouble() ?? 0.18;
+    final gst = (brokerage + exchangeCharges + clearingFee + sebiRegulatoryFee + turnoverTax + otherBrokerFee) * gstRate;
+
+    final taxCharges = stt + exchangeCharges + gst + clearingFee + sebiRegulatoryFee + turnoverTax;
+    final totalCharges = brokerage + stampDuty + taxCharges + dpCharges + otherBrokerFee;
+
+    return {
+      'brokerage': (brokerage * 100).roundToDouble() / 100.0,
+      'stamp_duty': (stampDuty * 100).roundToDouble() / 100.0,
+      'stt': (stt * 100).roundToDouble() / 100.0,
+      'exchange_charges': (exchangeCharges * 100).roundToDouble() / 100.0,
+      'clearing_fee': (clearingFee * 100).roundToDouble() / 100.0,
+      'sebi_regulatory_fee': (sebiRegulatoryFee * 100).roundToDouble() / 100.0,
+      'turnover_tax': (turnoverTax * 100).roundToDouble() / 100.0,
+      'dp_charges': (dpCharges * 100).roundToDouble() / 100.0,
+      'other_broker_fee': (otherBrokerFee * 100).roundToDouble() / 100.0,
+      'gst': (gst * 100).roundToDouble() / 100.0,
+      'tax_charges': (taxCharges * 100).roundToDouble() / 100.0,
+      'total_charges': (totalCharges * 100).roundToDouble() / 100.0,
+    };
+  }
 
   Future<void> _saveCache(String key, String jsonStr) async {
     try {
@@ -94,6 +249,7 @@ class SupabaseService {
       return;
     }
     await getUserProfile();
+    await fetchActiveChargeConfig();
   }
 
   Future<AuthResponse> signUp({
@@ -152,18 +308,46 @@ class SupabaseService {
     final user = currentUser;
     if (user == null) return null;
 
-    final profile = await client
-        .from('profiles')
-        .select()
-        .eq('id', user.id)
-        .maybeSingle();
-    if (profile == null) return null;
+    try {
+      final profile = await client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      if (profile == null) return null;
 
-    final parsed = app_models.User.fromJson(
-      Map<String, dynamic>.from(profile as Map),
-    );
-    await _saveCache('user_profile_${user.id}', jsonEncode(parsed.toJson()));
-    return parsed;
+      final parsed = app_models.User.fromJson(
+        Map<String, dynamic>.from(profile as Map),
+      );
+      await _saveCache('user_profile_${user.id}', jsonEncode(parsed.toJson()));
+      return parsed;
+    } catch (e) {
+      // Offline / DNS failure: degrade gracefully to last cached profile.
+      if (FirebaseService.isTransientNetworkError(e)) {
+        debugPrint('getUserProfile offline, using cache: $e');
+        return getCachedUserProfile();
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, String>> getAppVersionConfig() async {
+    try {
+      final data = await client.from('app_config').select('key, value');
+      final Map<String, String> config = {};
+      for (final row in (data as List<dynamic>)) {
+        final r = Map<String, dynamic>.from(row as Map);
+        final k = r['key']?.toString();
+        final v = r['value']?.toString();
+        if (k != null && v != null) {
+          config[k] = v;
+        }
+      }
+      return config;
+    } catch (e) {
+      debugPrint('Error getting app version config: $e');
+      rethrow;
+    }
   }
 
   Future<List<Order>> getOrders({int limit = 50}) async {
@@ -171,16 +355,25 @@ class SupabaseService {
     final user = currentUser;
     if (user == null) return [];
 
-    final data = await client
-        .from('orders')
-        .select()
-        .eq('user_id', user.id)
-        .order('created_at', ascending: false)
-        .limit(limit);
+    try {
+      final data = await client
+          .from('orders')
+          .select()
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(limit);
 
-    return (data as List<dynamic>)
-        .map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
+      return (data as List<dynamic>)
+          .map((e) => Order.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (e) {
+      // Offline / DNS failure: return empty list instead of crashing the UI.
+      if (FirebaseService.isTransientNetworkError(e)) {
+        debugPrint('getOrders offline: $e');
+        return [];
+      }
+      rethrow;
+    }
   }
 
   /// Settles expired option positions automatically.
@@ -193,18 +386,20 @@ class SupabaseService {
     final today = DateTime.now();
     final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-    // Find all derivative holdings (OPTION + FUTURE) with expiry_date <= today
+    // Find all active derivative positions in fo_positions with expiry_date <= today
     final expiredOptionRows = await client
-        .from('holdings')
+        .from('fo_positions')
         .select()
         .eq('user_id', user.id)
+        .eq('is_settled', false)
         .eq('instrument_type', 'OPTION')
         .lte('expiry_date', todayStr);
 
     final expiredFutureRows = await client
-        .from('holdings')
+        .from('fo_positions')
         .select()
         .eq('user_id', user.id)
+        .eq('is_settled', false)
         .eq('instrument_type', 'FUTURE')
         .lte('expiry_date', todayStr);
 
@@ -226,15 +421,18 @@ class SupabaseService {
 
     for (final raw in allExpired) {
       final row = Map<String, dynamic>.from(raw as Map);
-      final holdingId = row['id'] as String;
+      final positionId = row['id'] as String;
       final symbol = row['symbol'] as String;
-      final market = row['market'] as String? ?? 'stock';
-      final quantity = (row['quantity'] as num).toDouble();
-      final avgPrice = (row['avg_price'] as num).toDouble();
+      final market = 'stock';
+      final netQty = (row['net_qty'] as num).toDouble();
+      final lotSize = (row['lot_size'] as num?)?.toDouble() ?? 1.0;
+      final double quantity = netQty * lotSize;
+      final avgPrice = (row['avg_entry_price'] as num).toDouble();
       final instType = row['instrument_type'] as String? ?? 'OPTION';
       final optionType = row['option_type'] as String? ?? 'CE';
       final strikePrice = (row['strike_price'] as num?)?.toDouble() ?? 0.0;
       final expiryDate = row['expiry_date'] as String? ?? todayStr;
+      final blockedMargin = (row['margin_blocked'] as num?)?.toDouble() ?? 0.0;
 
       // Get the underlying spot price for settlement
       String underlyingSymbol = symbol;
@@ -252,9 +450,13 @@ class SupabaseService {
       } catch (_) {}
 
       double settlementPnl = 0.0;
+      double walletChange = 0.0;
+      double premiumReceivedLogVal = 0.0;
       String orderName = '';
       String notifTitle = '';
       String notifBody = '';
+      String settlementType = 'OTM';
+      double intrinsicValue = 0.0;
 
       if (instType == 'FUTURE') {
         // ── FUTURES SETTLEMENT ──
@@ -270,15 +472,14 @@ class SupabaseService {
         orderName = 'Futures Expiry Settlement';
         notifTitle = 'Futures Expired';
         notifBody = '$symbol expired. Settlement P&L: ${settlementPnl >= 0 ? '+' : ''}₹${settlementPnl.toStringAsFixed(2)}';
+        settlementType = 'FUTURE_EXPIRY';
 
         // Return the blocked margin + P&L to wallet
-        // Margin was ~15% of notional at entry
-        final blockedMargin = avgPrice * quantity.abs() * 0.15;
-        walletBalance += blockedMargin + settlementPnl;
+        walletChange = blockedMargin + settlementPnl;
+        walletBalance += walletChange;
 
       } else {
         // ── OPTIONS SETTLEMENT ──
-        double intrinsicValue = 0.0;
         if (optionType == 'CE') {
           intrinsicValue = (spotPrice - strikePrice).clamp(0.0, double.infinity);
         } else {
@@ -286,16 +487,24 @@ class SupabaseService {
         }
 
         final bool isITM = intrinsicValue > 0;
+        settlementType = isITM ? 'ITM' : 'OTM';
 
         if (quantity > 0) {
-          // Long: bought option
+          // Long Option (buyer)
+          // Realized P&L is (intrinsicValue - avgPrice) * quantity
           settlementPnl = (intrinsicValue - avgPrice) * quantity;
+          // Wallet change: credit the full intrinsic value (since premium was already debited at entry)
+          walletChange = intrinsicValue * quantity;
         } else {
-          // Short: wrote option
+          // Short Option (writer)
+          // Realized P&L is (avgPrice - intrinsicValue) * quantity.abs()
           settlementPnl = (avgPrice - intrinsicValue) * quantity.abs();
+          // Wallet change: release blocked margin and debit/pay the intrinsic value
+          walletChange = blockedMargin - (intrinsicValue * quantity.abs());
+          premiumReceivedLogVal = avgPrice * quantity.abs();
         }
 
-        walletBalance += settlementPnl;
+        walletBalance += walletChange;
         orderName = '${isITM ? "ITM" : "OTM"} Expiry Settlement';
         notifTitle = isITM ? 'Option Exercised (ITM)' : 'Option Expired (OTM)';
         notifBody = isITM
@@ -303,7 +512,29 @@ class SupabaseService {
             : '$symbol expired OTM. Premium lost: ₹${(avgPrice * quantity.abs()).toStringAsFixed(2)}';
       }
 
-      totalRealizedPnl += settlementPnl;
+      if (_activeChargeConfig == null) {
+        await fetchActiveChargeConfig();
+      }
+
+      final Map<String, double> charges = (market == 'stock')
+          ? calculateTransactionCharges(
+              instrumentType: instType,
+              side: quantity > 0 ? 'sell' : 'buy',
+              quantity: quantity.abs(),
+              price: spotPrice,
+              isIntraday: false,
+            )
+          : {
+              'brokerage': 0.0,
+              'stamp_duty': 0.0,
+              'tax_charges': 0.0,
+              'total_charges': 0.0,
+            };
+      final totalCharges = charges['total_charges'] ?? 0.0;
+      walletBalance -= totalCharges;
+      walletChange -= totalCharges;
+
+      totalRealizedPnl += settlementPnl - totalCharges;
 
       // Record the settlement as a closed order (shows in Order History)
       try {
@@ -324,6 +555,30 @@ class SupabaseService {
           'option_type': instType == 'OPTION' ? optionType : null,
           'expiry_date': expiryDate,
           'executed_at': DateTime.now().toUtc().toIso8601String(),
+          'charge_config_id': _activeChargeConfigId,
+          'brokerage': charges['brokerage'],
+          'stamp_duty': charges['stamp_duty'],
+          'tax_charges': charges['tax_charges'],
+          'total_charges': totalCharges,
+        });
+
+        // Insert immutable settlement ledger entry
+        await client.from('settlement_ledger').insert({
+          'user_id': user.id,
+          'position_id': positionId,
+          'symbol': symbol,
+          'instrument_type': instType,
+          'option_type': instType == 'OPTION' ? optionType : null,
+          'strike_price': instType == 'OPTION' ? strikePrice : null,
+          'expiry_date': expiryDate,
+          'quantity': quantity.abs(),
+          'avg_price': avgPrice,
+          'settlement_type': settlementType,
+          'intrinsic_value': instType == 'OPTION' ? intrinsicValue : 0.0,
+          'premium_received': premiumReceivedLogVal,
+          'margin_released': blockedMargin,
+          'wallet_change': walletChange,
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
         });
 
         // Create notification
@@ -337,8 +592,13 @@ class SupabaseService {
         });
       } catch (_) {}
 
-      // Delete the expired holding
-      await client.from('holdings').delete().eq('id', holdingId);
+      // Settle the expired position in fo_positions
+      await client.from('fo_positions').update({
+        'is_settled': true,
+        'settled_at': DateTime.now().toUtc().toIso8601String(),
+        'settlement_price': spotPrice,
+        'realized_pnl': settlementPnl,
+      }).eq('id', positionId);
     }
 
     // Update wallet balance and total realized P&L
@@ -349,6 +609,57 @@ class SupabaseService {
           'total_realized_pnl': totalRealizedPnl,
         })
         .eq('id', user.id);
+  }
+
+  Future<List<FoPosition>> getFoPositions() async {
+    final user = currentUser;
+    if (user == null) return [];
+
+    try {
+      final response = await client
+          .from('fo_positions')
+          .select()
+          .eq('user_id', user.id)
+          .eq('is_settled', false);
+
+      final positions = (response as List<dynamic>)
+          .map((e) => FoPosition.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+
+      return positions;
+    } catch (e) {
+      debugPrint('Error getting F&O positions: $e');
+      return [];
+    }
+  }
+
+  double _normalCDF(double x) {
+    final t = 1 / (1 + 0.2316419 * x.abs());
+    final d = 0.3989422804 * math.exp(-x * x / 2);
+    final p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+    return x >= 0 ? 1 - p : p;
+  }
+
+  double _blackScholes(String optionType, double spot, double strike, double T) {
+    if (T <= 0) {
+      if (optionType == 'CE') {
+        return math.max(0.0, spot - strike);
+      } else {
+        return math.max(0.0, strike - spot);
+      }
+    }
+    const r = 0.065;
+    const sigma = 0.25;
+    final d1 = (math.log(spot / strike) + (r + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T));
+    final d2 = d1 - sigma * math.sqrt(T);
+    
+    double price = 0.0;
+    if (optionType == 'CE') {
+      price = spot * _normalCDF(d1) - strike * math.exp(-r * T) * _normalCDF(d2);
+    } else {
+      price = strike * math.exp(-r * T) * _normalCDF(-d2) - spot * _normalCDF(-d1);
+    }
+    return math.max(0.05, (price * 100).round() / 100.0);
   }
 
   Future<List<Holding>> getHoldings() async {
@@ -367,7 +678,7 @@ class SupabaseService {
 
     final recentOrdersRaw = await client
         .from('orders')
-        .select('symbol, market, quantity, price, side, name, realized_pnl')
+        .select('symbol, market, quantity, price, side, name, realized_pnl, total_charges')
         .eq('user_id', user.id)
         .eq('status', 'executed')
         .gte('executed_at', todayStartStr);
@@ -389,6 +700,7 @@ class SupabaseService {
       final side = r['side'] as String? ?? 'buy';
       final name = r['name'] as String? ?? symbol;
       final relPnl = (r['realized_pnl'] as num?)?.toDouble() ?? 0.0;
+      final totalCharges = (r['total_charges'] as num?)?.toDouble() ?? 0.0;
 
       symbolNames[key] = name;
 
@@ -398,16 +710,57 @@ class SupabaseService {
       } else if (side == 'sell') {
         todaySells[key] = (todaySells[key] ?? 0.0) + q;
         todaySellCost[key] = (todaySellCost[key] ?? 0.0) + (q * p);
-        todayRealizedPnl[key] = (todayRealizedPnl[key] ?? 0.0) + relPnl;
       }
+      
+      todayRealizedPnl[key] = (todayRealizedPnl[key] ?? 0.0) + relPnl - totalCharges;
     }
 
-    final rows = await client.from('holdings').select().eq('user_id', user.id);
+    final List<dynamic> rows = [];
+    try {
+      final rawHoldings = await client.from('holdings').select().eq('user_id', user.id);
+      rows.addAll(rawHoldings as List<dynamic>);
+    } catch (e) {
+      debugPrint('Error loading holdings: $e');
+    }
+
+    try {
+      final rawFoPositions = await client
+          .from('fo_positions')
+          .select()
+          .eq('user_id', user.id)
+          .eq('is_settled', false);
+      for (final foRow in (rawFoPositions as List<dynamic>)) {
+        final f = Map<String, dynamic>.from(foRow as Map);
+        final netQty = (f['net_qty'] as num?)?.toDouble() ?? 0.0;
+        final lotSize = (f['lot_size'] as num?)?.toDouble() ?? 1.0;
+        final avgEntryPrice = (f['avg_entry_price'] as num?)?.toDouble() ?? 0.0;
+        final symbol = f['symbol'] as String? ?? '';
+        
+        rows.add({
+          'id': f['id'],
+          'user_id': f['user_id'],
+          'symbol': symbol,
+          'market': 'stock',
+          'quantity': netQty * lotSize,
+          'avg_price': avgEntryPrice,
+          'name': symbol,
+          'instrument_type': f['instrument_type'],
+          'strike_price': f['strike_price'],
+          'option_type': f['option_type'],
+          'expiry_date': f['expiry_date'],
+          'product_type': 'NRML',
+          'created_at': f['created_at'],
+        });
+      }
+    } catch (e) {
+      debugPrint('Error merging F&O positions: $e');
+    }
+
     final results = <Holding>[];
     final activeKeys = <String>{};
     final activeHoldingsMap = <String, Map<String, dynamic>>{};
 
-    for (final raw in (rows as List<dynamic>)) {
+    for (final raw in rows) {
       final row = Map<String, dynamic>.from(raw as Map);
       final symbol = row['symbol'] as String? ?? '';
       final market = row['market'] as String? ?? 'stock';
@@ -470,7 +823,14 @@ class SupabaseService {
     final fetchedQuotes = await Future.wait(quoteFutures);
     final quotesMap = <String, Quote?>{};
     for (int i = 0; i < keysToFetch.length; i++) {
-      quotesMap[keysToFetch[i]] = fetchedQuotes[i];
+      final key = keysToFetch[i];
+      final q = fetchedQuotes[i];
+      quotesMap[key] = q;
+      if (q != null) {
+        final parts = key.split('\x1F');
+        final normSym = MarketService.normalizeSymbol(parts[0], parts[1]);
+        quotesMap['$normSym\x1F${parts[1]}'] = q;
+      }
     }
 
     for (final key in allKeysList) {
@@ -489,57 +849,48 @@ class SupabaseService {
 
       if (instType == 'OPTION' && underlyingKeyMap.containsKey(key)) {
         // For options: estimate current price from underlying spot price
-        final underlyingQuote = quotesMap[underlyingKeyMap[key]];
+        final underlyingKey = underlyingKeyMap[key]!;
+        final uparts = underlyingKey.split('\x1F');
+        final normUnderlyingKey = '${MarketService.normalizeSymbol(uparts[0], uparts[1])}\x1F${uparts[1]}';
+        final underlyingQuote = quotesMap[underlyingKey] ?? quotesMap[normUnderlyingKey];
+        
         final spotPrice = underlyingQuote?.price ?? 0.0;
         final spotPrevClose = underlyingQuote?.previousClose ?? spotPrice;
         final strikePrice = (activeRow?['strike_price'] as num?)?.toDouble() ?? 0.0;
         final optType = activeRow?['option_type'] as String? ?? 'CE';
         final expiryStr = activeRow?['expiry_date'] as String?;
 
-        // Calculate intrinsic value
-        double intrinsic = 0.0;
-        if (optType == 'CE') {
-          intrinsic = (spotPrice - strikePrice).clamp(0.0, double.infinity);
-        } else {
-          intrinsic = (strikePrice - spotPrice).clamp(0.0, double.infinity);
-        }
-
-        // Estimate time value based on days remaining
-        double timeValue = 0.0;
+        double daysLeft = 0.0;
         if (expiryStr != null) {
           try {
             final expiry = DateTime.parse(expiryStr);
+            daysLeft = expiry.difference(now).inHours / 24.0;
+          } catch (_) {}
+        }
+        final T = math.max(0.0001, daysLeft) / 365.0;
+        currentPrice = _blackScholes(optType, spotPrice, strikePrice, T);
+
+        final tYesterday = (math.max(0.0, daysLeft) + 1.0) / 365.0;
+        previousClose = _blackScholes(optType, spotPrevClose, strikePrice, tYesterday);
+
+        // If created today, override previousClose with avgPrice
+        final createdAtStr = activeRow?['created_at'] as String?;
+        if (createdAtStr != null) {
+          try {
+            final createdAt = DateTime.parse(createdAtStr).toLocal();
             final now = DateTime.now();
-            final daysLeft = expiry.difference(now).inHours / 24.0;
-            if (daysLeft > 0) {
-              // Simple time decay: sqrt(daysLeft/30) * avgPrice * 0.3
-              // This gives a rough approximation of theta decay
-              final timeDecayFactor = (daysLeft / 30.0).clamp(0.0, 1.0);
-              final sqrtDecay = timeDecayFactor > 0 ? timeDecayFactor * 0.5 : 0.0;
-              timeValue = avgPrice * sqrtDecay * 0.5;
+            if (createdAt.year == now.year && createdAt.month == now.month && createdAt.day == now.day) {
+              previousClose = avgPrice;
             }
           } catch (_) {}
         }
-
-        currentPrice = intrinsic + timeValue;
-        if (currentPrice <= 0 && avgPrice > 0) {
-          currentPrice = avgPrice * 0.05; // Floor at 5% of avg price (not zero)
-        }
-
-        // Previous close estimate using yesterday's spot
-        double prevIntrinsic = 0.0;
-        if (optType == 'CE') {
-          prevIntrinsic = (spotPrevClose - strikePrice).clamp(0.0, double.infinity);
-        } else {
-          prevIntrinsic = (strikePrice - spotPrevClose).clamp(0.0, double.infinity);
-        }
-        previousClose = prevIntrinsic + timeValue;
-        if (previousClose <= 0 && avgPrice > 0) {
-          previousClose = avgPrice * 0.05;
-        }
       } else if (instType == 'FUTURE' && underlyingKeyMap.containsKey(key)) {
         // For futures: derive price from underlying spot + carry cost
-        final underlyingQuote = quotesMap[underlyingKeyMap[key]];
+        final underlyingKey = underlyingKeyMap[key]!;
+        final uparts = underlyingKey.split('\x1F');
+        final normUnderlyingKey = '${MarketService.normalizeSymbol(uparts[0], uparts[1])}\x1F${uparts[1]}';
+        final underlyingQuote = quotesMap[underlyingKey] ?? quotesMap[normUnderlyingKey];
+        
         final spotPrice = underlyingQuote?.price ?? avgPrice;
         final spotPrevClose = underlyingQuote?.previousClose ?? spotPrice;
         final expiryStr = activeRow?['expiry_date'] as String?;
@@ -560,9 +911,22 @@ class SupabaseService {
 
         currentPrice = spotPrice * carryMultiplier;
         previousClose = spotPrevClose * carryMultiplier;
+
+        // If created today, override previousClose with avgPrice
+        final createdAtStr = activeRow?['created_at'] as String?;
+        if (createdAtStr != null) {
+          try {
+            final createdAt = DateTime.parse(createdAtStr).toLocal();
+            final now = DateTime.now();
+            if (createdAt.year == now.year && createdAt.month == now.month && createdAt.day == now.day) {
+              previousClose = avgPrice;
+            }
+          } catch (_) {}
+        }
       } else {
         // For stocks/crypto: use direct quote
-        final currentQuote = quotesMap[key];
+        final normKey = '${MarketService.normalizeSymbol(symbol, market)}\x1F$market';
+        final currentQuote = quotesMap[key] ?? quotesMap[normKey];
         currentPrice = currentQuote?.price ?? avgPrice;
         previousClose = currentQuote?.previousClose ?? currentPrice;
       }
@@ -747,6 +1111,64 @@ class SupabaseService {
   }
 
   Future<Quote?> getQuote(String symbol, String market) async {
+    final parts = symbol.split('-');
+    final isOption = parts.length >= 5 && (parts.last == 'CE' || parts.last == 'PE');
+    final isFuture = symbol.contains(' FUT');
+
+    if (market == 'stock' && (isOption || isFuture)) {
+      final underlyingSymbol = isOption ? parts[0] : symbol.split(' ')[0];
+      final spotQuote = await MarketService.quote(underlyingSymbol, market);
+      if (spotQuote == null) return null;
+
+      double price = 0.0;
+      double previousClose = 0.0;
+
+      if (isFuture) {
+        double carryMultiplier = 1.0;
+        carryMultiplier = 1.0 + 0.065 * (15.0 / 365.0);
+        price = spotQuote.price * carryMultiplier;
+        previousClose = spotQuote.previousClose * carryMultiplier;
+      } else {
+        // Option
+        final strikePrice = double.tryParse(parts[4]) ?? 0.0;
+        final optType = parts.last;
+        
+        double intrinsic = 0.0;
+        if (optType == 'CE') {
+          intrinsic = (spotQuote.price - strikePrice).clamp(0.0, double.infinity);
+        } else {
+          intrinsic = (strikePrice - spotQuote.price).clamp(0.0, double.infinity);
+        }
+        
+        double prevIntrinsic = 0.0;
+        if (optType == 'CE') {
+          prevIntrinsic = (spotQuote.previousClose - strikePrice).clamp(0.0, double.infinity);
+        } else {
+          prevIntrinsic = (strikePrice - spotQuote.previousClose).clamp(0.0, double.infinity);
+        }
+
+        // Use a default estimation of time value (e.g. 5.0)
+        double timeValue = 5.0;
+        price = intrinsic + timeValue;
+        previousClose = prevIntrinsic + timeValue;
+      }
+
+      final change = price - previousClose;
+      final changePct = previousClose > 0 ? (change / previousClose) * 100 : 0.0;
+
+      return Quote(
+        symbol: symbol,
+        yfSymbol: symbol,
+        name: symbol,
+        price: price,
+        previousClose: previousClose,
+        change: change,
+        changePct: changePct,
+        currency: 'INR',
+        market: 'stock',
+      );
+    }
+
     return await MarketService.quote(symbol, market);
   }
 
@@ -910,7 +1332,7 @@ class SupabaseService {
       'user_id': user.id,
       'symbol': symbol,
       'market': market,
-      'name': ?name,
+      'name': name,
     }, onConflict: 'user_id,symbol,market');
   }
 
@@ -948,6 +1370,8 @@ class SupabaseService {
     double? strikePrice,
     String? optionType,
     String? expiryDate,
+    bool isIntraday = false,
+    bool isExitOrder = false,
   }) async {
     side = side.toLowerCase();
     final user = currentUser;
@@ -960,6 +1384,8 @@ class SupabaseService {
     double currentPrice = 0.0;
     String name = symbol;
     bool isQuoteAvailable = false;
+    String priceSource = 'FALLBACK_PREFILLED';
+    final nseContractDate = DateTime.now().toIso8601String().split('T')[0];
 
     if (instrumentType == 'EQUITY') {
       final quote = await MarketService.quote(symbol, market);
@@ -967,28 +1393,52 @@ class SupabaseService {
         currentPrice = quote.price;
         name = quote.name;
         isQuoteAvailable = true;
+        priceSource = 'EQUITY_LTP';
       } else {
         if (price == null || price <= 0) {
           throw Exception('Market quote unavailable');
         }
         currentPrice = price;
       }
+    } else if (instrumentType == 'OPTION') {
+      // The market-quote endpoint returns the UNDERLYING spot price for an
+      // option contract symbol (e.g. ~1330 for a RELIANCE option), NOT the
+      // option premium. The client computes and displays the correct premium
+      // (via the option chain) and passes it as `price`. Use that premium as
+      // the execution price so the cost charged matches what the user saw and
+      // confirmed. Without this, an option buy is wrongly priced at the
+      // underlying's price and gets rejected for "insufficient balance".
+      if (price != null && price > 0) {
+        currentPrice = price;
+        isQuoteAvailable = true;
+        priceSource = 'OPTION_PREMIUM';
+        name = '$symbol $expiryDate $strikePrice $optionType';
+      } else {
+        final liveQuote = await MarketService.quote(symbol, market);
+        if (liveQuote != null && liveQuote.price > 0) {
+          currentPrice = liveQuote.price;
+          name = liveQuote.name;
+          isQuoteAvailable = true;
+          priceSource = 'OPTION_PREMIUM';
+        } else {
+          throw Exception('Live derivative quote unavailable. Please try again.');
+        }
+      }
     } else {
+      // FUTURE: the underlying-tracked quote is an acceptable proxy for the
+      // futures price; fall back to the client-supplied price if unavailable.
       final liveQuote = await MarketService.quote(symbol, market);
       if (liveQuote != null && liveQuote.price > 0) {
         currentPrice = liveQuote.price;
         name = liveQuote.name;
         isQuoteAvailable = true;
+        priceSource = 'FUTURE_LTP';
       } else {
         if (price == null || price <= 0) {
           throw Exception('Live derivative quote unavailable. Please try again.');
         }
         currentPrice = price;
-        if (instrumentType == 'FUTURE') {
-          name = '$symbol Perpetual Futures';
-        } else {
-          name = '$symbol $expiryDate $strikePrice $optionType';
-        }
+        name = '$symbol Perpetual Futures';
       }
     }
 
@@ -1010,7 +1460,23 @@ class SupabaseService {
       }
     }
 
-    if (market != 'crypto' && !MarketHours.isOpen(market)) {
+    // Market-hours gate for ALL markets (equity, F&O, crypto). Previously this
+    // only applied to non-stock markets, so equity and F&O orders (which use
+    // market == 'stock') executed at any hour. Now any order placed while its
+    // market is closed is routed to pending and the pending executor (which
+    // also respects market hours) fills it once the market reopens. Crypto is
+    // unaffected since MarketHours.isOpen('crypto') is always true.
+    if (!MarketHours.isOpen(market)) {
+      executeImmediately = false;
+    }
+
+    // Option limit orders must WAIT for the live premium to reach the limit.
+    // For options, currentPrice above is the client-supplied premium (which
+    // equals the limit the user typed), so the buy/sell comparison would always
+    // be satisfied and fill instantly. Route option limit orders to the pending
+    // executor instead — it evaluates the trigger against a live computed
+    // premium (intrinsic + time value) and only fills once the limit is hit.
+    if (instrumentType == 'OPTION' && !isMarket) {
       executeImmediately = false;
     }
 
@@ -1036,6 +1502,10 @@ class SupabaseService {
             'strike_price': strikePrice,
             'option_type': optionType,
             'expiry_date': expiryDate,
+            'execution_price_source': priceSource,
+            'execution_reference_price': currentPrice,
+            'nse_contract_date': nseContractDate,
+            'is_exit': isExitOrder,
           })
           .select()
           .maybeSingle();
@@ -1059,11 +1529,342 @@ class SupabaseService {
 
     final execPrice = currentPrice;
     final total = execPrice * quantity;
-    // Calculate margin required: derivatives use ~15% margin, equity uses full value
+
+    if (_activeChargeConfig == null) {
+      await fetchActiveChargeConfig();
+    }
+
+    final Map<String, double> charges = (market == 'stock')
+        ? calculateTransactionCharges(
+            instrumentType: instrumentType,
+            side: side,
+            quantity: quantity,
+            price: execPrice,
+            isIntraday: isIntraday,
+          )
+        : {
+            'brokerage': 0.0,
+            'stamp_duty': 0.0,
+            'tax_charges': 0.0,
+            'total_charges': 0.0,
+          };
+    final totalCharges = charges['total_charges'] ?? 0.0;
+
     final bool isDerivative = instrumentType == 'FUTURE' || instrumentType == 'OPTION';
-    final double marginPct = isDerivative ? 0.15 : 1.0;
+
+    if (isDerivative) {
+      final lotSize = await FoInstrumentsService().getLotSize(symbol);
+      int tradeQtyLots = (quantity / lotSize).toInt();
+      int tradeSideSign = side == 'buy' ? 1 : -1;
+
+      // 1. Fetch existing position
+      final existingResponse = await client
+          .from('fo_positions')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .eq('instrument_type', instrumentType)
+          .eq('option_type', optionType ?? '')
+          .eq('strike_price', strikePrice ?? 0.0)
+          .eq('expiry_date', expiryDate ?? '')
+          .eq('is_settled', false)
+          .maybeSingle();
+
+      FoPosition? existingPos;
+      if (existingResponse != null) {
+        existingPos = FoPosition.fromJson(Map<String, dynamic>.from(existingResponse as Map));
+      }
+
+      final int existingQty = existingPos?.netQty ?? 0;
+      final double existingAvg = existingPos?.avgEntryPrice ?? 0.0;
+
+      // Exit-order handling: force a deterministic opposite-side close.
+      // Gated entirely behind isExitOrder so all non-exit (open/add) behavior
+      // is byte-for-byte unchanged.
+      if (isExitOrder) {
+        // Resolve the held position first. A null/zero position means there is
+        // nothing to close — fail clearly instead of silently opening a new
+        // position (kills the position-lookup-miss class of the bug).
+        if (existingPos == null || existingQty == 0) {
+          throw Exception('No open position to exit');
+        }
+        // Force the trade onto the side opposite the held direction so that
+        // (existingQty * tradeSideSign) < 0 and execution lands deterministically
+        // in the reduce/close branch. Record the matching side: 'sell' to close a
+        // long, 'buy' to cover a short.
+        tradeSideSign = existingQty > 0 ? -1 : 1;
+        side = existingQty > 0 ? 'sell' : 'buy';
+        // Clamp the closing lots so newNetQty moves toward zero and never
+        // overshoots into a reverse position (full close => 0).
+        tradeQtyLots = math.min(tradeQtyLots.abs(), existingQty.abs());
+      }
+
+      final int newNetQty = existingQty + (tradeQtyLots * tradeSideSign);
+
+      double newAvgEntryPrice = 0.0;
+      double realizedPnl = 0.0;
+      double walletDebit = 0.0;
+      double walletCredit = 0.0;
+      double marginBlocked = 0.0;
+
+      // Check if opening/adding vs closing/reducing
+      if (existingQty == 0 || (existingQty * tradeSideSign) > 0) {
+        // Opening new position or adding to it
+        newAvgEntryPrice = existingQty == 0
+            ? execPrice
+            : ((existingAvg * existingQty.abs()) + (execPrice * tradeQtyLots)) / (existingQty.abs() + tradeQtyLots);
+
+        if (instrumentType == 'OPTION' && newNetQty > 0) {
+          // Option buyer - pays 100% premium upfront, marginBlocked is 0
+          marginBlocked = 0.0;
+          walletDebit = execPrice * quantity;
+        } else if (instrumentType == 'OPTION' && newNetQty < 0) {
+          // Option seller - blocks 15% margin, receives premium
+          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+          final double oldMargin = existingPos?.marginBlocked ?? 0.0;
+          final double marginDelta = marginBlocked - oldMargin;
+          final double premiumReceived = execPrice * quantity;
+          if (premiumReceived >= marginDelta) {
+            walletCredit = premiumReceived - marginDelta;
+            walletDebit = 0.0;
+          } else {
+            walletDebit = marginDelta - premiumReceived;
+            walletCredit = 0.0;
+          }
+        } else {
+          // Futures trader - blocks 15% margin
+          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+          final double oldMargin = existingPos?.marginBlocked ?? 0.0;
+          walletDebit = marginBlocked - oldMargin;
+        }
+      } else {
+        // Reducing or closing position
+        newAvgEntryPrice = existingAvg;
+        final int closedQtyLots = tradeQtyLots.abs() > existingQty.abs() ? existingQty.abs() : tradeQtyLots.abs();
+        final int remainingQtyLots = tradeQtyLots.abs() - closedQtyLots;
+
+        realizedPnl = (existingQty > 0 ? (execPrice - existingAvg) : (existingAvg - execPrice)) * closedQtyLots * lotSize;
+
+        if (newNetQty == 0) {
+          // Complete close
+          marginBlocked = 0.0;
+          if (instrumentType == 'OPTION' && existingQty > 0) {
+            // Long option close - option buyer receives premium back
+            walletCredit = execPrice * closedQtyLots * lotSize;
+          } else if (instrumentType == 'OPTION' && existingQty < 0) {
+            // Short option close - release margin, pay premium to buy back
+            final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+            final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+            if (netImpact >= 0) {
+              walletCredit = netImpact;
+            } else {
+              walletDebit = netImpact.abs();
+            }
+          } else {
+            // Futures close - release margin + realizedPnl
+            final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+            final double netImpact = releasedMargin + realizedPnl;
+            if (netImpact >= 0) {
+              walletCredit = netImpact;
+            } else {
+              walletDebit = netImpact.abs();
+            }
+          }
+        } else if (newNetQty * existingQty > 0) {
+          // Partial reduction (same direction)
+          if (instrumentType == 'OPTION' && existingQty > 0) {
+            // Option buyer reduces long position
+            marginBlocked = 0.0;
+            walletCredit = execPrice * closedQtyLots * lotSize;
+          } else if (instrumentType == 'OPTION' && existingQty < 0) {
+            // Option seller reduces short position - release partial margin, pay premium to buy back
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
+            final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+            if (netImpact >= 0) {
+              walletCredit = netImpact;
+            } else {
+              walletDebit = netImpact.abs();
+            }
+          } else {
+            // Futures reduces position
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
+            final double netImpact = releasedMargin + realizedPnl;
+            if (netImpact >= 0) {
+              walletCredit = netImpact;
+            } else {
+              walletDebit = netImpact.abs();
+            }
+          }
+        } else {
+          // Over-close: position switches direction
+          // Closed portion first
+          double closedPortionNetImpact = 0.0;
+          if (instrumentType == 'OPTION' && existingQty > 0) {
+            closedPortionNetImpact = execPrice * closedQtyLots * lotSize;
+          } else if (instrumentType == 'OPTION' && existingQty < 0) {
+            final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+            closedPortionNetImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+          } else {
+            final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+            closedPortionNetImpact = releasedMargin + realizedPnl;
+          }
+
+          // Opened portion next
+          newAvgEntryPrice = execPrice;
+          double openedPortionDebit = 0.0;
+          double openedPortionCredit = 0.0;
+          if (instrumentType == 'OPTION' && newNetQty > 0) {
+            marginBlocked = 0.0;
+            openedPortionDebit = execPrice * remainingQtyLots * lotSize;
+          } else if (instrumentType == 'OPTION' && newNetQty < 0) {
+            // Opening short option - block margin, credit premium
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            final double premiumReceived = execPrice * remainingQtyLots * lotSize;
+            if (premiumReceived >= marginBlocked) {
+              openedPortionCredit = premiumReceived - marginBlocked;
+            } else {
+              openedPortionDebit = marginBlocked - premiumReceived;
+            }
+          } else {
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            openedPortionDebit = marginBlocked;
+          }
+
+          final double netImpact = closedPortionNetImpact + openedPortionCredit - openedPortionDebit;
+          if (netImpact >= 0) {
+            walletCredit = netImpact;
+          } else {
+            walletDebit = netImpact.abs();
+          }
+        }
+      }
+
+      // Check user balance and adjust credit/debit with charges
+      double finalDebit = walletDebit;
+      double finalCredit = walletCredit;
+      if (totalCharges > 0) {
+        if (walletCredit >= totalCharges) {
+          finalCredit = walletCredit - totalCharges;
+        } else {
+          finalCredit = 0.0;
+          finalDebit = walletDebit + (totalCharges - walletCredit);
+        }
+      }
+
+      // Closing portion of an exit must never be blocked on balance — closing
+      // reduces exposure and releases capital. Preserve the throw for non-exits.
+      if (!isExitOrder && profile.walletBalance + finalCredit - finalDebit < 0) {
+        throw Exception('Insufficient wallet balance. Required net impact (including charges): ₹${(finalDebit - finalCredit).toStringAsFixed(2)}');
+      }
+
+      final positionJson = {
+        'symbol': symbol,
+        'instrument_type': instrumentType,
+        'option_type': optionType ?? '',
+        'strike_price': strikePrice ?? 0.0,
+        'expiry_date': expiryDate ?? '',
+        'lot_size': lotSize,
+        'net_qty': newNetQty,
+        'avg_entry_price': newAvgEntryPrice,
+      };
+
+      final orderJson = {
+        'symbol': symbol,
+        'name': name,
+        'market': market,
+        'side': side,
+        'quantity': quantity,
+        'price': execPrice,
+        'total': total,
+        'realized_pnl': realizedPnl,
+        'status': 'executed',
+        'order_type': isMarket ? 'market' : 'limit',
+        'instrument_type': instrumentType,
+        'strike_price': strikePrice ?? 0.0,
+        'option_type': optionType ?? '',
+        'expiry_date': expiryDate ?? '',
+        'execution_price_source': priceSource,
+        'execution_reference_price': currentPrice,
+        'nse_contract_date': nseContractDate,
+        'charge_config_id': _activeChargeConfigId,
+        'brokerage': charges['brokerage'],
+        'stamp_duty': charges['stamp_duty'],
+        'tax_charges': charges['tax_charges'],
+        'total_charges': totalCharges,
+      };
+
+      // Released margin: with the forced exit routing the close branch sets
+      // marginBlocked to the smaller (or zero) value, so oldMargin - newMargin is
+      // the capital returned to the wallet. Stays 0.0 for non-exits (unchanged).
+      final double marginReleased = isExitOrder
+          ? math.max(0.0, (existingPos?.marginBlocked ?? 0.0) - marginBlocked)
+          : 0.0;
+
+      final Map<String, dynamic> rpcParams = {
+        'p_user_id': user.id,
+        'p_wallet_debit': finalDebit,
+        'p_wallet_credit': finalCredit,
+        'p_margin_blocked': marginBlocked,
+        'p_margin_released': marginReleased,
+        'p_position_data': positionJson,
+        'p_order_data': orderJson,
+      };
+      // Bypass the RPC's internal balance guard only for exits. Omitted for
+      // non-exits so their call signature is byte-for-byte identical (the RPC
+      // param defaults to FALSE).
+      if (isExitOrder) {
+        rpcParams['p_skip_balance_check'] = true;
+      }
+
+      await client.rpc('place_fo_order_transaction', params: rpcParams);
+
+      final orderResponse = await client
+          .from('orders')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .order('executed_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (orderResponse == null) throw Exception('Could not place order');
+      final placedOrder = Order.fromJson(Map<String, dynamic>.from(orderResponse as Map));
+
+      return placedOrder;
+    }
+
+    final double marginPct = 1.0;
     final double marginRequired = total * marginPct;
     double realizedPnl = 0.0;
+
+    // Exit-order handling (equity): force a deterministic opposite-side close.
+    // Gated entirely behind isExitOrder so all non-exit (open/add/normal sell)
+    // behavior is byte-for-byte unchanged. Resolve the held holding first and
+    // derive the side from its sign: 'sell' closes a long (quantity > 0),
+    // 'buy' covers a short (quantity < 0). A null/zero holding means there is
+    // nothing to close — fail clearly instead of opening a new position.
+    if (isExitOrder) {
+      final existingExit = await client
+          .from('holdings')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .eq('market', market)
+          .maybeSingle();
+      if (existingExit == null) {
+        throw Exception('No open position to exit');
+      }
+      final exitQty =
+          ((Map<String, dynamic>.from(existingExit as Map))['quantity'] as num)
+              .toDouble();
+      if (exitQty == 0) {
+        throw Exception('No open position to exit');
+      }
+      // Oppose the held direction so execution lands in the close/reduce path.
+      side = exitQty > 0 ? 'sell' : 'buy';
+    }
 
     if (side == 'buy') {
       final existing = await client
@@ -1074,12 +1875,12 @@ class SupabaseService {
           .eq('market', market)
           .maybeSingle();
       if (existing == null) {
-        if (profile.walletBalance < marginRequired) {
-          throw Exception('Insufficient wallet balance. Required margin: ₹${marginRequired.toStringAsFixed(0)}');
+        if (profile.walletBalance < marginRequired + totalCharges) {
+          throw Exception('Insufficient wallet balance. Required (total + charges): ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
         }
         await client
             .from('profiles')
-            .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
+            .update({'wallet_balance': profile.walletBalance - total - totalCharges})
             .eq('id', user.id);
         await client.from('holdings').insert({
           'user_id': user.id,
@@ -1101,24 +1902,26 @@ class SupabaseService {
         if (oldQuantity < 0) {
           // Covering short position
           final coverQty = quantity > -oldQuantity ? -oldQuantity : quantity;
-          final remainingBuyQty = quantity - coverQty;
+          // On an exit, never open a reverse position: clamp the closed lots to
+          // the held quantity so no surplus buy remains.
+          final remainingBuyQty = isExitOrder ? 0.0 : quantity - coverQty;
 
           realizedPnl += (oldAvg - execPrice) * coverQty;
 
-          final double resultingBalance = profile.walletBalance +
-              (isDerivative
-                  ? (coverQty * oldAvg * marginPct + realizedPnl)
-                  : -(coverQty * execPrice));
+          final double resultingBalance = profile.walletBalance - (coverQty * execPrice) - totalCharges;
 
-          if (resultingBalance < 0) {
-            throw Exception('Insufficient wallet balance to cover short position.');
+          // The closing portion of an exit must never be blocked on balance —
+          // closing reduces exposure and releases capital. Preserve the throw
+          // for non-exit covers.
+          if (!isExitOrder && resultingBalance < 0) {
+            throw Exception('Insufficient wallet balance to cover short position (including charges).');
           }
 
           await client
               .from('profiles')
               .update({
                 'wallet_balance': resultingBalance,
-                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
+                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl - totalCharges,
               })
               .eq('id', user.id);
 
@@ -1151,7 +1954,7 @@ class SupabaseService {
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        updatedProfile.walletBalance - (isDerivative ? remainingMargin : remainingTotal),
+                        updatedProfile.walletBalance - remainingTotal,
                   })
                   .eq('id', user.id);
               await client.from('holdings').insert({
@@ -1170,12 +1973,12 @@ class SupabaseService {
           }
         } else {
           // Adding to long position
-          if (profile.walletBalance < marginRequired) {
-            throw Exception('Insufficient wallet balance. Required margin: ₹${marginRequired.toStringAsFixed(0)}');
+          if (profile.walletBalance < marginRequired + totalCharges) {
+            throw Exception('Insufficient wallet balance. Required (total + charges): ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
           }
           await client
               .from('profiles')
-              .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
+              .update({'wallet_balance': profile.walletBalance - total - totalCharges})
               .eq('id', user.id);
           final newQuantity = oldQuantity + quantity;
           final newAvg = newQuantity > 0
@@ -1203,11 +2006,10 @@ class SupabaseService {
           .maybeSingle();
       if (existing == null) {
         // Open new short position — require margin
-        if (profile.walletBalance < marginRequired) {
-          throw Exception('Insufficient margin to short sell. Required: ₹${marginRequired.toStringAsFixed(0)}');
+        if (profile.walletBalance < marginRequired + totalCharges) {
+          throw Exception('Insufficient margin to short sell (including charges). Required: ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
         }
-        // For derivatives: block margin from wallet; for equity: credit sale proceeds
-        final double walletDelta = isDerivative ? -marginRequired : total;
+        final double walletDelta = total - totalCharges;
         await client
             .from('profiles')
             .update({'wallet_balance': profile.walletBalance + walletDelta})
@@ -1232,14 +2034,16 @@ class SupabaseService {
         if (oldQuantity > 0) {
           // Selling to close/reduce long position
           final sellQty = quantity > oldQuantity ? oldQuantity : quantity;
-          final remainingSellQty = quantity - sellQty;
+          // On an exit, never open a reverse (short) position: clamp the closed
+          // lots to the held quantity so no surplus sell remains.
+          final remainingSellQty = isExitOrder ? 0.0 : quantity - sellQty;
 
           realizedPnl += (execPrice - oldAvg) * sellQty;
           await client
               .from('profiles')
               .update({
-                'wallet_balance': profile.walletBalance + (isDerivative ? (sellQty * oldAvg * marginPct + realizedPnl) : (sellQty * execPrice)),
-                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl,
+                'wallet_balance': profile.walletBalance + (sellQty * execPrice) - totalCharges,
+                'total_realized_pnl': profile.totalRealizedPnl + realizedPnl - totalCharges,
               })
               .eq('id', user.id);
 
@@ -1291,12 +2095,12 @@ class SupabaseService {
           }
         } else {
           // Adding to existing short position
-          if (profile.walletBalance < marginRequired) {
-            throw Exception('Insufficient margin to add to short. Required: ₹${marginRequired.toStringAsFixed(0)}');
+          if (profile.walletBalance < marginRequired + totalCharges) {
+            throw Exception('Insufficient margin to add to short. Required (total + charges): ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
           }
           await client
               .from('profiles')
-              .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : -total)})
+              .update({'wallet_balance': profile.walletBalance + total - totalCharges})
               .eq('id', user.id);
           final newQuantity = oldQuantity - quantity;
           final oldQtyAbs = oldQuantity.abs();
@@ -1337,6 +2141,14 @@ class SupabaseService {
           'strike_price': strikePrice,
           'option_type': optionType,
           'expiry_date': expiryDate,
+          'execution_price_source': priceSource,
+          'execution_reference_price': currentPrice,
+          'nse_contract_date': nseContractDate,
+          'charge_config_id': _activeChargeConfigId,
+          'brokerage': charges['brokerage'],
+          'stamp_duty': charges['stamp_duty'],
+          'tax_charges': charges['tax_charges'],
+          'total_charges': totalCharges,
         })
         .select()
         .maybeSingle();
@@ -1344,22 +2156,24 @@ class SupabaseService {
     if (order == null) throw Exception('Could not place order');
     final placedOrder = Order.fromJson(Map<String, dynamic>.from(order as Map));
 
-    try {
-      await client.from('notifications').insert({
-        'user_id': user.id,
-        'title': 'Order Executed',
-        'body':
-            '${side.toUpperCase()} ${quantity.toStringAsFixed(market == "crypto" ? 4 : 0)} $symbol filled at ₹${execPrice.toStringAsFixed(2)}',
-        'is_read': false,
-        'action_type': 'order',
-        'action_data': {'symbol': symbol, 'market': market},
-      });
-    } catch (_) {}
-
     return placedOrder;
   }
 
-  Future<List<Order>> executePendingOrders() async {
+  // In-flight guard (same isolate): coalesce overlapping invocations from
+  // getOrders() + getHoldings() + multiple screens into a single run so a
+  // still-pending row cannot be read and executed by more than one pass.
+  Future<List<Order>>? _pendingRun;
+
+  Future<List<Order>> executePendingOrders() {
+    final running = _pendingRun;
+    if (running != null) return running;
+    final run = _executePendingOrdersInner()
+        .whenComplete(() => _pendingRun = null);
+    _pendingRun = run;
+    return run;
+  }
+
+  Future<List<Order>> _executePendingOrdersInner() async {
     if (!MarketHours.isOpen('stock') && !MarketHours.isOpen('crypto')) {
       return [];
     }
@@ -1385,17 +2199,88 @@ class SupabaseService {
       final expiryDate = row['expiry_date'] as String?;
       final orderType = row['order_type'] as String? ?? 'market';
       final limitPrice = (row['price'] as num?)?.toDouble() ?? 0.0;
+      final bool isExit = row['is_exit'] as bool? ?? false;
 
       if (!MarketHours.isOpen(market)) continue;
 
+      // `claimed` is declared outside the try so the catch can inspect it:
+      // a row claimed (pending -> executing) whose execution then fails is
+      // marked 'failed' rather than being silently lost or left re-executable.
+      bool claimed = false;
       try {
+        // Atomic claim (cross-isolate/device): transition this row
+        // pending -> executing before ANY mutation/RPC. Postgres serialises
+        // the conditional update so exactly one pass claims the row; all
+        // others match zero rows and skip. 'executing' is not in
+        // ('filled','executed'), so it does NOT fire notify_order_executed().
+        // Each order flows through exactly one branch below, so claimOrder()
+        // is invoked at most once per row.
+        Future<bool> claimOrder() async {
+          final claim = await client
+              .from('orders')
+              .update({'status': 'executing'})
+              .eq('id', id)
+              .eq('status', 'pending')
+              .select();
+          if ((claim as List).isEmpty) return false;
+          claimed = true;
+          return true;
+        }
+
         double execPrice = 0.0;
         String name = symbol;
 
-        final quote = await MarketService.quote(symbol, market);
+        final bool isDerivative = instrumentType == 'FUTURE' || instrumentType == 'OPTION';
+        final underlyingSymbol = (instrumentType == 'OPTION' && symbol.contains('-'))
+            ? symbol.split('-')[0]
+            : (instrumentType == 'FUTURE' && symbol.contains(' '))
+                ? symbol.split(' ')[0]
+                : symbol;
+
+        final quote = await MarketService.quote(underlyingSymbol, market);
         if (quote == null) continue;
-        execPrice = quote.price;
         name = quote.name;
+
+        if (isDerivative) {
+          if (instrumentType == 'FUTURE') {
+            double carryMultiplier = 1.0;
+            if (expiryDate != null && expiryDate != 'PERPETUAL') {
+              try {
+                final expiry = DateTime.parse(expiryDate);
+                final daysLeft = expiry.difference(DateTime.now()).inHours / 24.0;
+                if (daysLeft > 0) {
+                  carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
+                }
+              } catch (_) {}
+            }
+            execPrice = quote.price * carryMultiplier;
+          } else {
+            // Option
+            double intrinsic = 0.0;
+            final strike = strikePrice ?? 0.0;
+            if (optionType == 'CE') {
+              intrinsic = (quote.price - strike).clamp(0.0, double.infinity);
+            } else {
+              intrinsic = (strike - quote.price).clamp(0.0, double.infinity);
+            }
+            double timeValue = 0.0;
+            if (expiryDate != null) {
+              try {
+                final expiry = DateTime.parse(expiryDate);
+                final daysLeft = expiry.difference(DateTime.now()).inHours / 24.0;
+                if (daysLeft > 0) {
+                  timeValue = limitPrice * (daysLeft / 30.0).clamp(0.0, 1.0) * 0.5;
+                }
+              } catch (_) {}
+            }
+            execPrice = intrinsic + timeValue;
+            if (execPrice <= 0 && limitPrice > 0) {
+              execPrice = limitPrice * 0.05;
+            }
+          }
+        } else {
+          execPrice = quote.price;
+        }
 
         if (orderType == 'limit') {
           if (side == 'buy' && execPrice > limitPrice) {
@@ -1407,14 +2292,310 @@ class SupabaseService {
         }
 
         final total = execPrice * quantity;
-        final bool isDerivative = instrumentType == 'FUTURE' || instrumentType == 'OPTION';
         final double marginPct = isDerivative ? 0.15 : 1.0;
         final double marginRequired = total * marginPct;
+
+        if (_activeChargeConfig == null) {
+          await fetchActiveChargeConfig();
+        }
+
+        final Map<String, double> charges = (market == 'stock')
+            ? calculateTransactionCharges(
+                instrumentType: instrumentType,
+                side: side,
+                quantity: quantity,
+                price: execPrice,
+                isIntraday: false, // Pending orders are NRML/Delivery
+              )
+            : {
+                'brokerage': 0.0,
+                'stamp_duty': 0.0,
+                'tax_charges': 0.0,
+                'total_charges': 0.0,
+              };
+        final totalCharges = charges['total_charges'] ?? 0.0;
 
         final profile = await getUserProfile();
         if (profile == null) continue;
 
         double realizedPnl = 0.0;
+
+        if (isDerivative) {
+          final lotSize = await FoInstrumentsService().getLotSize(symbol);
+          int tradeQtyLots = (quantity / lotSize).toInt();
+          final tradeSideSign = side == 'buy' ? 1 : -1;
+
+          // 1. Fetch existing position
+          final existingResponse = await client
+              .from('fo_positions')
+              .select()
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .eq('instrument_type', instrumentType)
+              .eq('option_type', optionType ?? '')
+              .eq('strike_price', strikePrice ?? 0.0)
+              .eq('expiry_date', expiryDate ?? '')
+              .eq('is_settled', false)
+              .maybeSingle();
+
+          FoPosition? existingPos;
+          if (existingResponse != null) {
+            existingPos = FoPosition.fromJson(Map<String, dynamic>.from(existingResponse as Map));
+          }
+
+          final int existingQty = existingPos?.netQty ?? 0;
+          final double existingAvg = existingPos?.avgEntryPrice ?? 0.0;
+
+          // Exit orders must never flip into a reverse position when they fire.
+          // When this fill closes against the held position, clamp the closing
+          // lots to the held quantity so newNetQty stops at 0 (a full/partial
+          // close) and can never overshoot into an opposite-side position.
+          if (isExit && existingQty != 0 && (existingQty * tradeSideSign) < 0) {
+            tradeQtyLots = math.min(tradeQtyLots.abs(), existingQty.abs());
+          }
+
+          final int newNetQty = existingQty + (tradeQtyLots * tradeSideSign);
+
+          double newAvgEntryPrice = 0.0;
+          double walletDebit = 0.0;
+          double walletCredit = 0.0;
+          double marginBlocked = 0.0;
+
+          // Check if opening/adding vs closing/reducing
+          if (existingQty == 0 || (existingQty * tradeSideSign) > 0) {
+            // Opening new position or adding to it
+            newAvgEntryPrice = existingQty == 0
+                ? execPrice
+                : ((existingAvg * existingQty.abs()) + (execPrice * tradeQtyLots)) / (existingQty.abs() + tradeQtyLots);
+
+            if (instrumentType == 'OPTION' && newNetQty > 0) {
+              // Option buyer - pays 100% premium upfront, marginBlocked is 0
+              marginBlocked = 0.0;
+              walletDebit = execPrice * quantity;
+            } else if (instrumentType == 'OPTION' && newNetQty < 0) {
+              // Option seller - blocks 15% margin, receives premium
+              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+              final double oldMargin = existingPos?.marginBlocked ?? 0.0;
+              final double marginDelta = marginBlocked - oldMargin;
+              final double premiumReceived = execPrice * quantity;
+              if (premiumReceived >= marginDelta) {
+                walletCredit = premiumReceived - marginDelta;
+                walletDebit = 0.0;
+              } else {
+                walletDebit = marginDelta - premiumReceived;
+                walletCredit = 0.0;
+              }
+            } else {
+              // Futures trader - blocks 15% margin
+              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+              final double oldMargin = existingPos?.marginBlocked ?? 0.0;
+              walletDebit = marginBlocked - oldMargin;
+            }
+
+            // Validate the FULL incremental capital required at execPrice for
+            // the added lots against the CURRENT available balance (not the
+            // blended-average margin delta, which can understate the true
+            // requirement when adding below the existing average). This runs
+            // BEFORE claimOrder(), so an underfunded open/add is never claimed
+            // and simply stays 'pending'. Closes/reduces stay exempt (handled
+            // in the reducing/closing branch below) to preserve the prior
+            // exit-position-order-fix exemption (Req 3.6).
+            final addedLots = tradeQtyLots; // opening/adding adds |addedLots|
+            final double requiredCapital = (instrumentType == 'OPTION' && newNetQty > 0)
+                ? execPrice * quantity                     // long option: full premium
+                : execPrice * addedLots * lotSize * 0.15;  // futures / short option: full margin on added lots
+            if (profile.walletBalance < requiredCapital + totalCharges) {
+              continue; // leave pending; insufficient true funds (un-claimed)
+            }
+          } else {
+            // Reducing or closing position
+            newAvgEntryPrice = existingAvg;
+            final int closedQtyLots = tradeQtyLots.abs() > existingQty.abs() ? existingQty.abs() : tradeQtyLots.abs();
+            final int remainingQtyLots = tradeQtyLots.abs() - closedQtyLots;
+
+            realizedPnl = (existingQty > 0 ? (execPrice - existingAvg) : (existingAvg - execPrice)) * closedQtyLots * lotSize;
+
+            if (newNetQty == 0) {
+              // Complete close
+              marginBlocked = 0.0;
+              if (instrumentType == 'OPTION' && existingQty > 0) {
+                // Long option close - option buyer receives premium back
+                walletCredit = execPrice * closedQtyLots * lotSize;
+              } else if (instrumentType == 'OPTION' && existingQty < 0) {
+                // Short option close - release margin, pay premium to buy back
+                final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+                final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+                if (netImpact >= 0) {
+                  walletCredit = netImpact;
+                } else {
+                  walletDebit = netImpact.abs();
+                }
+              } else {
+                // Futures close - release margin + realizedPnl
+                final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+                final double netImpact = releasedMargin + realizedPnl;
+                if (netImpact >= 0) {
+                  walletCredit = netImpact;
+                } else {
+                  walletDebit = netImpact.abs();
+                }
+              }
+            } else if (newNetQty * existingQty > 0) {
+              // Partial reduction (same direction)
+              if (instrumentType == 'OPTION' && existingQty > 0) {
+                // Option buyer reduces long position
+                marginBlocked = 0.0;
+                walletCredit = execPrice * closedQtyLots * lotSize;
+              } else if (instrumentType == 'OPTION' && existingQty < 0) {
+                // Option seller reduces short position - release partial margin, pay premium to buy back
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
+                final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+                if (netImpact >= 0) {
+                  walletCredit = netImpact;
+                } else {
+                  walletDebit = netImpact.abs();
+                }
+              } else {
+                // Futures reduces position
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
+                final double netImpact = releasedMargin + realizedPnl;
+                if (netImpact >= 0) {
+                  walletCredit = netImpact;
+                } else {
+                  walletDebit = netImpact.abs();
+                }
+              }
+            } else {
+              // Over-close: position switches direction
+              // Closed portion first
+              double closedPortionNetImpact = 0.0;
+              if (instrumentType == 'OPTION' && existingQty > 0) {
+                closedPortionNetImpact = execPrice * closedQtyLots * lotSize;
+              } else if (instrumentType == 'OPTION' && existingQty < 0) {
+                final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+                closedPortionNetImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
+              } else {
+                final double releasedMargin = existingPos?.marginBlocked ?? 0.0;
+                closedPortionNetImpact = releasedMargin + realizedPnl;
+              }
+
+              // Opened portion next
+              newAvgEntryPrice = execPrice;
+              double openedPortionDebit = 0.0;
+              double openedPortionCredit = 0.0;
+              if (instrumentType == 'OPTION' && newNetQty > 0) {
+                marginBlocked = 0.0;
+                openedPortionDebit = execPrice * remainingQtyLots * lotSize;
+              } else if (instrumentType == 'OPTION' && newNetQty < 0) {
+                // Opening short option - block margin, credit premium
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                final double premiumReceived = execPrice * remainingQtyLots * lotSize;
+                if (premiumReceived >= marginBlocked) {
+                  openedPortionCredit = premiumReceived - marginBlocked;
+                } else {
+                  openedPortionDebit = marginBlocked - premiumReceived;
+                }
+              } else {
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                openedPortionDebit = marginBlocked;
+              }
+
+              final double netImpact = closedPortionNetImpact + openedPortionCredit - openedPortionDebit;
+              if (netImpact >= 0) {
+                walletCredit = netImpact;
+              } else {
+                walletDebit = netImpact.abs();
+              }
+            }
+          }
+
+          // Check user balance and adjust credit/debit with charges
+          double finalDebit = walletDebit;
+          double finalCredit = walletCredit;
+          if (totalCharges > 0) {
+            if (walletCredit >= totalCharges) {
+              finalCredit = walletCredit - totalCharges;
+            } else {
+              finalCredit = 0.0;
+              finalDebit = walletDebit + (totalCharges - walletCredit);
+            }
+          }
+
+          if (profile.walletBalance + finalCredit - finalDebit < 0) {
+            continue;
+          }
+
+          final positionJson = {
+            'symbol': symbol,
+            'instrument_type': instrumentType,
+            'option_type': optionType ?? '',
+            'strike_price': strikePrice ?? 0.0,
+            'expiry_date': expiryDate ?? '',
+            'lot_size': lotSize,
+            'net_qty': newNetQty,
+            'avg_entry_price': newAvgEntryPrice,
+          };
+
+          final orderJson = {
+            'symbol': symbol,
+            'name': name,
+            'market': market,
+            'side': side,
+            'quantity': quantity,
+            'price': execPrice,
+            'total': total,
+            'realized_pnl': realizedPnl,
+            'status': 'executed',
+            'order_type': orderType,
+            'instrument_type': instrumentType,
+            'strike_price': strikePrice ?? 0.0,
+            'option_type': optionType ?? '',
+            'expiry_date': expiryDate ?? '',
+            'charge_config_id': _activeChargeConfigId,
+            'brokerage': charges['brokerage'],
+            'stamp_duty': charges['stamp_duty'],
+            'tax_charges': charges['tax_charges'],
+            'total_charges': totalCharges,
+          };
+
+          // Claim the row (pending -> executing) before any mutation/RPC.
+          // If another pass already claimed it, skip.
+          if (!await claimOrder()) continue;
+
+          await client.rpc('place_fo_order_transaction', params: {
+            'p_user_id': user.id,
+            'p_wallet_debit': finalDebit,
+            'p_wallet_credit': finalCredit,
+            'p_margin_blocked': marginBlocked,
+            'p_margin_released': 0.0,
+            'p_position_data': positionJson,
+            'p_order_data': orderJson,
+          });
+
+          // RPC succeeded (it inserted the executed order, firing the trigger
+          // once). Remove the claimed pending row. p_skip_balance_check stays
+          // at its default FALSE so the RPC's FOR UPDATE balance guard remains
+          // authoritative for opens/adds.
+          await client.from('orders').delete().eq('id', id);
+
+          // Fetch the newly inserted executed order to add to executedOrders list
+          final orderResponse = await client
+              .from('orders')
+              .select()
+              .eq('user_id', user.id)
+              .eq('symbol', symbol)
+              .order('executed_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+
+          if (orderResponse != null) {
+            final execOrder = Order.fromJson(Map<String, dynamic>.from(orderResponse as Map));
+            executedOrders.add(execOrder);
+          }
+          continue;
+        }
 
         if (side == 'buy') {
           final existing = await client
@@ -1425,10 +2606,11 @@ class SupabaseService {
               .eq('market', market)
               .maybeSingle();
           if (existing == null) {
-            if (profile.walletBalance < marginRequired) continue;
+            if (profile.walletBalance < marginRequired + totalCharges) continue;
+            if (!await claimOrder()) continue;
             await client
                 .from('profiles')
-                .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
+                .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total) - totalCharges})
                 .eq('id', user.id);
             await client.from('holdings').insert({
               'user_id': user.id,
@@ -1452,7 +2634,8 @@ class SupabaseService {
               final coverQty = quantity > -oq ? -oq : quantity;
               final remainingBuyQty = quantity - coverQty;
 
-              if (profile.walletBalance < (coverQty * execPrice)) continue;
+              if (profile.walletBalance < (coverQty * execPrice) + totalCharges) continue;
+              if (!await claimOrder()) continue;
 
               realizedPnl += (oa - execPrice) * coverQty;
 
@@ -1460,9 +2643,9 @@ class SupabaseService {
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        profile.walletBalance - (coverQty * execPrice),
+                        profile.walletBalance - (coverQty * execPrice) - totalCharges,
                     'total_realized_pnl':
-                        profile.totalRealizedPnl + realizedPnl,
+                        profile.totalRealizedPnl + realizedPnl - totalCharges,
                   })
                   .eq('id', user.id);
 
@@ -1511,10 +2694,11 @@ class SupabaseService {
                 }
               }
             } else {
-              if (profile.walletBalance < marginRequired) continue;
+              if (profile.walletBalance < marginRequired + totalCharges) continue;
+              if (!await claimOrder()) continue;
               await client
                   .from('profiles')
-                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total)})
+                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : total) - totalCharges})
                   .eq('id', user.id);
               final nq = oq + quantity;
               final na = nq > 0
@@ -1538,11 +2722,12 @@ class SupabaseService {
               .maybeSingle();
           if (existing == null) {
             // Open new short position
-            if (profile.walletBalance < marginRequired) continue;
+            if (profile.walletBalance < marginRequired + totalCharges) continue;
+            if (!await claimOrder()) continue;
             final double walletDelta = isDerivative ? -marginRequired : total;
             await client
                 .from('profiles')
-                .update({'wallet_balance': profile.walletBalance + walletDelta})
+                .update({'wallet_balance': profile.walletBalance + walletDelta - totalCharges})
                 .eq('id', user.id);
             await client.from('holdings').insert({
               'user_id': user.id,
@@ -1567,13 +2752,14 @@ class SupabaseService {
               final remainingSellQty = quantity - sellQty;
 
               realizedPnl += (execPrice - oa) * sellQty;
+              if (!await claimOrder()) continue;
               await client
                   .from('profiles')
                   .update({
                     'wallet_balance':
-                        profile.walletBalance + (isDerivative ? (sellQty * oa * marginPct + realizedPnl) : (sellQty * execPrice)),
+                        profile.walletBalance + (isDerivative ? (sellQty * oa * marginPct + realizedPnl) : (sellQty * execPrice)) - totalCharges,
                     'total_realized_pnl':
-                        profile.totalRealizedPnl + realizedPnl,
+                        profile.totalRealizedPnl + realizedPnl - totalCharges,
                   })
                   .eq('id', user.id);
 
@@ -1623,10 +2809,11 @@ class SupabaseService {
               }
             } else {
               // Adding to short position
-              if (profile.walletBalance < marginRequired) continue;
+              if (profile.walletBalance < marginRequired + totalCharges) continue;
+              if (!await claimOrder()) continue;
               await client
                   .from('profiles')
-                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : -total)})
+                  .update({'wallet_balance': profile.walletBalance - (isDerivative ? marginRequired : -total) - totalCharges})
                   .eq('id', user.id);
               final nq = oq - quantity;
               final oqAbs = oq.abs();
@@ -1651,6 +2838,11 @@ class SupabaseService {
               'total': total,
               'realized_pnl': realizedPnl,
               'executed_at': DateTime.now().toUtc().toIso8601String(),
+              'charge_config_id': _activeChargeConfigId,
+              'brokerage': charges['brokerage'],
+              'stamp_duty': charges['stamp_duty'],
+              'tax_charges': charges['tax_charges'],
+              'total_charges': totalCharges,
             })
             .eq('id', id)
             .select()
@@ -1661,20 +2853,17 @@ class SupabaseService {
             Map<String, dynamic>.from(updatedOrder as Map),
           );
           executedOrders.add(execOrder);
-
-          try {
-            await client.from('notifications').insert({
-              'user_id': user.id,
-              'title': 'Order Executed',
-              'body':
-                  '${side.toUpperCase()} ${quantity.toStringAsFixed(market == "crypto" ? 4 : 0)} $symbol filled at ₹${execPrice.toStringAsFixed(2)}',
-              'is_read': false,
-              'action_type': 'order',
-              'action_data': {'symbol': symbol, 'market': market},
-            });
-          } catch (_) {}
         }
-      } catch (_) {}
+      } catch (e) {
+        if (claimed) {
+          await client
+              .from('orders')
+              .update({'status': 'failed'})
+              .eq('id', id)
+              .eq('status', 'executing');
+        }
+        continue; // proceed to next pending order
+      }
     }
     return executedOrders;
   }
@@ -1999,5 +3188,187 @@ class SupabaseService {
       final chunk = inserts.sublist(i, i + 100 > inserts.length ? inserts.length : i + 100);
       await client.from('notifications').insert(chunk);
     }
+  }
+
+  // --- COMMUNITY WISHLIST METHODS ---
+
+  Future<void> submitFeatureRequest({
+    required String title,
+    required String description,
+    String? imageUrl,
+  }) async {
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+    await client.from('feature_requests').insert({
+      'user_id': user.id,
+      'title': title,
+      'description': description,
+      'image_url': imageUrl,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getFeatureRequests({
+    String sortBy = 'trending',
+    bool includeReported = false,
+  }) async {
+    final user = currentUser;
+    if (user == null) return [];
+
+    List<dynamic> rows;
+    if (sortBy == 'trending') {
+      final response = await client.rpc('get_trending_features');
+      rows = response as List<dynamic>;
+    } else {
+      final query = client.from('feature_requests').select('*');
+      if (sortBy == 'top') {
+        final response = await query;
+        rows = response as List<dynamic>;
+      } else {
+        // 'new'
+        final response = await query.order('created_at', ascending: false);
+        rows = response as List<dynamic>;
+      }
+    }
+
+    List<Map<String, dynamic>> results = rows.map((row) {
+      return Map<String, dynamic>.from(row as Map);
+    }).toList();
+
+    // Fetch upvotes for current user
+    final userUpvotes = await client
+        .from('feature_upvotes')
+        .select('feature_id')
+        .eq('user_id', user.id);
+    final upvotedIds = (userUpvotes as List<dynamic>)
+        .map((e) => e['feature_id'] as String)
+        .toSet();
+
+    // Fetch all upvote counts in case of non-trending sort
+    Map<String, int> upvoteCounts = {};
+    Map<String, int> reportCounts = {};
+    
+    final allUpvotes = await client.from('feature_upvotes').select('feature_id');
+    for (var u in (allUpvotes as List<dynamic>)) {
+      final fid = u['feature_id'] as String;
+      upvoteCounts[fid] = (upvoteCounts[fid] ?? 0) + 1;
+    }
+    final allReports = await client.from('feature_reports').select('feature_id');
+    for (var r in (allReports as List<dynamic>)) {
+      final fid = r['feature_id'] as String;
+      reportCounts[fid] = (reportCounts[fid] ?? 0) + 1;
+    }
+
+    List<Map<String, dynamic>> finalResults = [];
+    for (var r in results) {
+      final id = r['id'] as String;
+      final upvotesCount = sortBy == 'trending' 
+          ? (r['upvotes_count'] as num?)?.toInt() ?? 0
+          : (upvoteCounts[id] ?? 0);
+      
+      final reportsCount = reportCounts[id] ?? 0;
+
+      // Filter out reported requests if we are a regular user (not admin) and not includeReported
+      final isOwner = r['user_id'] == user.id;
+      final isModerated = r['is_moderated'] == true;
+      
+      // We will check if the user is admin. We can get this from user.isAdmin or by checking profile is_admin
+      final profile = await getUserProfile();
+      final isAdmin = profile?.isAdmin ?? false;
+
+      if (!includeReported && reportsCount >= 3 && !isOwner && !isModerated && !isAdmin) {
+        // Skip reported posts from public view
+        continue;
+      }
+
+      finalResults.add({
+        ...r,
+        'upvotes_count': upvotesCount,
+        'reports_count': reportsCount,
+        'user_upvoted': upvotedIds.contains(id),
+      });
+    }
+
+    if (sortBy == 'top') {
+      finalResults.sort((a, b) {
+        final cmp = (b['upvotes_count'] as int).compareTo(a['upvotes_count'] as int);
+        if (cmp != 0) return cmp;
+        return DateTime.parse(b['created_at'] as String)
+            .compareTo(DateTime.parse(a['created_at'] as String));
+      });
+    }
+
+    return finalResults;
+  }
+
+  Future<List<Map<String, dynamic>>> searchSimilarFeatures(String query) async {
+    try {
+      final response = await client.rpc('search_similar_features', params: {
+        'search_title': query,
+        'similarity_threshold': 0.35,
+      });
+      return (response as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<void> toggleUpvote(String featureId, bool isUpvoted) async {
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+
+    if (isUpvoted) {
+      await client.from('feature_upvotes').insert({
+        'feature_id': featureId,
+        'user_id': user.id,
+      });
+    } else {
+      await client.from('feature_upvotes').delete().match({
+        'feature_id': featureId,
+        'user_id': user.id,
+      });
+    }
+  }
+
+  Future<void> reportFeatureRequest(String featureId) async {
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+    // Try insert report, ignore if already reported by this user (constraint error)
+    try {
+      await client.from('feature_reports').insert({
+        'feature_id': featureId,
+        'user_id': user.id,
+      });
+    } catch (e) {
+      // already reported, safe to ignore
+    }
+  }
+
+  Future<void> approveFeatureRequest(String featureId) async {
+    await client.from('feature_requests').update({
+      'is_moderated': true,
+    }).eq('id', featureId);
+
+    try {
+      await client.from('feature_reports').delete().eq('feature_id', featureId);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  Future<void> updateFeatureStatus(
+    String featureId,
+    String status, {
+    String? releasedInVersion,
+  }) async {
+    await client.from('feature_requests').update({
+      'status': status,
+      'released_in_version': releasedInVersion,
+    }).eq('id', featureId);
+  }
+
+  Future<void> deleteFeatureRequest(String featureId) async {
+    await client.from('feature_requests').delete().eq('id', featureId);
   }
 }

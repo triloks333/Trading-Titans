@@ -4,6 +4,14 @@ const YAHOO_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
+async function fetchJson(url: string): Promise<any> {
+  const response = await fetch(url, { headers: { "User-Agent": UA } });
+  if (!response.ok) {
+    throw new Error(`Yahoo request failed: ${response.status} ${response.statusText}`);
+  }
+  return response.json();
+}
+
 const CURATED_NAMES: Record<string, string> = {
   "RELIANCE": "Reliance Industries",
   "TCS": "Tata Consultancy Services",
@@ -59,8 +67,26 @@ const CURATED_NAMES: Record<string, string> = {
   "IRCTC": "IRCTC",
 };
 
-export function toYfSymbol(sym: string): string {
-  const s = sym.toUpperCase().trim();
+export function toYfSymbol(sym: string, market = "stock"): string {
+  let s = sym.toUpperCase().trim();
+  
+  if (market === "crypto") {
+    if (s.endsWith("-INR") || s.endsWith("-USD")) return s;
+    return `${s}-INR`;
+  }
+  
+  // Strip exchange prefix (e.g. NSE:FEDERALBNK-EQ -> FEDERALBNK-EQ)
+  const colonIndex = s.indexOf(':');
+  if (colonIndex !== -1) {
+    s = s.substring(colonIndex + 1);
+  }
+  
+  // Strip Fyers/broker specific suffixes (e.g. -EQ, -BE, -SM) or F&O terms
+  if (!s.startsWith("^")) {
+    // Split on hyphen or space to get the base ticker (e.g. TVSMOTOR-EQ -> TVSMOTOR, RELIANCE JUN FUT -> RELIANCE)
+    s = s.split('-')[0].split(' ')[0];
+  }
+
   if (s.endsWith(".NS") || s.endsWith(".BO") || ["^NSEI", "^BSESN", "^NSEBANK"].includes(s)) return s;
   return `${s}.NS`;
 }
@@ -95,57 +121,60 @@ export interface YfQuote {
   last_traded_time?: string;
   lower_circuit?: number;
   upper_circuit?: number;
+  open_interest?: number;
 }
 
 export async function fetchQuote(symbol: string): Promise<YfQuote> {
   const yfSym = toYfSymbol(symbol);
-  const url = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?interval=1d&range=2d`;
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
-  if (!res.ok) throw new Error(`YF chart failed: ${res.status} for ${yfSym}`);
+  const quoteUrl = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(yfSym)}`;
+  const chartUrl = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?interval=1d&range=2d`;
 
-  const json = await res.json();
-  const result = json?.chart?.result?.[0];
-  if (!result) throw new Error(`No YF result for ${yfSym}`);
-
-  const meta = result.meta ?? {};
-  const timestamps = result.timestamp ?? [];
-  const closes = result.indicators?.quote?.[0]?.close ?? [];
-
-  let price = meta.regularMarketPrice ?? closes[closes.length - 1];
-  let prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-
-  if (price == null && closes.length > 0) {
-    price = closes[closes.length - 1];
-  }
-  if (prevClose == null && closes.length > 1) {
-    prevClose = closes[closes.length - 2];
-  }
-
-  price = Number(price) || 0;
-  prevClose = Number(prevClose) || price;
-  const change = price - prevClose;
-  const changePct = prevClose ? (change / prevClose) * 100 : 0;
-  const currency = meta.currency ?? "INR";
-  const rawSym = yfSym.replace(".NS", "").replace(".BO", "");
-
-  // Get display name from curated list or quote summary
-  let name = CURATED_NAMES[rawSym] ?? rawSym;
+  let meta: any = {};
+  let price = 0;
+  let prevClose = 0;
+  let currency = "INR";
+  let name: string | null = null;
   let qResult: any = null;
+
   try {
-    const qUrl = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(yfSym)}`;
-    const qRes = await fetch(qUrl, { headers: { "User-Agent": UA } });
-    if (qRes.ok) {
-      const qJson = await qRes.json();
-      qResult = qJson?.quoteResponse?.result?.[0];
-      if (qResult) {
-        if (name === rawSym) {
-          name = qResult.longName ?? qResult.shortName ?? rawSym;
-        }
-      }
+    const json = await fetchJson(quoteUrl);
+    qResult = json?.quoteResponse?.result?.[0];
+    if (qResult) {
+      price = Number(qResult.regularMarketPrice ?? qResult.ask ?? qResult.bid ?? 0);
+      prevClose = Number(qResult.regularMarketPreviousClose ?? qResult.regularMarketPreviousClose ?? qResult.previousClose ?? 0);
+      currency = qResult.currency ?? "INR";
+      name = qResult.longName ?? qResult.shortName ?? null;
     }
   } catch {
-    // fallback to curated name or raw symbol
+    // Ignore direct quote failures and fall back to chart data.
   }
+
+  if (!price || !prevClose) {
+    try {
+      const json = await fetchJson(chartUrl);
+      const result = json?.chart?.result?.[0];
+      if (!result) throw new Error(`No YF result for ${yfSym}`);
+      meta = result.meta ?? {};
+      const closes = result.indicators?.quote?.[0]?.close ?? [];
+      price = Number(meta.regularMarketPrice ?? closes[closes.length - 1] ?? 0);
+      prevClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length - 2] ?? price ?? 0);
+      currency = meta.currency ?? currency;
+      if (!name) {
+        name = CURATED_NAMES[yfSym.replace('.NS', '').replace('.BO', '')] ?? null;
+      }
+    } catch (err) {
+      throw new Error(`Yahoo quote failed for ${yfSym}: ${err.message}`);
+    }
+  }
+
+  if (!price) {
+    throw new Error(`Yahoo quote price unavailable for ${yfSym}`);
+  }
+
+  const rawSym = yfSym.replace(".NS", "").replace(".BO", "");
+  const finalName = name ?? CURATED_NAMES[rawSym] ?? rawSym;
+  const change = price - prevClose;
+  const changePct = prevClose ? (change / prevClose) * 100 : 0;
 
   const dayLow = qResult?.regularMarketDayLow ?? meta.regularMarketDayLow;
   const dayHigh = qResult?.regularMarketDayHigh ?? meta.regularMarketDayHigh;
@@ -155,7 +184,7 @@ export async function fetchQuote(symbol: string): Promise<YfQuote> {
   return {
     symbol: rawSym,
     yf_symbol: yfSym,
-    name,
+    name: finalName,
     price: round(price, 2),
     previous_close: round(prevClose, 2),
     change: round(change, 2),
@@ -281,14 +310,23 @@ export async function searchStocks(query: string): Promise<{ symbol: string; nam
     });
 }
 
-export async function whatIfStock(
+export async function whatIfYahoo(
   symbol: string,
+  market: string,
   amount: number,
   yearsAgo: number
 ): Promise<Record<string, unknown>> {
-  const yfSym = toYfSymbol(symbol);
-  const period = yearsAgo > 1 ? "5y" : "1y";
-  const url = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?range=${period}&interval=1d`;
+  const yfSym = toYfSymbol(symbol, market);
+  
+  // Calculate precise calendar-based period1 and period2
+  const end = new Date();
+  const start = new Date();
+  start.setFullYear(start.getFullYear() - yearsAgo);
+  
+  const period1 = Math.floor(start.getTime() / 1000);
+  const period2 = Math.floor(end.getTime() / 1000);
+
+  const url = `${YAHOO_BASE}/${encodeURIComponent(yfSym)}?period1=${period1}&period2=${period2}&interval=1d`;
   const res = await fetch(url, { headers: { "User-Agent": UA } });
   if (!res.ok) throw new Error(`YF whatif failed: ${res.status}`);
 
@@ -296,21 +334,39 @@ export async function whatIfStock(
   const result = json?.chart?.result?.[0];
   if (!result) throw new Error("No whatif data");
 
-  const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
-  if (closes.length < 2) throw new Error("Insufficient history");
+  const timestamps: number[] = result.timestamp ?? [];
+  const closes: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
+  
+  // Filter out any null close prices and find first and last valid entries
+  let firstIdx = -1;
+  let lastIdx = -1;
+  for (let i = 0; i < closes.length; i++) {
+    if (closes[i] != null) {
+      if (firstIdx === -1) firstIdx = i;
+      lastIdx = i;
+    }
+  }
+  
+  if (firstIdx === -1 || lastIdx === -1 || firstIdx === lastIdx) {
+    throw new Error("Insufficient history");
+  }
 
-  const oldPrice = closes[0];
-  const newPrice = closes[closes.length - 1];
+  const oldPrice = closes[firstIdx]!;
+  const newPrice = closes[lastIdx]!;
   const units = amount / oldPrice;
   const currentValue = units * newPrice;
   const pnl = currentValue - amount;
   const pnlPct = amount ? (pnl / amount) * 100 : 0;
-  const targetDate = new Date(Date.now() - yearsAgo * 365 * 86400000);
+  
+  // Expose the exact purchase date from the Yahoo dataset
+  const purchaseTimestamp = timestamps[firstIdx] * 1000;
+  const purchaseDate = new Date(purchaseTimestamp).toISOString();
 
   return {
     symbol: symbol.toUpperCase(),
+    yf_symbol: yfSym,
     amount_invested: amount,
-    purchase_date: targetDate.toISOString(),
+    purchase_date: purchaseDate,
     purchase_price: round(oldPrice, 2),
     current_price: round(newPrice, 2),
     units: round(units, 4),

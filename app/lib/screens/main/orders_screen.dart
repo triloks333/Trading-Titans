@@ -8,7 +8,11 @@ import '../../services/supabase_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class OrdersScreen extends StatefulWidget {
-  const OrdersScreen({super.key});
+  /// When true, the screen renders only its body (no Scaffold/AppBar) so it can
+  /// be embedded inside another screen such as a portfolio tab.
+  final bool embedded;
+
+  const OrdersScreen({super.key, this.embedded = false});
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -64,7 +68,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       await _supabase.cancelOrder(id);
       if (mounted) {
-        setState(() => _ordersFuture = _supabase.getOrders());
+        setState(() {
+          _ordersFuture = _supabase.getOrders();
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order cancelled successfully'),
@@ -95,13 +101,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.embedded) {
+      return _buildOrdersBody();
+    }
     return Scaffold(
       appBar: AppBar(
         title: Text('Order History', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
       ),
-      body: FutureBuilder<List<Order>>(
+      body: _buildOrdersBody(),
+    );
+  }
+
+  Widget _buildOrdersBody() {
+    return FutureBuilder<List<Order>>(
         future: _ordersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -114,7 +128,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
           if (orders.isEmpty) {
             return Center(child: Text('No orders yet', style: GoogleFonts.inter(color: AppColors.ink4)));
           }
-          return ListView.separated(
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _ordersFuture = _supabase.getOrders();
+              });
+              await _ordersFuture;
+            },
+            child: ListView.separated(
             padding: const EdgeInsets.all(AppSpacing.lg),
             itemBuilder: (context, index) {
               final order = orders[index];
@@ -242,10 +263,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
             },
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
             itemCount: orders.length,
+            ),
           );
         },
-      ),
-    );
+      );
   }
 
   void _showOrderDetails(BuildContext context, Order order) {
@@ -369,8 +390,139 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 _buildGridItem('Placed At', localizedCreated),
                 _buildGridItem('Executed At', order.isExecuted ? localizedExecuted : '--'),
               ]),
+              if (order.totalCharges > 0) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.parchment,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.birch),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.receipt_long_rounded, size: 15, color: AppColors.ink3),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Transaction Charges',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.ink,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'VIRTUAL CASH',
+                              style: GoogleFonts.inter(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFE65100),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Order value line
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)} × ₹${order.price.toStringAsFixed(2)}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink2,
+                            ),
+                          ),
+                          Text(
+                            '₹${totalValue.toStringAsFixed(2)}',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Container(height: 0.5, color: AppColors.birch),
+                      const SizedBox(height: 10),
+                      _buildChargeRow('Brokerage', '₹${order.brokerage.toStringAsFixed(2)}'),
+                      const SizedBox(height: 8),
+                      _buildChargeRow('Stamp Duty', '₹${order.stampDuty.toStringAsFixed(2)}'),
+                      const SizedBox(height: 8),
+                      _buildChargeRow('Taxes & Exchange Fees', '₹${order.taxCharges.toStringAsFixed(2)}'),
+                      const SizedBox(height: 12),
+                      Divider(color: AppColors.birch, height: 1),
+                      const SizedBox(height: 12),
+                      _buildChargeRow(
+                        'Total Charges',
+                        '₹${order.totalCharges.toStringAsFixed(2)}',
+                        isTotal: true,
+                      ),
+                    ],
+                  ),
+                ),
+                if (order.realizedPnl != 0.0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: order.realizedPnl > 0
+                          ? AppColors.bullLight.withValues(alpha: 0.3)
+                          : AppColors.bearLight.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: order.realizedPnl > 0
+                            ? AppColors.bull.withValues(alpha: 0.2)
+                            : AppColors.bear.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          order.realizedPnl > 0
+                              ? Icons.trending_up_rounded
+                              : Icons.trending_down_rounded,
+                          color: order.realizedPnl > 0 ? AppColors.bull : AppColors.bear,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            order.realizedPnl > 0
+                                ? 'Charges reduced your return by ${((order.totalCharges / order.realizedPnl) * 100).toStringAsFixed(1)}%.'
+                                : 'Charges increased this loss by ₹${order.totalCharges.toStringAsFixed(2)}.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: order.realizedPnl > 0 ? AppColors.bull : AppColors.bear,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
               const SizedBox(height: 24),
-                    Divider(color: AppColors.birch, height: 1),
+              Divider(color: AppColors.birch, height: 1),
               const SizedBox(height: 20),
               InkWell(
                 onTap: () {
@@ -689,6 +841,30 @@ class _OrdersScreenState extends State<OrdersScreen> {
             fontSize: 14,
             fontWeight: FontWeight.bold,
             color: valueColor ?? AppColors.ink,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChargeRow(String label, String value, {bool isTotal = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: isTotal ? 13 : 12,
+            fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
+            color: isTotal ? AppColors.ink : AppColors.ink3,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: isTotal ? 13 : 12,
+            fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
+            color: isTotal ? AppColors.ink : AppColors.ink2,
           ),
         ),
       ],

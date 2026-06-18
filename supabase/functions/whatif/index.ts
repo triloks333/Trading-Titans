@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders, handleCors } from "../_shared/cors.ts";
-import { whatIfStock } from "../_shared/yahoo.ts";
-import { whatIfCrypto } from "../_shared/coingecko.ts";
+import { whatIfYahoo } from "../_shared/yahoo.ts";
 
 serve(async (req) => {
   const cors = handleCors(req);
@@ -28,9 +27,7 @@ serve(async (req) => {
       });
     }
 
-    const result = market === "crypto"
-      ? await whatIfCrypto(symbol, amount, yearsAgo)
-      : await whatIfStock(symbol, amount, yearsAgo);
+    const result = await whatIfYahoo(symbol, market, amount, yearsAgo);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

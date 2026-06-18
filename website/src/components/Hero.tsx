@@ -20,8 +20,8 @@ export const Hero: React.FC = () => {
   const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak";
 
   useEffect(() => {
-    // Set static target date of June 24, 2026 IST
-    const targetDate = new Date('2026-06-24T00:00:00+05:30');
+    // Set static target date to June 28, 2026 IST (14 days from June 13)
+    const targetDate = new Date('2026-06-28T00:00:00+05:30');
 
     const interval = setInterval(() => {
       const now = new Date().getTime();

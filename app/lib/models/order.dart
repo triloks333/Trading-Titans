@@ -14,6 +14,11 @@ class Order {
 
   final String? orderType;
   final String? instrumentType;
+  final String? chargeConfigId;
+  final double brokerage;
+  final double stampDuty;
+  final double taxCharges;
+  final double totalCharges;
 
   Order({
     required this.id,
@@ -30,6 +35,11 @@ class Order {
     this.executedAt,
     this.orderType,
     this.instrumentType,
+    this.chargeConfigId,
+    this.brokerage = 0.0,
+    this.stampDuty = 0.0,
+    this.taxCharges = 0.0,
+    this.totalCharges = 0.0,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -52,6 +62,11 @@ class Order {
           : null,
       orderType: json['order_type'] as String?,
       instrumentType: json['instrument_type'] as String?,
+      chargeConfigId: json['charge_config_id'] as String?,
+      brokerage: (json['brokerage'] as num?)?.toDouble() ?? 0.0,
+      stampDuty: (json['stamp_duty'] as num?)?.toDouble() ?? 0.0,
+      taxCharges: (json['tax_charges'] as num?)?.toDouble() ?? 0.0,
+      totalCharges: (json['total_charges'] as num?)?.toDouble() ?? 0.0,
     );
   }
 

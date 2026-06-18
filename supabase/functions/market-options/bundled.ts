@@ -626,7 +626,19 @@ var CURATED_NAMES = {
   "IRCTC": "IRCTC"
 };
 function toYfSymbol(sym) {
-  const s = sym.toUpperCase().trim();
+  let s = sym.toUpperCase().trim();
+  
+  // Strip exchange prefix (e.g. NSE:FEDERALBNK-EQ -> FEDERALBNK-EQ)
+  const colonIndex = s.indexOf(':');
+  if (colonIndex !== -1) {
+    s = s.substring(colonIndex + 1);
+  }
+  
+  // Strip F&O or Equity suffixes like -EQ or -FUT or -OPT
+  if (s.endsWith("-EQ")) {
+    s = s.substring(0, s.length - 3);
+  }
+
   if (s.endsWith(".NS") || s.endsWith(".BO") || ["^NSEI", "^BSESN", "^NSEBANK"].includes(s)) return s;
   return `${s}.NS`;
 }

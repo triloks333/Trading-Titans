@@ -54,7 +54,7 @@ serve(async (req) => {
     // 2. Fetch recent executed orders
     const { data: ordersData, error: ordersError } = await serviceClient
       .from("orders")
-      .select("id, symbol, name, market, side, quantity, price, total, realized_pnl, created_at, instrument_type, order_type")
+      .select("id, symbol, name, market, side, quantity, price, total, realized_pnl, created_at, instrument_type, order_type, total_charges, brokerage, stamp_duty, tax_charges")
       .eq("user_id", user.id)
       .eq("status", "executed")
       .order("created_at", { ascending: false });
@@ -112,6 +112,10 @@ serve(async (req) => {
           type: Number(trade.realized_pnl) > 0 ? "profit" : "loss",
           reason: cached.reason,
           advice: cached.advice,
+          total_charges: Number(trade.total_charges) || 0.0,
+          brokerage: Number(trade.brokerage) || 0.0,
+          stamp_duty: Number(trade.stamp_duty) || 0.0,
+          tax_charges: Number(trade.tax_charges) || 0.0,
         });
         continue;
       }
@@ -217,6 +221,10 @@ serve(async (req) => {
         type: isProfit ? "profit" : "loss",
         reason: reason,
         advice: advice,
+        total_charges: Number(trade.total_charges) || 0.0,
+        brokerage: Number(trade.brokerage) || 0.0,
+        stamp_duty: Number(trade.stamp_duty) || 0.0,
+        tax_charges: Number(trade.tax_charges) || 0.0,
       });
     }
 

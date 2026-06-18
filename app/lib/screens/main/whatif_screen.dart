@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/market_service.dart';
+import 'package:intl/intl.dart';
 
 class WhatIfScreen extends StatefulWidget {
   const WhatIfScreen({super.key});
@@ -176,8 +177,13 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            if (_result != null)
-              Container(
+            if (_result != null) () {
+              DateTime? purchaseDate;
+              try {
+                purchaseDate = DateTime.parse(_result!['purchase_date'] as String).toLocal();
+              } catch (_) {}
+
+              return Container(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 decoration: BoxDecoration(
                   color: AppColors.warmWhite,
@@ -217,12 +223,22 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Simulated purchase price ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}',
+                      purchaseDate != null
+                          ? 'Simulated purchase price on ${DateFormat('dd MMM yyyy').format(purchaseDate)}: ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}'
+                          : 'Simulated purchase price: ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}',
                       style: GoogleFonts.inter(color: AppColors.ink4),
                     ),
+                    if (_market == 'crypto') ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Text(
+                        '*Calculated using the ${_result!['symbol']}-INR pair on Yahoo Finance.',
+                        style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4, fontStyle: FontStyle.italic),
+                      ),
+                    ],
                   ],
                 ),
-              ),
+              );
+            }(),
           ],
         ),
       ),

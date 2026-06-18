@@ -31,27 +31,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  bool get _isLengthValid => _passwordController.text.length >= 8;
+  bool get _hasUppercase => RegExp(r'[A-Z]').hasMatch(_passwordController.text);
+  bool get _hasLowercase => RegExp(r'[a-z]').hasMatch(_passwordController.text);
+  bool get _hasDigits => RegExp(r'[0-9]').hasMatch(_passwordController.text);
+  bool get _hasSpecial => RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(_passwordController.text);
+
+  bool get _isValid => _isLengthValid && _hasUppercase && _hasLowercase && _hasDigits && _hasSpecial;
+
   Future<void> _submit() async {
-    final password = _passwordController.text;
-    
-    if (password.length < 8) {
-      setState(() {
-        _error = 'Password must be at least 8 characters long.';
-      });
-      return;
-    }
-    
-    final hasUppercase = RegExp(r'[A-Z]').hasMatch(password);
-    final hasLowercase = RegExp(r'[a-z]').hasMatch(password);
-    final hasDigits = RegExp(r'[0-9]').hasMatch(password);
-    final hasSpecialCharacters = RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password);
-    
-    if (!hasUppercase || !hasLowercase || !hasDigits || !hasSpecialCharacters) {
-      setState(() {
-        _error = 'Password must contain uppercase, lowercase, numbers, and special characters.';
-      });
-      return;
-    }
+    if (!_isValid) return;
 
     setState(() {
       _busy = true;
@@ -69,13 +58,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      // Extract clean error message
-      String errMsg = e.toString();
-      if (errMsg.contains('Exception: ')) {
-        errMsg = errMsg.substring(errMsg.indexOf('Exception: ') + 11);
-      }
       setState(() {
-        _error = errMsg;
+        _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       setState(() {
@@ -97,7 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: AppSpacing.xxl),
                 const CrownLogo(size: 72),
                 const SizedBox(height: AppSpacing.lg),
-                      Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
                 const Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
@@ -108,21 +92,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                            Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
-                            Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
+                      Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
-                            Text('Full Name', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                      Text('Full Name', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_nameController, 'Arjun Mehra', false),
                       const SizedBox(height: AppSpacing.md),
-                            Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                      Text('Email', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_emailController, 'you@example.com', false),
                       const SizedBox(height: AppSpacing.md),
-                            Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                      Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_passwordController, 'Min. 8 chars (letters, digits & symbols)', true, isPassword: true),
+                      const SizedBox(height: AppSpacing.md),
+                      _buildChecklist(),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
@@ -137,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 });
                               },
                               activeColor: AppColors.imperialGold,
-                              side:       BorderSide(color: AppColors.birch),
+                              side: BorderSide(color: AppColors.birch),
                             ),
                           ),
                           const SizedBox(width: AppSpacing.sm),
@@ -153,7 +139,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       if (_hasReferral) ...[
                         const SizedBox(height: AppSpacing.md),
-                              Text('Referral Code', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                        Text('Referral Code', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                         const SizedBox(height: AppSpacing.xs),
                         _buildField(_referralController, 'e.g. TT-XXXXXX', false),
                       ],
@@ -163,15 +149,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ],
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(
-                        onPressed: _busy ? null : _submit,
-                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold, minimumSize: const Size.fromHeight(52)),
-                        child: _busy ?       CircularProgressIndicator(color: AppColors.pureWhite) :       Text('Create Account', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
+                        onPressed: _busy || !_isValid ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.imperialGold,
+                          disabledBackgroundColor: AppColors.birch,
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                        child: _busy
+                            ? CircularProgressIndicator(color: AppColors.pureWhite)
+                            : Text('Create Account', style: TextStyle(color: _isValid ? AppColors.pureWhite : AppColors.ink4, fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                                Text('Already have an account?', style: TextStyle(color: AppColors.ink4)),
+                          Text('Already have an account?', style: TextStyle(color: AppColors.ink4)),
                           TextButton(
                             onPressed: () {
                               Navigator.of(context).pop();
@@ -191,10 +183,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Widget _buildChecklist() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCheckItem('Minimum 8 characters', _isLengthValid),
+        const SizedBox(height: 6),
+        _buildCheckItem('At least 1 uppercase letter', _hasUppercase),
+        const SizedBox(height: 6),
+        _buildCheckItem('At least 1 lowercase letter', _hasLowercase),
+        const SizedBox(height: 6),
+        _buildCheckItem('At least 1 number', _hasDigits),
+        const SizedBox(height: 6),
+        _buildCheckItem('At least 1 special character', _hasSpecial),
+      ],
+    );
+  }
+
+  Widget _buildCheckItem(String text, bool isValid) {
+    return Row(
+      children: [
+        Icon(
+          isValid ? Icons.check_circle : Icons.cancel,
+          color: isValid ? AppColors.bull : AppColors.bear,
+          size: 16,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: isValid ? AppColors.ink : AppColors.ink4,
+            fontWeight: isValid ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildField(TextEditingController controller, String placeholder, bool obscureText, {bool isPassword = false}) {
     return TextField(
       controller: controller,
       obscureText: isPassword ? _obscurePassword : obscureText,
+      onChanged: (text) {
+        if (isPassword) {
+          setState(() {});
+        }
+      },
       decoration: InputDecoration(
         hintText: placeholder,
         hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),

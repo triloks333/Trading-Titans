@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 
@@ -73,8 +73,7 @@ class SubscribeScreen extends StatelessWidget {
               Text('₹$price', style:       TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ElevatedButton(
                 onPressed: () {
-                  final email = context.read<AuthService>().user?.email ?? '';
-                  _launchTopupUrl(context, email);
+                  _showBetaPhaseDialog(context);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold),
                 child:       Text('Top up', style: TextStyle(color: AppColors.pureWhite)),
@@ -86,17 +85,54 @@ class SubscribeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _launchTopupUrl(BuildContext context, String email) async {
-    final uri = Uri.parse('https://thetradingtitans.com/topup?email=$email');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch top-up page. Please visit thetradingtitans.com/topup')),
-        );
-      }
-    }
+  void _showBetaPhaseDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppColors.pureWhite,
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: AppColors.imperialGold, size: 28),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Beta Testing Phase',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w900,
+                color: AppColors.ink,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'We have currently paused the paywall for the beta testing phase. To get more credits, kindly contact the mods.',
+          style: GoogleFonts.inter(
+            color: AppColors.ink3,
+            fontSize: 14,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.imperialGold,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+            ),
+            child: Text(
+              'Got it',
+              style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

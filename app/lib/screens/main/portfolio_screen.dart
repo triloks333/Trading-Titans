@@ -1,16 +1,18 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/portfolio.dart';
+import '../../models/position_model.dart';
+import '../../services/market_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import 'stock_detail_screen.dart';
 import 'order_entry_screen.dart';
+import 'orders_screen.dart';
 import '../../models/quote.dart';
-import '../../utils/lot_size.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-
 
 class PortfolioScreen extends StatefulWidget {
   const PortfolioScreen({super.key});
@@ -22,6 +24,8 @@ class PortfolioScreen extends StatefulWidget {
 class _PortfolioScreenState extends State<PortfolioScreen> {
   final SupabaseService _supabase = SupabaseService();
   List<Holding> _holdings = [];
+  List<FoPosition> _foPositions = [];
+  Map<String, Quote> _quotes = {};
   bool _loading = true;
   Timer? _pollTimer;
 
@@ -39,16 +43,59 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    if (mounted) setState(() => _loading = true);
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final results = await Future.wait([
-        _supabase.getHoldings(),
-        auth.refreshUser(),
-      ]);
+      final holdingsData = await _supabase.getHoldings();
+      final foPositionsData = await _supabase.getFoPositions();
+      await auth.refreshUser();
+      
+      // Fetch quotes for all required symbols (using underlying symbols for options and futures)
+      final uniqueSymbols = <String>{};
+      for (final h in holdingsData) {
+        if (h.instrumentType == 'OPTION' && h.symbol.contains('-')) {
+          uniqueSymbols.add(h.symbol.split('-')[0]);
+        } else if (h.instrumentType == 'FUTURE') {
+          String underlying = h.symbol;
+          if (h.symbol.contains(' ')) {
+            underlying = h.symbol.split(' ')[0];
+          }
+          uniqueSymbols.add(underlying);
+        } else {
+          uniqueSymbols.add(h.symbol);
+        }
+      }
+      for (final p in foPositionsData) {
+        if (p.instrumentType == 'OPTION' && p.symbol.contains('-')) {
+          uniqueSymbols.add(p.symbol.split('-')[0]);
+        } else if (p.instrumentType == 'FUTURE') {
+          String underlying = p.symbol;
+          if (p.symbol.contains(' ')) {
+            underlying = p.symbol.split(' ')[0];
+          }
+          uniqueSymbols.add(underlying);
+        } else {
+          uniqueSymbols.add(p.symbol);
+        }
+      }
+
+      final quoteMap = <String, Quote>{};
+      await Future.wait(uniqueSymbols.map((sym) async {
+        try {
+          final q = await MarketService.quote(sym, 'stock');
+          if (q != null) {
+            quoteMap[sym] = q;
+            final norm = MarketService.normalizeSymbol(sym, 'stock');
+            quoteMap[norm] = q;
+          }
+        } catch (_) {}
+      }));
+
       if (mounted) {
         setState(() {
-          _holdings = results[0] as List<Holding>;
+          _holdings = holdingsData;
+          _foPositions = foPositionsData;
+          _quotes = quoteMap;
           _loading = false;
         });
       }
@@ -62,23 +109,207 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   Future<void> _refresh() async {
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final results = await Future.wait([
-        _supabase.getHoldings(),
-        auth.refreshUser(),
-      ]);
+      final holdingsData = await _supabase.getHoldings();
+      final foPositionsData = await _supabase.getFoPositions();
+      await auth.refreshUser();
+      
+      final uniqueSymbols = <String>{};
+      for (final h in holdingsData) {
+        if (h.instrumentType == 'OPTION' && h.symbol.contains('-')) {
+          uniqueSymbols.add(h.symbol.split('-')[0]);
+        } else if (h.instrumentType == 'FUTURE') {
+          String underlying = h.symbol;
+          if (h.symbol.contains(' ')) {
+            underlying = h.symbol.split(' ')[0];
+          }
+          uniqueSymbols.add(underlying);
+        } else {
+          uniqueSymbols.add(h.symbol);
+        }
+      }
+      for (final p in foPositionsData) {
+        if (p.instrumentType == 'OPTION' && p.symbol.contains('-')) {
+          uniqueSymbols.add(p.symbol.split('-')[0]);
+        } else if (p.instrumentType == 'FUTURE') {
+          String underlying = p.symbol;
+          if (p.symbol.contains(' ')) {
+            underlying = p.symbol.split(' ')[0];
+          }
+          uniqueSymbols.add(underlying);
+        } else {
+          uniqueSymbols.add(p.symbol);
+        }
+      }
+
+      final quoteMap = <String, Quote>{};
+      await Future.wait(uniqueSymbols.map((sym) async {
+        try {
+          final q = await MarketService.quote(sym, 'stock');
+          if (q != null) {
+            quoteMap[sym] = q;
+            final norm = MarketService.normalizeSymbol(sym, 'stock');
+            quoteMap[norm] = q;
+          }
+        } catch (_) {}
+      }));
+
       if (mounted) {
         setState(() {
-          _holdings = results[0] as List<Holding>;
+          _holdings = holdingsData;
+          _foPositions = foPositionsData;
+          _quotes = quoteMap;
         });
       }
     } catch (_) {}
   }
 
-  double get _totalInvested => _holdings.fold(0.0, (s, h) => s + h.invested);
-  double get _totalCurrent => _holdings.fold(0.0, (s, h) => s + h.current);
+  double _normalCDF(double x) {
+    final t = 1 / (1 + 0.2316419 * x.abs());
+    final d = 0.3989422804 * math.exp(-x * x / 2);
+    final p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+    return x >= 0 ? 1 - p : p;
+  }
+
+  double _blackScholes(String optionType, double spot, double strike, double T) {
+    if (T <= 0) {
+      if (optionType == 'CE') {
+        return math.max(0.0, spot - strike);
+      } else {
+        return math.max(0.0, strike - spot);
+      }
+    }
+    const r = 0.065;
+    const sigma = 0.25;
+    final d1 = (math.log(spot / strike) + (r + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T));
+    final d2 = d1 - sigma * math.sqrt(T);
+    
+    double price = 0.0;
+    if (optionType == 'CE') {
+      price = spot * _normalCDF(d1) - strike * math.exp(-r * T) * _normalCDF(d2);
+    } else {
+      price = strike * math.exp(-r * T) * _normalCDF(-d2) - spot * _normalCDF(-d1);
+    }
+    return math.max(0.05, (price * 100).round() / 100.0);
+  }
+
+  // Helper to estimate F&O position price
+  double _estimateFoPrice(FoPosition pos) {
+    final underlyingSymbol = (pos.instrumentType == 'OPTION' && pos.symbol.contains('-'))
+        ? pos.symbol.split('-')[0]
+        : (pos.instrumentType == 'FUTURE' && pos.symbol.contains(' '))
+            ? pos.symbol.split(' ')[0]
+            : pos.symbol;
+    final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, 'stock');
+    final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
+    if (spotQuote == null || spotQuote.price <= 0) return pos.avgEntryPrice;
+    final spotPrice = spotQuote.price;
+
+    if (pos.instrumentType == 'FUTURE') {
+      double carryMultiplier = 1.0;
+      try {
+        final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+        if (daysLeft > 0) {
+          carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
+        }
+      } catch (_) {}
+      return spotPrice * carryMultiplier;
+    } else {
+      double daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+      final T = math.max(0.0001, daysLeft) / 365.0;
+      return _blackScholes(pos.optionType, spotPrice, pos.strikePrice, T);
+    }
+  }
+
+  // Helper to estimate F&O position previous close price
+  double _estimateFoPreviousClose(FoPosition pos) {
+    if (pos.createdAt != null) {
+      final localCreated = pos.createdAt!.toLocal();
+      final now = DateTime.now();
+      if (localCreated.year == now.year && localCreated.month == now.month && localCreated.day == now.day) {
+        return pos.avgEntryPrice;
+      }
+    }
+
+    final underlyingSymbol = (pos.instrumentType == 'OPTION' && pos.symbol.contains('-'))
+        ? pos.symbol.split('-')[0]
+        : (pos.instrumentType == 'FUTURE' && pos.symbol.contains(' '))
+            ? pos.symbol.split(' ')[0]
+            : pos.symbol;
+    final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, 'stock');
+    final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
+    if (spotQuote == null || spotQuote.previousClose <= 0) return pos.avgEntryPrice;
+    final spotPrevClose = spotQuote.previousClose;
+
+    if (pos.instrumentType == 'FUTURE') {
+      double carryMultiplier = 1.0;
+      try {
+        final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+        if (daysLeft > 0) {
+          carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
+        }
+      } catch (_) {}
+      return spotPrevClose * carryMultiplier;
+    } else {
+      double daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+      final tYesterday = (math.max(0.0, daysLeft) + 1.0) / 365.0;
+      return _blackScholes(pos.optionType, spotPrevClose, pos.strikePrice, tYesterday);
+    }
+  }
+
+  // Day P&L for F&O positions
+  double _foDayPnl(FoPosition pos) {
+    final currentPrice = _estimateFoPrice(pos);
+    final previousClose = _estimateFoPreviousClose(pos);
+    final totalUnits = pos.netQty.abs() * pos.lotSize;
+    if (pos.netQty > 0) {
+      return (currentPrice - previousClose) * totalUnits;
+    } else {
+      return (previousClose - currentPrice) * totalUnits;
+    }
+  }
+
+  // Capital/Margin used for F&O
+  double _foCapitalUsed(FoPosition pos) {
+    if (pos.instrumentType == 'OPTION' && pos.netQty > 0) {
+      // Long option - premium paid is the capital used
+      return pos.avgEntryPrice * pos.netQty * pos.lotSize;
+    } else {
+      // Short option or future - blocked margin is the capital used
+      return pos.marginBlocked;
+    }
+  }
+
+  // Current contract value for F&O
+  double _foCurrentValue(FoPosition pos) {
+    final estPrice = _estimateFoPrice(pos);
+    if (pos.instrumentType == 'OPTION' && pos.netQty > 0) {
+      return estPrice * pos.netQty * pos.lotSize;
+    } else {
+      return pos.marginBlocked + pos.unrealizedPnl(estPrice);
+    }
+  }
+
+  // P&L Metrics
+  double get _totalInvested {
+    final equityInvested = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.invested);
+    final foInvested = _foPositions.fold(0.0, (s, p) => s + _foCapitalUsed(p));
+    return equityInvested + foInvested;
+  }
+
+  double get _totalCurrent {
+    final equityCurrent = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.current);
+    final foCurrent = _foPositions.fold(0.0, (s, p) => s + _foCurrentValue(p));
+    return equityCurrent + foCurrent;
+  }
+
   double get _totalPnl => _totalCurrent - _totalInvested;
   double get _totalPnlPct => _totalInvested > 0 ? (_totalPnl / _totalInvested) * 100 : 0.0;
-  double get _totalDayPnl => _holdings.fold(0.0, (s, h) => s + h.dayPnl);
+
+  double get _totalDayPnl {
+    final equityDayPnl = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.dayPnl);
+    final foDayPnl = _foPositions.fold(0.0, (s, p) => s + _foDayPnl(p));
+    return equityDayPnl + foDayPnl;
+  }
 
   String _fmt(double v) {
     if (v.abs() < 1) return '₹${v.toStringAsFixed(2)}';
@@ -88,12 +319,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   @override
   Widget build(BuildContext context) {
     final equityHoldings = _holdings.where((h) => h.isEquity && h.quantity > 0).toList();
-    final optionPositions = _holdings.where((h) => (h.isOption || h.instrumentType == 'FUTURE' || h.quantity < 0) && h.quantity != 0).toList();
     final closedPositions = _holdings.where((h) => h.quantity == 0).toList();
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
+        backgroundColor: AppColors.parchment,
         body: SafeArea(
           child: RefreshIndicator(
             onRefresh: _load,
@@ -114,49 +345,48 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      
+                      // Combined Summary Card (Aesthetic design upgrade)
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                         padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: AppCard.primary,
+                        decoration: BoxDecoration(
+                          color: AppColors.ink,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: AppShadows.md,
+                        ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Text('DEPLOYED CAPITAL', style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                            const SizedBox(height: 4),
+                            Text(_fmt(_totalInvested), style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
+                            const SizedBox(height: AppSpacing.lg),
                             Row(
                               children: [
-                                _summaryItem('Invested', _fmt(_totalInvested)),
-                                const SizedBox(width: AppSpacing.sm),
-                                _summaryItem('Current', _fmt(_totalCurrent)),
-                              ],
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Row(
-                              children: [
-                                _summaryItem(
-                                  'P&L',
-                                  '${_totalPnl >= 0 ? '+' : ''}${_fmt(_totalPnl.abs())}',
-                                  valueColor: _totalPnl >= 0 ? AppColors.bull : AppColors.bear,
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                _summaryItem(
-                                  'Today',
+                                _summaryCardItem('Current Value', _fmt(_totalCurrent)),
+                                Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
+                                _summaryCardItem(
+                                  'Today P&L',
                                   '${_totalDayPnl >= 0 ? '+' : ''}${_fmt(_totalDayPnl.abs())}',
-                                  valueColor: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear,
+                                  color: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear,
+                                ),
+                                Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
+                                _summaryCardItem(
+                                  'Total P&L', 
+                                  '${_totalPnl >= 0 ? '+' : ''}${_fmt(_totalPnl.abs())} (${_totalPnlPct.toStringAsFixed(2)}%)',
+                                  color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear,
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                            Text(
-                              '${_totalPnlPct >= 0 ? '+' : ''}${_totalPnlPct.toStringAsFixed(2)}% overall',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear,
-                              ),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      
                       TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
                         labelColor: AppColors.ink,
                         unselectedLabelColor: AppColors.ink4,
                         indicatorColor: AppColors.imperialGold,
@@ -165,17 +395,19 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
                         tabs: [
                           Tab(text: 'Holdings (${equityHoldings.length})'),
-                          Tab(text: 'Positions (${optionPositions.length})'),
+                          Tab(text: 'F&O Positions (${_foPositions.length})'),
                           Tab(text: 'Closed (${closedPositions.length})'),
+                          const Tab(text: 'Orders'),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
                       Expanded(
                         child: TabBarView(
                           children: [
-                            _buildHoldingsTab(equityHoldings, type: 'holdings'),
-                            _buildHoldingsTab(optionPositions, type: 'positions'),
-                            _buildHoldingsTab(closedPositions, type: 'closed'),
+                            _buildHoldingsList(equityHoldings),
+                            _buildFoPositionsList(),
+                            _buildClosedList(closedPositions),
+                            const OrdersScreen(embedded: true),
                           ],
                         ),
                       ),
@@ -187,31 +419,25 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  Widget _buildHoldingsTab(List<Holding> list, {required String type}) {
+  Widget _summaryCardItem(String label, String value, {Color? color}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 2),
+          Text(value, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: color ?? AppColors.pureWhite)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHoldingsList(List<Holding> list) {
     if (list.isEmpty) {
-      IconData icon = Icons.inventory_2_outlined;
-      String title = 'No holdings yet';
-      String subtitle = 'Start trading to build your portfolio';
-      if (type == 'positions') {
-        icon = Icons.trending_up_rounded;
-        title = 'No active positions';
-        subtitle = 'Open derivatives and F&O positions will show here';
-      } else if (type == 'closed') {
-        icon = Icons.assignment_turned_in_outlined;
-        title = 'No closed positions';
-        subtitle = 'Closed positions for the day will appear here';
-      }
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: AppColors.ink5),
-            const SizedBox(height: AppSpacing.md),
-            Text(title, style: GoogleFonts.inter(color: AppColors.ink4)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5)),
-          ],
-        ),
+      return _buildEmptyState(
+        Icons.inventory_2_outlined,
+        'No holdings yet',
+        'Start trading equities to build your portfolio',
       );
     }
     return ListView.builder(
@@ -221,19 +447,47 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  Widget _summaryItem(String label, String value, {Color? valueColor}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: AppCard.cream,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
-            const SizedBox(height: 2),
-            Text(value, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: valueColor ?? AppColors.ink)),
-          ],
-        ),
+  Widget _buildFoPositionsList() {
+    if (_foPositions.isEmpty) {
+      return _buildEmptyState(
+        Icons.trending_up_rounded,
+        'No active F&O positions',
+        'Live futures and options positions will show here',
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      itemCount: _foPositions.length,
+      itemBuilder: (context, index) => _buildFoPositionCard(_foPositions[index]),
+    );
+  }
+
+  Widget _buildClosedList(List<Holding> list) {
+    if (list.isEmpty) {
+      return _buildEmptyState(
+        Icons.assignment_turned_in_outlined,
+        'No closed positions',
+        'Completed trades will appear here after exit',
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      itemCount: list.length,
+      itemBuilder: (context, index) => _buildHoldingCard(list[index]),
+    );
+  }
+
+  Widget _buildEmptyState(IconData icon, String title, String subtitle) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 48, color: AppColors.ink5),
+          const SizedBox(height: AppSpacing.md),
+          Text(title, style: GoogleFonts.inter(color: AppColors.ink4, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5)),
+        ],
       ),
     );
   }
@@ -296,7 +550,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.ink5.withAlpha(38),
+                                  color: AppColors.ink5.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -312,25 +566,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Builder(
-                          builder: (context) {
-                            if (isClosed) {
-                              return Text(
-                                '0 shares',
-                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
-                              );
-                            }
-                             final isDerivative = h.instrumentType == 'OPTION' || h.instrumentType == 'FUTURE' || h.symbol.contains('-CE') || h.symbol.contains('-PE') || h.symbol.toUpperCase().contains('FUT');
-                             final lotSize = isDerivative ? getOptionLotSize(h.symbol) : 1;
-                             final numLots = h.quantity / lotSize;
-                             final qtyText = isDerivative
-                                 ? '${numLots.toStringAsFixed(1).replaceAll('.0', '')} lot${numLots.abs() == 1 ? '' : 's'} (${h.quantity.toInt()} units)'
-                                 : '${h.quantity.toStringAsFixed(h.market == 'crypto' ? 4 : 0)} shares';
-                            return Text(
-                              qtyText,
-                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
-                            );
-                          },
+                        Text(
+                          '${h.quantity.toStringAsFixed(h.market == 'crypto' ? 4 : 0)} shares',
+                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
                         ),
                       ],
                     ),
@@ -338,17 +576,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Builder(
-                        builder: (context) {
-                          return Text(
-                            'LTP ₹${h.currentPrice.toStringAsFixed(2)}',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.ink,
-                              fontSize: 13,
-                            ),
-                          );
-                        },
+                      Text(
+                        'LTP ₹${h.currentPrice.toStringAsFixed(2)}',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.ink,
+                          fontSize: 13,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Builder(
@@ -371,7 +605,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 ],
               ),
               const SizedBox(height: AppSpacing.sm),
-                    Divider(height: 1, color: AppColors.cream),
+              Divider(height: 1, color: AppColors.cream),
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
@@ -379,18 +613,18 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   _holdingStat('Invested', isClosed ? '₹0' : '₹${h.invested.toStringAsFixed(0)}'),
                   _holdingStat(
                     isClosed ? 'Realized P&L' : 'P&L',
-                    '${isPositive ? '+' : ''}₹${h.pnl.abs().toStringAsFixed(0)}',
+                    '${isPositive ? '+' : '-'}₹${h.pnl.abs().toStringAsFixed(0)}',
                     valueColor: isPositive ? AppColors.bull : AppColors.bear,
                   ),
                   _holdingStat(
                     'Day P&L',
-                    '${dayIsPositive ? '+' : ''}₹${h.dayPnl.abs().toStringAsFixed(0)}',
+                    '${dayIsPositive ? '+' : '-'}₹${h.dayPnl.abs().toStringAsFixed(0)}',
                     valueColor: dayIsPositive ? AppColors.bull : AppColors.bear,
                   ),
                 ],
               ),
               if (!isClosed) ...[
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -408,9 +642,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           price: h.currentPrice,
                           previousClose: h.previousClose,
                           change: h.currentPrice - h.previousClose,
-                          changePct: h.previousClose > 0 
-                              ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 
-                              : 0.0,
+                          changePct: h.previousClose > 0 ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 : 0.0,
                           currency: 'INR',
                           market: h.market,
                         );
@@ -421,10 +653,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                               quote: quote,
                               isBuy: h.quantity < 0, // buy to cover if quantity is negative (short), sell to close if positive (long)
                               instrumentType: h.instrumentType,
-                              strikePrice: h.strikePrice,
-                              optionType: h.optionType,
-                              expiryDate: h.expiryDate,
                               prefilledQuantity: h.quantity.abs(),
+                              isExitOrder: true,
                             ),
                           ),
                         );
@@ -445,6 +675,166 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFoPositionCard(FoPosition pos) {
+    final estPrice = _estimateFoPrice(pos);
+    final pnl = pos.unrealizedPnl(estPrice);
+    final pnlPct = pos.unrealizedPnlPct(estPrice);
+    final isPositive = pnl >= 0;
+    final dayPnl = _foDayPnl(pos);
+    final dayPnlIsPositive = dayPnl >= 0;
+    
+    final formattedQty = '${pos.netQty > 0 ? "+" : ""}${pos.netQty} Lot${pos.netQty.abs() > 1 ? "s" : ""}';
+    final totalUnits = pos.netQty.abs() * pos.lotSize;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: AppCard.secondary,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: pos.netQty > 0 ? AppColors.bull.withValues(alpha: 0.1) : AppColors.bear.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: pos.netQty > 0 ? AppColors.bull.withValues(alpha: 0.3) : AppColors.bear.withValues(alpha: 0.3)),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  pos.instrumentType == 'OPTION' ? pos.optionType : 'FUT',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: pos.netQty > 0 ? AppColors.bull : AppColors.bear,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      pos.instrumentType == 'OPTION' 
+                          ? '${pos.symbol} ${pos.expiry.month}/${pos.expiry.day} ${pos.strikePrice.toStringAsFixed(0)} ${pos.optionType}'
+                          : '${pos.symbol} FUT',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink, fontSize: 13),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$formattedQty ($totalUnits units)',
+                      style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'LTP ₹${estPrice.toStringAsFixed(2)}',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.ink,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isPositive ? AppColors.bull : AppColors.bear,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Divider(height: 1, color: AppColors.cream),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _holdingStat('Avg', '₹${pos.avgEntryPrice.toStringAsFixed(2)}'),
+              _holdingStat('Invested', '₹${_foCapitalUsed(pos).toStringAsFixed(0)}'),
+              _holdingStat(
+                'P&L',
+                '${isPositive ? '+' : '-'}₹${pnl.abs().toStringAsFixed(0)}',
+                valueColor: isPositive ? AppColors.bull : AppColors.bear,
+              ),
+              _holdingStat(
+                'Day P&L',
+                '${dayPnlIsPositive ? '+' : '-'}₹${dayPnl.abs().toStringAsFixed(0)}',
+                valueColor: dayPnlIsPositive ? AppColors.bull : AppColors.bear,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.bearLight,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tag)),
+                ),
+                onPressed: () async {
+                  // Use the same estimated price shown on the card (futures carry / Black-Scholes for options)
+                  final exitPrice = _estimateFoPrice(pos);
+                  final capitalUsed = _foCapitalUsed(pos);
+                  final quote = Quote(
+                    symbol: pos.symbol,
+                    yfSymbol: pos.symbol,
+                    name: pos.instrumentType == 'OPTION'
+                        ? '${pos.symbol} ${pos.optionType} ₹${pos.strikePrice.toStringAsFixed(0)}'
+                        : '${pos.symbol} FUT',
+                    price: exitPrice,
+                    previousClose: exitPrice,
+                    change: 0,
+                    changePct: 0,
+                    currency: 'INR',
+                    market: 'stock',
+                  );
+                  
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrderEntryScreen(
+                        quote: quote,
+                        isBuy: pos.netQty < 0, // Buy to cover if negative, Sell to close if positive
+                        instrumentType: pos.instrumentType,
+                        strikePrice: pos.strikePrice > 0 ? pos.strikePrice : null,
+                        optionType: pos.optionType.isNotEmpty ? pos.optionType : null,
+                        expiryDate: pos.expiry.toIso8601String().split('T')[0],
+                        prefilledQuantity: (pos.netQty.abs() * pos.lotSize).toDouble(),
+                        isExitOrder: true,
+                        marginUsed: capitalUsed,
+                      ),
+                    ),
+                  );
+                  _load();
+                },
+                child: Text(
+                  'EXIT',
+                  style: GoogleFonts.inter(
+                    color: AppColors.bear,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

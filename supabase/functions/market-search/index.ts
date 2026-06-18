@@ -99,15 +99,18 @@ serve(async (req) => {
               finalName = item.name.replace("Zomato", "Eternal");
             }
 
-            // Extract clean symbol for display (remove NSE: prefix and -EQ suffix)
+            // Extract clean symbol (remove NSE:/BSE: prefix and -EQ suffix)
             // e.g., "NSE:TATACHEM-EQ" → "TATACHEM"
             let displaySymbol = finalSymbol;
             if (displaySymbol.startsWith("NSE:") || displaySymbol.startsWith("BSE:")) {
               displaySymbol = displaySymbol.substring(4);
             }
+            if (displaySymbol.endsWith("-EQ")) {
+              displaySymbol = displaySymbol.substring(0, displaySymbol.length - 3);
+            }
 
             return {
-              symbol: finalSymbol,
+              symbol: displaySymbol,
               display_symbol: displaySymbol,
               name: finalName,
               market: item.market,
