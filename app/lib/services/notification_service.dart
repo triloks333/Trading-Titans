@@ -266,6 +266,25 @@ class NotificationService {
         _registerToken(newToken);
       });
 
+      // 4. Foreground push handler: when a push arrives while the app is open,
+      // Android/iOS do NOT show it in the tray automatically — they deliver it
+      // here. Post it as a local notification so EVERY push appears in the
+      // system tray regardless of app state. (Background/terminated pushes are
+      // shown automatically by the OS.)
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        final notif = message.notification;
+        final data = message.data;
+        final title = (notif?.title ?? data['title'] ?? '').trim();
+        final body = (notif?.body ?? data['body'] ?? '').trim();
+        if (title.isEmpty && body.isEmpty) return;
+        showNotification(
+          id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
+          title: title.isEmpty ? 'Trading Titans' : title,
+          body: body,
+          category: _categoryFromType(data['type']),
+        );
+      });
+
     } catch (e) {
       debugPrint('Error setting up Notification Service: $e');
     }
@@ -355,18 +374,71 @@ class NotificationService {
       iOS: iosDetails,
     );
 
-    await _notificationsPlugin.show(
-      id: id,
-      title: title,
-      body: body,
-      notificationDetails: platformDetails,
-    );
+    // Post to the system tray. A missing/invalid custom sound resource makes
+    // the plugin throw `invalid_sound`, which would otherwise prevent the
+    // notification from ever appearing in the tray. So on any failure we retry
+    // once WITHOUT a custom sound (the channel's default sound is used), which
+    // guarantees the notification is delivered (R5.3, R5.4).
+    try {
+      await _notificationsPlugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: platformDetails,
+      );
+    } catch (e) {
+      debugPrint('showNotification: custom-sound post failed ($e); retrying with default sound');
+      final AndroidNotificationDetails fallbackAndroid = AndroidNotificationDetails(
+        resolved.androidChannelId,
+        resolved.androidChannelName,
+        channelDescription: resolved.androidChannelDescription,
+        importance: Importance.max,
+        priority: Priority.high,
+        ticker: 'ticker',
+      );
+      const DarwinNotificationDetails fallbackIos = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+      try {
+        await _notificationsPlugin.show(
+          id: id,
+          title: title,
+          body: body,
+          notificationDetails: NotificationDetails(android: fallbackAndroid, iOS: fallbackIos),
+        );
+      } catch (e2) {
+        debugPrint('showNotification: fallback post also failed: $e2');
+        return ShowNotificationResult(posted: false, usedFallbackCategory: usedFallbackCategory, error: 'post failed: $e2');
+      }
+    }
 
     return ShowNotificationResult(
       posted: true,
       usedFallbackCategory: usedFallbackCategory,
       error: error,
     );
+  }
+
+  /// Maps a push `data.type` value to a notification category for channel/sound
+  /// selection. Unknown/absent types fall back to the default (broadcast).
+  NotificationCategory _categoryFromType(String? type) {
+    switch (type) {
+      case 'price_alert':
+        return NotificationCategory.priceAlert;
+      case 'order':
+      case 'order_executed':
+        return NotificationCategory.orderExecuted;
+      case 'order_pending':
+        return NotificationCategory.orderPending;
+      case 'order_failed':
+        return NotificationCategory.orderFailed;
+      case 'reward':
+        return NotificationCategory.reward;
+      default:
+        return NotificationCategory.broadcast;
+    }
   }
 
   void dispose() {

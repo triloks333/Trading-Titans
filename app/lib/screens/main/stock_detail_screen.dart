@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../models/quote.dart';
 import '../../models/portfolio.dart';
+import '../../models/price_alert.dart';
 import '../../services/market_service.dart';
 import '../../services/supabase_service.dart';
 import '../../core/market_hours.dart';
@@ -95,6 +96,21 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     }
   }
 
+  void _showPriceAlertSheet() {
+    final currentPrice = _quote?.price ?? 0.0;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _PriceAlertSheet(
+        symbol: widget.symbol,
+        market: widget.market,
+        displayName: _displaySymbol,
+        currentPrice: currentPrice,
+      ),
+    );
+  }
+
 
   bool get _isUp => (_quote?.change ?? 0) >= 0;
   Color get _changeColor => _isUp ? AppColors.bull : AppColors.bear;
@@ -116,6 +132,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         title: Text(_displaySymbol),
         backgroundColor: AppColors.parchment,
         actions: [
+          IconButton(
+            tooltip: 'Price alert',
+            icon: Icon(Icons.notifications_outlined, color: AppColors.ink4),
+            onPressed: _quote == null ? null : _showPriceAlertSheet,
+          ),
           IconButton(
             icon: Icon(_isWatched ? Icons.star : Icons.star_border, color: _isWatched ? AppColors.goldDeep : AppColors.ink4),
             onPressed: _toggleWatch,
@@ -556,6 +577,286 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet for creating and managing price alerts for a single symbol.
+class _PriceAlertSheet extends StatefulWidget {
+  final String symbol;
+  final String market;
+  final String displayName;
+  final double currentPrice;
+
+  const _PriceAlertSheet({
+    required this.symbol,
+    required this.market,
+    required this.displayName,
+    required this.currentPrice,
+  });
+
+  @override
+  State<_PriceAlertSheet> createState() => _PriceAlertSheetState();
+}
+
+class _PriceAlertSheetState extends State<_PriceAlertSheet> {
+  final TextEditingController _targetController = TextEditingController();
+  String _direction = 'above';
+  bool _saving = false;
+  bool _loadingList = true;
+  List<PriceAlert> _alerts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _direction = 'above';
+    _loadAlerts();
+  }
+
+  @override
+  void dispose() {
+    _targetController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAlerts() async {
+    final list = await SupabaseService().getPriceAlerts(
+      symbol: widget.symbol,
+      market: widget.market,
+      activeOnly: true,
+    );
+    if (mounted) {
+      setState(() {
+        _alerts = list;
+        _loadingList = false;
+      });
+    }
+  }
+
+  Future<void> _create() async {
+    final target = double.tryParse(_targetController.text.trim());
+    if (target == null || target <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid target price')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await SupabaseService().createPriceAlert(
+        symbol: widget.symbol,
+        market: widget.market,
+        name: widget.displayName,
+        targetPrice: target,
+        direction: _direction,
+        referencePrice: widget.currentPrice,
+      );
+      _targetController.clear();
+      await _loadAlerts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Alert set: notify when price goes $_direction ₹${target.toStringAsFixed(2)}',
+            ),
+            backgroundColor: AppColors.bull,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to set alert: $e'), backgroundColor: AppColors.bear),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _delete(PriceAlert alert) async {
+    setState(() => _alerts = _alerts.where((a) => a.id != alert.id).toList());
+    try {
+      await SupabaseService().deletePriceAlert(alert.id);
+    } catch (_) {
+      _loadAlerts();
+    }
+  }
+
+  void _autoDirection() {
+    final target = double.tryParse(_targetController.text.trim());
+    if (target != null && widget.currentPrice > 0) {
+      final newDir = target >= widget.currentPrice ? 'above' : 'below';
+      if (newDir != _direction) setState(() => _direction = newDir);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.birch,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Icon(Icons.notifications_active_outlined, color: AppColors.imperialGold, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  'Price Alert',
+                  style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${widget.displayName}  •  Current ₹${widget.currentPrice.toStringAsFixed(2)}',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+            ),
+            const SizedBox(height: 20),
+
+            // Direction toggle
+            Row(
+              children: [
+                _dirTab('Above', 'above'),
+                const SizedBox(width: 10),
+                _dirTab('Below', 'below'),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Target price input
+            TextField(
+              controller: _targetController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => _autoDirection(),
+              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.ink),
+              decoration: InputDecoration(
+                labelText: 'Target price (₹)',
+                labelStyle: TextStyle(color: AppColors.ink4),
+                hintText: 'e.g. ${(widget.currentPrice * 1.02).toStringAsFixed(2)}',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.birch)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.birch)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.imperialGold)),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _create,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.imperialGold,
+                  foregroundColor: AppColors.pureWhite,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _saving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text('SET ALERT', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              ),
+            ),
+
+            if (_loadingList) ...[
+              const SizedBox(height: 20),
+              const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+            ] else if (_alerts.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text('Active alerts', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink4, letterSpacing: 0.5)),
+              const SizedBox(height: 8),
+              ..._alerts.map(_alertRow),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dirTab(String label, String value) {
+    final selected = _direction == value;
+    final color = value == 'above' ? AppColors.bull : AppColors.bear;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _direction = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: selected ? color : AppColors.birch),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                value == 'above' ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                size: 16,
+                color: selected ? color : AppColors.ink4,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  color: selected ? color : AppColors.ink4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _alertRow(PriceAlert a) {
+    final color = a.isAbove ? AppColors.bull : AppColors.bear;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.parchment,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Row(
+        children: [
+          Icon(a.isAbove ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'When price goes ${a.direction} ₹${a.targetPrice.toStringAsFixed(2)}',
+              style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _delete(a),
+            child: Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.ink4),
+          ),
+        ],
       ),
     );
   }

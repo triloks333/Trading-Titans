@@ -8,10 +8,13 @@ import '../models/portfolio.dart';
 import '../models/order.dart';
 import '../models/quote.dart';
 import '../models/position_model.dart';
+import '../models/price_alert.dart';
 import '../core/market_hours.dart';
+import '../core/option_pricing.dart';
 import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
+import 'notification_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -1124,33 +1127,34 @@ class SupabaseService {
       double previousClose = 0.0;
 
       if (isFuture) {
-        double carryMultiplier = 1.0;
-        carryMultiplier = 1.0 + 0.065 * (15.0 / 365.0);
-        price = spotQuote.price * carryMultiplier;
-        previousClose = spotQuote.previousClose * carryMultiplier;
+        price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: 15.0);
+        previousClose = OptionPricing.futurePrice(spot: spotQuote.previousClose, daysToExpiry: 15.0);
       } else {
-        // Option
+        // Option — priced with the shared Black-Scholes estimator so the LTP
+        // matches the portfolio screen and the limit-fill engine exactly.
         final strikePrice = double.tryParse(parts[4]) ?? 0.0;
         final optType = parts.last;
-        
-        double intrinsic = 0.0;
-        if (optType == 'CE') {
-          intrinsic = (spotQuote.price - strikePrice).clamp(0.0, double.infinity);
-        } else {
-          intrinsic = (strikePrice - spotQuote.price).clamp(0.0, double.infinity);
-        }
-        
-        double prevIntrinsic = 0.0;
-        if (optType == 'CE') {
-          prevIntrinsic = (spotQuote.previousClose - strikePrice).clamp(0.0, double.infinity);
-        } else {
-          prevIntrinsic = (strikePrice - spotQuote.previousClose).clamp(0.0, double.infinity);
+
+        double daysToExpiry = 7.0;
+        final expiry = DateTime.tryParse(
+          '${parts[1]}-${parts[2].padLeft(2, '0')}-${parts[3].padLeft(2, '0')}',
+        );
+        if (expiry != null) {
+          daysToExpiry = expiry.difference(DateTime.now()).inHours / 24.0;
         }
 
-        // Use a default estimation of time value (e.g. 5.0)
-        double timeValue = 5.0;
-        price = intrinsic + timeValue;
-        previousClose = prevIntrinsic + timeValue;
+        price = OptionPricing.optionPremium(
+          optionType: optType,
+          spot: spotQuote.price,
+          strike: strikePrice,
+          daysToExpiry: daysToExpiry,
+        );
+        previousClose = OptionPricing.optionPremium(
+          optionType: optType,
+          spot: spotQuote.previousClose,
+          strike: strikePrice,
+          daysToExpiry: daysToExpiry + 1.0,
+        );
       }
 
       final change = price - previousClose;
@@ -1357,6 +1361,158 @@ class SupabaseService {
         .eq('user_id', user.id)
         .eq('symbol', symbol)
         .eq('market', market);
+  }
+
+  // ── Price Alerts ──────────────────────────────────────────────────────────
+
+  /// Creates a price alert. [direction] is 'above' or 'below'. The reference
+  /// price (current price at creation) is stored for context.
+  Future<PriceAlert?> createPriceAlert({
+    required String symbol,
+    required String market,
+    String? name,
+    required double targetPrice,
+    required String direction,
+    double? referencePrice,
+  }) async {
+    final user = currentUser;
+    if (user == null) return null;
+    final row = await client
+        .from('price_alerts')
+        .insert({
+          'user_id': user.id,
+          'symbol': symbol,
+          'market': market,
+          'name': name,
+          'target_price': targetPrice,
+          'direction': direction,
+          'reference_price': referencePrice,
+          'status': 'active',
+        })
+        .select()
+        .maybeSingle();
+    if (row == null) return null;
+    return PriceAlert.fromJson(Map<String, dynamic>.from(row as Map));
+  }
+
+  /// Returns the user's price alerts, newest first. When [symbol] is provided,
+  /// only alerts for that symbol are returned. When [activeOnly] is true, only
+  /// alerts with status 'active' are returned.
+  Future<List<PriceAlert>> getPriceAlerts({
+    String? symbol,
+    String? market,
+    bool activeOnly = false,
+  }) async {
+    final user = currentUser;
+    if (user == null) return [];
+    try {
+      var query = client.from('price_alerts').select().eq('user_id', user.id);
+      if (symbol != null) query = query.eq('symbol', symbol);
+      if (market != null) query = query.eq('market', market);
+      if (activeOnly) query = query.eq('status', 'active');
+      final data = await query.order('created_at', ascending: false);
+      return (data as List<dynamic>)
+          .map((e) => PriceAlert.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (e) {
+      if (FirebaseService.isTransientNetworkError(e)) return [];
+      rethrow;
+    }
+  }
+
+  /// Permanently deletes a price alert.
+  Future<void> deletePriceAlert(String id) async {
+    final user = currentUser;
+    if (user == null) return;
+    await client
+        .from('price_alerts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+  }
+
+  /// Evaluates all active price alerts against the latest quotes. When a
+  /// target is crossed, fires a local + in-app notification and marks the
+  /// alert 'triggered'. Safe to call on every refresh cycle: it returns early
+  /// when the user has no active alerts and never throws on network errors.
+  Future<void> evaluatePriceAlerts() async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final alerts = await getPriceAlerts(activeOnly: true);
+      if (alerts.isEmpty) return;
+
+      // Fetch one quote per unique (symbol, market) pair.
+      final uniqueKeys = <String, PriceAlert>{};
+      for (final a in alerts) {
+        uniqueKeys['${a.symbol}\x1F${a.market}'] = a;
+      }
+      final priceBySymbol = <String, double>{};
+      await Future.wait(uniqueKeys.values.map((a) async {
+        try {
+          final q = await MarketService.quote(a.symbol, a.market);
+          if (q != null && q.price > 0) {
+            priceBySymbol['${a.symbol}\x1F${a.market}'] = q.price;
+          }
+        } catch (_) {}
+      }));
+
+      for (final alert in alerts) {
+        final price = priceBySymbol['${alert.symbol}\x1F${alert.market}'];
+        if (price == null) continue;
+
+        final crossed = alert.isAbove
+            ? price >= alert.targetPrice
+            : price <= alert.targetPrice;
+        if (!crossed) continue;
+
+        // Mark triggered first (atomic guard): only proceed if THIS call wins
+        // the active->triggered transition, so the notification fires once.
+        final claim = await client
+            .from('price_alerts')
+            .update({
+              'status': 'triggered',
+              'triggered_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', alert.id)
+            .eq('status', 'active')
+            .select();
+        if ((claim as List).isEmpty) continue;
+
+        final displaySymbol = (alert.name?.isNotEmpty ?? false)
+            ? alert.name!
+            : alert.symbol.replaceFirst('NSE:', '');
+        final title = 'Price Alert: $displaySymbol';
+        final body =
+            '$displaySymbol is now ₹${price.toStringAsFixed(2)} '
+            '(${alert.isAbove ? 'above' : 'below'} your target of ₹${alert.targetPrice.toStringAsFixed(2)}).';
+
+        // In-app notification row so it appears in the notifications screen.
+        try {
+          await client.from('notifications').insert({
+            'user_id': user.id,
+            'title': title,
+            'body': body,
+            'is_read': false,
+            'action_type': 'price_alert',
+            'action_data': {'symbol': alert.symbol, 'market': alert.market},
+          });
+        } catch (_) {}
+
+        // Local device notification with the dedicated price-alert sound/channel.
+        try {
+          await NotificationService().showNotification(
+            id: alert.id.hashCode,
+            title: title,
+            body: body,
+            category: NotificationCategory.priceAlert,
+          );
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (FirebaseService.isTransientNetworkError(e)) return;
+      debugPrint('evaluatePriceAlerts error: $e');
+    }
   }
 
   Future<Order> placeOrder({
@@ -2186,7 +2342,34 @@ class SupabaseService {
         .select()
         .eq('user_id', user.id)
         .eq('status', 'pending');
-    for (final raw in (pending as List<dynamic>)) {
+    final pendingList = pending as List<dynamic>;
+    if (pendingList.isEmpty) return [];
+
+    // Pre-warm quotes for every unique underlying IN PARALLEL before the loop.
+    // MarketService.quote caches results for a few seconds, so the per-order
+    // pricing below then hits the cache instead of making serial network calls.
+    // This is what removed the growing delay on buy/sell + refresh once pending
+    // limit orders started accumulating.
+    final underlyingsToWarm = <String>{};
+    for (final raw in pendingList) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final sym = row['symbol'] as String? ?? '';
+      final mkt = row['market'] as String? ?? 'stock';
+      final itype = row['instrument_type'] as String? ?? 'EQUITY';
+      String u = sym;
+      if (itype == 'OPTION' && sym.contains('-')) {
+        u = sym.split('-')[0];
+      } else if (itype == 'FUTURE' && sym.contains(' ')) {
+        u = sym.split(' ')[0];
+      }
+      underlyingsToWarm.add('$u\x1F$mkt');
+    }
+    await Future.wait(underlyingsToWarm.map((k) {
+      final p = k.split('\x1F');
+      return MarketService.quote(p[0], p[1]).then<void>((_) {}).catchError((_) {});
+    }));
+
+    for (final raw in pendingList) {
       final row = Map<String, dynamic>.from(raw as Map);
       final id = row['id'] as String;
       final symbol = row['symbol'] as String;
@@ -2243,40 +2426,29 @@ class SupabaseService {
 
         if (isDerivative) {
           if (instrumentType == 'FUTURE') {
-            double carryMultiplier = 1.0;
+            double daysLeft = 15.0;
             if (expiryDate != null && expiryDate != 'PERPETUAL') {
               try {
-                final expiry = DateTime.parse(expiryDate);
-                final daysLeft = expiry.difference(DateTime.now()).inHours / 24.0;
-                if (daysLeft > 0) {
-                  carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
-                }
+                daysLeft = DateTime.parse(expiryDate).difference(DateTime.now()).inHours / 24.0;
               } catch (_) {}
             }
-            execPrice = quote.price * carryMultiplier;
+            execPrice = OptionPricing.futurePrice(spot: quote.price, daysToExpiry: daysLeft);
           } else {
-            // Option
-            double intrinsic = 0.0;
+            // Option — same Black-Scholes estimator used for display, so a
+            // limit fills exactly when the displayed LTP reaches the limit.
             final strike = strikePrice ?? 0.0;
-            if (optionType == 'CE') {
-              intrinsic = (quote.price - strike).clamp(0.0, double.infinity);
-            } else {
-              intrinsic = (strike - quote.price).clamp(0.0, double.infinity);
-            }
-            double timeValue = 0.0;
+            double daysLeft = 7.0;
             if (expiryDate != null) {
               try {
-                final expiry = DateTime.parse(expiryDate);
-                final daysLeft = expiry.difference(DateTime.now()).inHours / 24.0;
-                if (daysLeft > 0) {
-                  timeValue = limitPrice * (daysLeft / 30.0).clamp(0.0, 1.0) * 0.5;
-                }
+                daysLeft = DateTime.parse(expiryDate).difference(DateTime.now()).inHours / 24.0;
               } catch (_) {}
             }
-            execPrice = intrinsic + timeValue;
-            if (execPrice <= 0 && limitPrice > 0) {
-              execPrice = limitPrice * 0.05;
-            }
+            execPrice = OptionPricing.optionPremium(
+              optionType: optionType ?? 'CE',
+              spot: quote.price,
+              strike: strike,
+              daysToExpiry: daysLeft,
+            );
           }
         } else {
           execPrice = quote.price;

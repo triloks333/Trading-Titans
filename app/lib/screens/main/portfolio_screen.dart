@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/option_pricing.dart';
 import '../../models/portfolio.dart';
 import '../../models/position_model.dart';
 import '../../services/market_service.dart';
@@ -163,35 +163,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     } catch (_) {}
   }
 
-  double _normalCDF(double x) {
-    final t = 1 / (1 + 0.2316419 * x.abs());
-    final d = 0.3989422804 * math.exp(-x * x / 2);
-    final p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
-    return x >= 0 ? 1 - p : p;
-  }
-
-  double _blackScholes(String optionType, double spot, double strike, double T) {
-    if (T <= 0) {
-      if (optionType == 'CE') {
-        return math.max(0.0, spot - strike);
-      } else {
-        return math.max(0.0, strike - spot);
-      }
-    }
-    const r = 0.065;
-    const sigma = 0.25;
-    final d1 = (math.log(spot / strike) + (r + 0.5 * sigma * sigma) * T) / (sigma * math.sqrt(T));
-    final d2 = d1 - sigma * math.sqrt(T);
-    
-    double price = 0.0;
-    if (optionType == 'CE') {
-      price = spot * _normalCDF(d1) - strike * math.exp(-r * T) * _normalCDF(d2);
-    } else {
-      price = strike * math.exp(-r * T) * _normalCDF(-d2) - spot * _normalCDF(-d1);
-    }
-    return math.max(0.05, (price * 100).round() / 100.0);
-  }
-
   // Helper to estimate F&O position price
   double _estimateFoPrice(FoPosition pos) {
     final underlyingSymbol = (pos.instrumentType == 'OPTION' && pos.symbol.contains('-'))
@@ -204,19 +175,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     if (spotQuote == null || spotQuote.price <= 0) return pos.avgEntryPrice;
     final spotPrice = spotQuote.price;
 
+    final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
     if (pos.instrumentType == 'FUTURE') {
-      double carryMultiplier = 1.0;
-      try {
-        final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
-        if (daysLeft > 0) {
-          carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
-        }
-      } catch (_) {}
-      return spotPrice * carryMultiplier;
+      return OptionPricing.futurePrice(spot: spotPrice, daysToExpiry: daysLeft);
     } else {
-      double daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
-      final T = math.max(0.0001, daysLeft) / 365.0;
-      return _blackScholes(pos.optionType, spotPrice, pos.strikePrice, T);
+      return OptionPricing.optionPremium(
+        optionType: pos.optionType,
+        spot: spotPrice,
+        strike: pos.strikePrice,
+        daysToExpiry: daysLeft,
+      );
     }
   }
 
@@ -240,19 +208,17 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     if (spotQuote == null || spotQuote.previousClose <= 0) return pos.avgEntryPrice;
     final spotPrevClose = spotQuote.previousClose;
 
+    // Price the prior session by treating it as one extra day to expiry.
+    final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
     if (pos.instrumentType == 'FUTURE') {
-      double carryMultiplier = 1.0;
-      try {
-        final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
-        if (daysLeft > 0) {
-          carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
-        }
-      } catch (_) {}
-      return spotPrevClose * carryMultiplier;
+      return OptionPricing.futurePrice(spot: spotPrevClose, daysToExpiry: daysLeft + 1.0);
     } else {
-      double daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
-      final tYesterday = (math.max(0.0, daysLeft) + 1.0) / 365.0;
-      return _blackScholes(pos.optionType, spotPrevClose, pos.strikePrice, tYesterday);
+      return OptionPricing.optionPremium(
+        optionType: pos.optionType,
+        spot: spotPrevClose,
+        strike: pos.strikePrice,
+        daysToExpiry: daysLeft + 1.0,
+      );
     }
   }
 

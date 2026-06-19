@@ -30,11 +30,15 @@ class _MainNavigationState extends State<MainNavigation> {
   void initState() {
     super.initState();
     // Check for unclaimed rewards every 10 seconds
-    _rewardCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkRewards());
+    _rewardCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _checkRewards();
+      SupabaseService().evaluatePriceAlerts();
+    });
     // Initial check after a brief load delay
     Future.delayed(const Duration(seconds: 2), () {
       _checkRewards();
       _checkSoftUpdate();
+      SupabaseService().evaluatePriceAlerts();
     });
   }
 
