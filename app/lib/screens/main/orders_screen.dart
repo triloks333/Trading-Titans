@@ -5,6 +5,7 @@ import '../../models/order.dart';
 import '../../models/quote.dart' as app_models;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -119,7 +120,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         future: _ordersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListSkeleton();
           }
           if (snapshot.hasError) {
             return Center(child: Text('Unable to load orders: ${snapshot.error}'));

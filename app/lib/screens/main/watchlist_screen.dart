@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 
 import '../../widgets/stock_action_sheet.dart';
+import '../../widgets/skeleton.dart';
 
 class WatchlistScreen extends StatefulWidget {
   const WatchlistScreen({super.key});
@@ -54,7 +55,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       ),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+            ? const ListSkeleton()
             : _items.isEmpty
                 ? Center(
                     child: Column(

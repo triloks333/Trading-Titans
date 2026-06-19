@@ -11,6 +11,7 @@ import 'stock_detail_screen.dart';
 import 'order_entry_screen.dart';
 import 'orders_screen.dart';
 import '../../models/quote.dart';
+import '../../widgets/skeleton.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -295,7 +296,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           child: RefreshIndicator(
             onRefresh: _load,
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const PortfolioSkeleton()
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

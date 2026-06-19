@@ -4,6 +4,7 @@ import '../../core/theme.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/skeleton.dart';
 import 'subscribe_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -46,7 +47,7 @@ class _WalletScreenState extends State<WalletScreen> {
         child: RefreshIndicator(
           onRefresh: _loadOrders,
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const ListSkeleton()
               : ListView(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [

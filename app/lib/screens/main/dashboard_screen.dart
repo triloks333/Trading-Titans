@@ -6,6 +6,7 @@ import 'package:showcaseview/showcaseview.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
+import '../../widgets/skeleton.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/quote.dart';
@@ -149,7 +150,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: RefreshIndicator(
           onRefresh: _load,
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const DashboardSkeleton()
               : SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(AppSpacing.lg),
