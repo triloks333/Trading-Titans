@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/theme_service.dart';
 import '../../widgets/reward_celebration_dialog.dart';
 import '../../widgets/update_dialogs.dart';
 import 'dashboard_screen.dart';
@@ -165,30 +166,124 @@ class _MainNavigationState extends State<MainNavigation> {
       },
       child: Scaffold(
         body: _getScreen(_currentIndex),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: AppColors.warmWhite,
-            border: Border(top: BorderSide(color: AppColors.birch)),
-            boxShadow: AppShadows.sm,
-          ),
-          child: BottomNavigationBar(
+        bottomNavigationBar: Consumer<ThemeService>(
+          // Rebuild the navbar the instant the theme toggles so its colours
+          // track the app theme without needing a tab switch first.
+          builder: (context, _, _) => _FloatingNavBar(
             currentIndex: _currentIndex,
             onTap: (index) => setState(() => _currentIndex = index),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: AppColors.warmWhite,
-            selectedItemColor: AppColors.imperialGold,
-            unselectedItemColor: AppColors.ink5,
-            selectedFontSize: 11,
-            unselectedFontSize: 11,
-            selectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500),
-            elevation: 0,
-            items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.swap_horiz_outlined), activeIcon: Icon(Icons.swap_horiz), label: 'Trade'),
-              BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2), label: 'Portfolio'),
-              BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet), label: 'Wallet'),
-              BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A single destination in the floating navbar.
+class _NavDest {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  const _NavDest(this.icon, this.activeIcon, this.label);
+}
+
+/// Floating, glassy navbar with an animated "expanding pill" for the active
+/// item. Theme-aware via AppColors (works in both light and dark). It lives in
+/// the bottomNavigationBar slot so its height stays reserved — no screen
+/// content is ever hidden behind it.
+class _FloatingNavBar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  const _FloatingNavBar({required this.currentIndex, required this.onTap});
+
+  static const List<_NavDest> _dests = [
+    _NavDest(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Home'),
+    _NavDest(Icons.swap_horiz_outlined, Icons.swap_horiz_rounded, 'Trade'),
+    _NavDest(Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Portfolio'),
+    _NavDest(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded, 'Wallet'),
+    _NavDest(Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = AppColors.isDark;
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite.withValues(alpha: dark ? 0.92 : 0.96),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: AppColors.birch),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.ink.withValues(alpha: dark ? 0.55 : 0.16),
+              blurRadius: 28,
+              spreadRadius: -4,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(_dests.length, (i) {
+            return _NavButton(
+              dest: _dests[i],
+              selected: i == currentIndex,
+              onTap: () => onTap(i),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavButton extends StatelessWidget {
+  final _NavDest dest;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NavButton({required this.dest, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color activeColor = AppColors.imperialGold;
+    final Color idleColor = AppColors.ink4;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(horizontal: selected ? 16 : 13, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.goldPale : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                selected ? dest.activeIcon : dest.icon,
+                size: 23,
+                color: selected ? activeColor : idleColor,
+              ),
+              if (selected) ...[
+                const SizedBox(width: 8),
+                Text(
+                  dest.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: activeColor,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ],
             ],
           ),
         ),

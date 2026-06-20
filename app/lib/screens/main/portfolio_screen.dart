@@ -258,13 +258,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   // P&L Metrics
   double get _totalInvested {
-    final equityInvested = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.invested);
+    final equityInvested = _holdings.where((h) => h.isEquity && h.quantity != 0).fold(0.0, (s, h) => s + h.invested);
     final foInvested = _foPositions.fold(0.0, (s, p) => s + _foCapitalUsed(p));
     return equityInvested + foInvested;
   }
 
   double get _totalCurrent {
-    final equityCurrent = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.current);
+    final equityCurrent = _holdings.where((h) => h.isEquity && h.quantity != 0).fold(0.0, (s, h) => s + h.current);
     final foCurrent = _foPositions.fold(0.0, (s, p) => s + _foCurrentValue(p));
     return equityCurrent + foCurrent;
   }
@@ -273,7 +273,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   double get _totalPnlPct => _totalInvested > 0 ? (_totalPnl / _totalInvested) * 100 : 0.0;
 
   double get _totalDayPnl {
-    final equityDayPnl = _holdings.where((h) => h.isEquity && h.quantity > 0).fold(0.0, (s, h) => s + h.dayPnl);
+    final equityDayPnl = _holdings.where((h) => h.isEquity && h.quantity != 0).fold(0.0, (s, h) => s + h.dayPnl);
     final foDayPnl = _foPositions.fold(0.0, (s, p) => s + _foDayPnl(p));
     return equityDayPnl + foDayPnl;
   }
@@ -285,7 +285,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final equityHoldings = _holdings.where((h) => h.isEquity && h.quantity > 0).toList();
+    final equityHoldings = _holdings.where((h) => h.isEquity && h.quantity != 0).toList();
     final closedPositions = _holdings.where((h) => h.quantity == 0).toList();
 
     return DefaultTabController(
@@ -530,11 +530,29 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                 ),
                               ),
                             ],
+                            if (!isClosed && h.isShort) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.bear.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  'SHORT',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.bear,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${h.quantity.toStringAsFixed(h.market == 'crypto' ? 4 : 0)} shares',
+                          '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)} ${h.isShort ? 'units short' : 'shares'}',
                           style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
                         ),
                       ],

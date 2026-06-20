@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Titans — Practice trading. Risk nothing.</title>
+  <meta name="description" content="Trading Titans is a virtual stock trading app for the Indian markets. Trade stocks, futures and options with virtual cash, build a portfolio, sharpen your skills, and learn — without risking a single rupee." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="icon" href="assets/brand/logo.png" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="aurora"></div>
+  <div class="blob v"></div>
+  <div class="blob w"></div>
+  <div class="grain"></div>
+
+  <!-- NAV -->
+  <nav class="nav" id="nav">
+    <a href="#top" class="brand">
+      <img src="assets/brand/logo.png" alt="Trading Titans logo" />
+      Trading Titans
+    </a>
+    <div class="nav-links" id="navLinks">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#tools">Tools</a>
+      <a href="#screens">Screens</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="#download" class="btn btn-primary">Get the App</a>
+      <button class="menu-btn" id="menuBtn" aria-label="Menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero" id="top">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow reveal"><span class="dot"></span> Launching soon · Built for Indian markets</span>
+        <h1 class="reveal d1">Trade fearlessly.<br /><span class="gradient-text">Risk nothing.</span></h1>
+        <p class="lead reveal d2">A virtual trading playground for stocks, futures and options. Practice with real market movement, build a portfolio, and sharpen your skills — all on virtual cash, never your own money.</p>
+        <div class="hero-actions reveal d3">
+          <a href="#download" class="btn btn-primary btn-lg" data-magnetic>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5V3.5c0-.6.7-1 1.2-.6l14 8.5c.5.3.5 1 0 1.3l-14 8.5c-.5.3-1.2-.1-1.2-.7z"/></svg>
+            Download for Android
+          </a>
+          <a href="#features" class="btn btn-ghost btn-lg">See features</a>
+        </div>
+        <div class="trust-row reveal d4">
+          <span><span class="rating-stars">★★★★★</span> &nbsp;Loved by beta Titans</span>
+          <span class="sep"></span>
+          <span><b>₹0</b> real money at risk</span>
+          <span class="sep"></span>
+          <span><b>NSE</b> · <b>BSE</b> · F&amp;O</span>
+        </div>
+      </div>
+
+      <div class="hero-visual reveal d2">
+        <div class="phone-stage">
+          <div class="device-halo"></div>
+          <div class="device" id="tiltPhone">
+            <div class="screen" id="heroScreen">
+              <img src="assets/screenshots/flutter_01.png" alt="Trading Titans app" class="active" />
+              <img src="assets/screenshots/flutter_04.png" alt="Trading Titans app" />
+              <img src="assets/screenshots/flutter_06.png" alt="Trading Titans app" />
+              <img src="assets/screenshots/flutter_08.png" alt="Trading Titans app" />
+            </div>
+          </div>
+          <div class="device-shadow"></div>
+          <div class="float-card fc-1" data-depth="22">
+            <div class="cap">Portfolio</div>
+            <div class="big up">▲ 12.4%</div>
+          </div>
+          <div class="float-card fc-2" data-depth="34">
+            <div class="cap">NIFTY 50</div>
+            <div class="big">24,812 <span class="up" style="font-size:13px;">+0.8%</span></div>
+          </div>
+          <div class="float-card fc-3" data-depth="16">
+            <div class="cap">Order filled</div>
+            <div class="big" style="font-size:15px;">BUY · RELIANCE</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TRUST MARQUEE -->
+  <div class="marquee">
+    <div class="marquee-track" id="marquee">
+      <span class="chip">RELIANCE <span class="tk up">▲ 2,945</span></span>
+      <span class="chip">TCS <span class="tk down">▼ 3,880</span></span>
+      <span class="chip">HDFC BANK <span class="tk up">▲ 1,712</span></span>
+      <span class="chip">NIFTY 50 <span class="tk up">▲ 24,812</span></span>
+      <span class="chip">INFY <span class="tk up">▲ 1,640</span></span>
+      <span class="chip">BANK NIFTY <span class="tk down">▼ 52,140</span></span>
+      <span class="chip">ICICI BANK <span class="tk up">▲ 1,254</span></span>
+      <span class="chip">SENSEX <span class="tk up">▲ 81,330</span></span>
+      <span class="chip">ADANI ENT <span class="tk down">▼ 2,980</span></span>
+      <span class="chip">ETERNAL <span class="tk up">▲ 268</span></span>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <section id="stats">
+    <div class="container">
+      <div class="stats">
+        <div class="stat reveal"><div class="num gradient-text" data-count="0" data-suffix="">₹0</div><div class="lbl">Real money at risk</div></div>
+        <div class="stat reveal d1"><div class="num gradient-text" data-count="3">3</div><div class="lbl">Markets — Equity, F&amp;O, Crypto</div></div>
+        <div class="stat reveal d2"><div class="num gradient-text" data-count="100" data-suffix="%">100%</div><div class="lbl">Realistic order flow</div></div>
+        <div class="stat reveal d3"><div class="num gradient-text">24/7</div><div class="lbl">Practice anytime</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES (BENTO) -->
+  <section id="features" class="section-soft">
+    <div class="container">
+      <div class="center">
+        <span class="eyebrow reveal"><span class="dot"></span> Everything you need</span>
+        <h2 class="section-title reveal d1">A complete trading floor,<br />in your pocket</h2>
+        <p class="section-sub reveal d2">Real market data, real mechanics, real competition — minus the real-money risk. Learn by doing, the safe way.</p>
+      </div>
+      <div class="bento">
+        <div class="tile feature-hero span6 reveal">
+          <div>
+            <div class="icon">📊</div>
+            <h3>Live Market Pulse</h3>
+            <p>Track major indices and tickers with live movement, build a watchlist of the stocks you care about, and feel the market breathe in real time.</p>
+          </div>
+          <div class="mini-shot hero-shot"><div class="hero-phone"><div class="screen"><img src="assets/screenshots/flutter_02.png" alt="Market pulse" loading="lazy" /></div></div></div>
+        </div>
+
+        <div class="tile span3 reveal"><span class="glow-ring"></span><div class="icon">⚡</div><h3>Futures &amp; Options</h3><p>Trade derivatives with a full option chain, strikes and expiries — priced and settled just like the real thing.</p></div>
+        <div class="tile span3 reveal d1"><span class="glow-ring"></span><div class="icon">💼</div><h3>Portfolio Tracking</h3><p>Holdings, open positions and P&amp;L update live, with total portfolio value front and centre.</p></div>
+
+        <div class="tile reveal"><span class="glow-ring"></span><div class="icon">🔮</div><h3>What-If Simulator</h3><p>Rewind time and see how an investment would have played out from an earlier date.</p></div>
+        <div class="tile reveal d1"><span class="glow-ring"></span><div class="icon">🔎</div><h3>Trade Autopsy</h3><p>A post-trade breakdown of every win and loss, so you learn what worked.</p></div>
+        <div class="tile reveal d2"><span class="glow-ring"></span><div class="icon">📈</div><h3>Performance Analytics</h3><p>Deeper insight into your trading performance and habits — turn raw trades into lessons you can act on.</p></div>
+
+        <div class="tile span3 reveal"><span class="glow-ring"></span><div class="icon">🔔</div><h3>Smart Alerts</h3><p>Price alerts and order-fill notifications, each with its own distinct sound — never miss a move.</p></div>
+        <div class="tile span3 reveal d1"><span class="glow-ring"></span><div class="icon">🎁</div><h3>Refer &amp; Earn</h3><p>Invite friends and both sides get virtual-cash rewards, plus surprise bonuses in your wallet.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="container">
+      <div class="center">
+        <span class="eyebrow reveal"><span class="dot"></span> From zero to Titan</span>
+        <h2 class="section-title reveal d1">Get started in minutes</h2>
+        <p class="section-sub reveal d2">It feels exactly like a real trading app — except every win and loss is a lesson, not a liability.</p>
+      </div>
+      <div class="steps">
+        <div class="step reveal"><div class="badge">1</div><h3>Sign up</h3><p>Create an account and receive a starting balance of virtual cash to trade with.</p></div>
+        <div class="step reveal d1"><div class="badge">2</div><h3>Explore</h3><p>Browse stocks, watch the Market Pulse, and build a personal watchlist.</p></div>
+        <div class="step reveal d2"><div class="badge">3</div><h3>Trade</h3><p>Place buy and sell orders across equity and F&amp;O with a real-feel order ticket.</p></div>
+        <div class="step reveal d3"><div class="badge">4</div><h3>Improve</h3><p>Track your P&amp;L, review every trade, and sharpen your skills with smart tools.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENSHOT SHOWCASE -->
+  <section id="screens" class="showcase section-soft">
+    <div class="container">
+      <div class="center">
+        <span class="eyebrow reveal"><span class="dot"></span> A look inside</span>
+        <h2 class="section-title reveal d1">Designed to feel premium</h2>
+        <p class="section-sub reveal d2">A clean, royal-blue interface with light and dark modes — crafted so prices, numbers and percentages are effortless to read.</p>
+      </div>
+      <div class="gallery" id="gallery">
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_01.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_03.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_05.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_07.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_09.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_11.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_13.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_15.png" alt="App screen" loading="lazy" /></div></div>
+        <div class="frame"><div class="screen"><img src="assets/screenshots/flutter_17.png" alt="App screen" loading="lazy" /></div></div>
+      </div>
+      <div class="gallery-hint reveal">← drag to explore →</div>
+    </div>
+  </section>
+
+  <!-- TOOLS -->
+  <section id="tools">
+    <div class="container">
+      <div class="center">
+        <span class="eyebrow reveal"><span class="dot"></span> Smart tools</span>
+        <h2 class="section-title reveal d1">Learn faster, trade smarter</h2>
+      </div>
+
+      <div class="tool-row">
+        <div class="tool-media reveal">
+          <div class="frame-lg"><div class="screen"><img src="assets/screenshots/flutter_10.png" alt="Portfolio" loading="lazy" /></div></div>
+          <div class="badge-float">📈 Live P&amp;L</div>
+        </div>
+        <div class="tool-copy reveal d1">
+          <span class="mini-eyebrow">Portfolio</span>
+          <h3>Your portfolio, in real time</h3>
+          <p>Watch holdings, open positions and total value move with the market. Clear gain-and-loss colouring keeps the story obvious at a glance.</p>
+          <ul class="feat-list">
+            <li><span class="tick">✓</span> Live P&amp;L across equity and F&amp;O positions</li>
+            <li><span class="tick">✓</span> Net portfolio value front and centre</li>
+            <li><span class="tick">✓</span> Exit positions with a single, deterministic tap</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tool-row">
+        <div class="tool-media reveal">
+          <div class="frame-lg"><div class="screen"><img src="assets/screenshots/flutter_12.png" alt="What-If and Autopsy" loading="lazy" /></div></div>
+          <div class="badge-float">🔮 Replay the past</div>
+        </div>
+        <div class="tool-copy reveal d1">
+          <span class="mini-eyebrow">Insight</span>
+          <h3>What-If &amp; Autopsy</h3>
+          <p>Test ideas against history, then learn from every trade. What-If replays earlier entries, while Autopsy breaks down what drove each win and loss.</p>
+          <ul class="feat-list">
+            <li><span class="tick">✓</span> Replay an investment from an earlier date</li>
+            <li><span class="tick">✓</span> Honest, post-trade feedback on your decisions</li>
+            <li><span class="tick">✓</span> Analytics that reveal your trading habits</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tool-row">
+        <div class="tool-media reveal">
+          <div class="frame-lg"><div class="screen"><img src="assets/screenshots/flutter_16.png" alt="Rewards and referrals" loading="lazy" /></div></div>
+          <div class="badge-float">🎁 Rewards</div>
+        </div>
+        <div class="tool-copy reveal d1">
+          <span class="mini-eyebrow">Rewards</span>
+          <h3>Stay motivated, get rewarded</h3>
+          <p>Invite friends, collect surprise bonuses, and top up your practice balance with boost packs — there's always a reason to keep trading and learning.</p>
+          <ul class="feat-list">
+            <li><span class="tick">✓</span> Refer &amp; earn virtual-cash rewards for both sides</li>
+            <li><span class="tick">✓</span> Surprise reward bonuses land in your wallet</li>
+            <li><span class="tick">✓</span> Boost packs to top up your practice balance</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VALUE BAND -->
+  <section class="section-soft">
+    <div class="container">
+      <div class="band reveal">
+        <div class="band-inner">
+          <div>
+            <h2>Your risk-free<br />trading playground</h2>
+            <p>Test any strategy, make mistakes, and learn from them — all without risking a single real rupee.</p>
+          </div>
+          <div class="band-stats">
+            <div class="band-stat"><div class="n">100%</div><div class="l">Safe, virtual practice</div></div>
+            <div class="band-stat"><div class="n">₹</div><div class="l">Virtual rewards &amp; boosts</div></div>
+            <div class="band-stat"><div class="n">∞</div><div class="l">Strategies to test, risk-free</div></div>
+            <div class="band-stat"><div class="n">3</div><div class="l">Markets in one app</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD / CTA -->
+  <section id="download">
+    <div class="container">
+      <div class="cta-wrap reveal">
+        <div class="halo"></div>
+        <span class="eyebrow"><span class="dot"></span> Launching soon</span>
+        <h2 style="margin-top:18px;">Become a <span class="gradient-text">Titan</span></h2>
+        <p>Start trading the Indian markets with zero risk and total confidence. Your practice floor is almost ready.</p>
+        <div class="hero-actions" style="justify-content:center;">
+          <a href="#" class="btn btn-primary btn-lg" data-magnetic>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5V3.5c0-.6.7-1 1.2-.6l14 8.5c.5.3.5 1 0 1.3l-14 8.5c-.5.3-1.2-.1-1.2-.7z"/></svg>
+            Get it on Android
+          </a>
+          <a href="#top" class="btn btn-ghost btn-lg">Back to top</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section-soft">
+    <div class="container">
+      <div class="center">
+        <span class="eyebrow reveal"><span class="dot"></span> Questions</span>
+        <h2 class="section-title reveal d1">Frequently asked</h2>
+      </div>
+      <div class="faq">
+        <div class="qa"><button>Is this real money trading? <span class="chev">+</span></button><div class="ans">No. Trading Titans is 100% virtual. Every account runs on practice cash, so you can buy, sell, win and lose in a realistic environment without risking a single rupee.</div></div>
+        <div class="qa"><button>Which markets can I trade? <span class="chev">+</span></button><div class="ans">Indian equities, futures and options (with a full option chain), plus crypto — all with live market movement and realistic order mechanics.</div></div>
+        <div class="qa"><button>Is it good for complete beginners? <span class="chev">+</span></button><div class="ans">Absolutely. An interactive walkthrough guides new users, and tools like Autopsy give honest feedback so you improve with every trade.</div></div>
+        <div class="qa"><button>Do I need to pay anything? <span class="chev">+</span></button><div class="ans">The app is free to practice with. Optional "boost" packs top up your virtual balance during the beta. No real-money trading is involved.</div></div>
+        <div class="qa"><button>When is it launching? <span class="chev">+</span></button><div class="ans">Very soon — we're in the final stretch of beta. Get the app to be among the first Titans on launch day.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="foot-grid">
+        <div>
+          <div class="foot-brand">
+            <img src="assets/brand/logo.png" alt="Trading Titans" />
+            <span>Trading Titans</span>
+          </div>
+          <p>The safe, fun and competitive way to learn trading on the Indian markets — without risking real money.</p>
+        </div>
+        <div>
+          <h4>Product</h4>
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#tools">Tools</a>
+          <a href="#screens">Screens</a>
+        </div>
+        <div>
+          <h4>Legal</h4>
+          <a href="terms.html">Terms of Service</a>
+          <a href="privacy.html">Privacy Policy</a>
+        </div>
+        <div>
+          <h4>Contact</h4>
+          <a href="mailto:support@thetradingtitans.com">support@thetradingtitans.com</a>
+          <a href="https://thetradingtitans.com" target="_blank" rel="noopener">thetradingtitans.com</a>
+        </div>
+      </div>
+      <p class="disclaimer">Disclaimer: Trading Titans is a simulation and educational product. All trading is performed with virtual currency only. Nothing in this app or on this website constitutes investment, financial, or trading advice. Market data may be delayed or simulated. Simulated performance does not represent actual results and is not indicative of future returns in real markets.</p>
+      <div class="foot-bottom">
+        <span>© 2026 Trading Titans. All rights reserved.</span>
+        <span>Made in India 🇮🇳</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -24,6 +24,35 @@ class _OrdersScreenState extends State<OrdersScreen> {
   late Future<List<Order>> _ordersFuture;
   RealtimeChannel? _ordersSubscription;
 
+  // Batched LTP cache for the visible orders. Instead of each row firing its
+  // own quote request (an N+1), we fetch the unique symbols once into this map
+  // and every row reads from it. The signature guards against re-fetching the
+  // same set on every rebuild.
+  Map<String, app_models.Quote?> _ltp = {};
+  String _ltpSignature = '';
+
+  String _ltpKey(Order o) => '${o.symbol}\u001f${o.market}';
+
+  Future<void> _prefetchLtps(List<Order> orders) async {
+    final pairs = <String, Order>{};
+    for (final o in orders) {
+      pairs[_ltpKey(o)] = o;
+    }
+    final signature = (pairs.keys.toList()..sort()).join(',');
+    if (signature == _ltpSignature) return; // this exact set is already loaded
+    _ltpSignature = signature;
+
+    final results = <String, app_models.Quote?>{};
+    await Future.wait(pairs.entries.map((e) async {
+      try {
+        results[e.key] = await _supabase.getQuote(e.value.symbol, e.value.market);
+      } catch (_) {
+        results[e.key] = null;
+      }
+    }));
+    if (mounted) setState(() => _ltp = results);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -49,6 +78,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           callback: (payload) {
             if (mounted) {
               setState(() {
+                _ltpSignature = ''; // force fresh LTPs on the next build
                 _ordersFuture = _supabase.getOrders();
               });
             }
@@ -129,6 +159,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           if (orders.isEmpty) {
             return Center(child: Text('No orders yet', style: GoogleFonts.inter(color: AppColors.ink4)));
           }
+          // Batch-fetch all visible orders' LTPs once (kills the per-row N+1).
+          WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchLtps(orders));
           return RefreshIndicator(
             onRefresh: () async {
               setState(() {
@@ -622,43 +654,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildLtpWidget(Order order) {
-    return FutureBuilder<app_models.Quote?>(
-      future: _supabase.getQuote(order.symbol, order.market),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Text('LTP: Loading...', style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4));
-        }
-        final quote = snapshot.data;
-        if (quote == null) return const SizedBox.shrink();
-        final isPositive = quote.changePct >= 0;
-        return Text(
-          'LTP: ₹${quote.price.toStringAsFixed(2)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: isPositive ? AppColors.bull : AppColors.bear,
-          ),
-        );
-      },
+    final quote = _ltp[_ltpKey(order)];
+    if (!_ltp.containsKey(_ltpKey(order))) {
+      return Text('LTP: Loading...', style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4));
+    }
+    if (quote == null) return const SizedBox.shrink();
+    final isPositive = quote.changePct >= 0;
+    return Text(
+      'LTP: ₹${quote.price.toStringAsFixed(2)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
+      style: GoogleFonts.inter(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: isPositive ? AppColors.bull : AppColors.bear,
+      ),
     );
   }
 
   Widget _buildLtpGridItem(Order order) {
-    return FutureBuilder<app_models.Quote?>(
-      future: _supabase.getQuote(order.symbol, order.market),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildGridItem('Current Price (LTP)', 'Loading...');
-        }
-        final quote = snapshot.data;
-        if (quote == null) return _buildGridItem('Current Price (LTP)', '--');
-        final isPositive = quote.changePct >= 0;
-        return _buildGridItem(
-          'Current Price (LTP)',
-          '₹${quote.price.toStringAsFixed(2)}',
-          valueColor: isPositive ? AppColors.bull : AppColors.bear,
-        );
-      },
+    final quote = _ltp[_ltpKey(order)];
+    if (!_ltp.containsKey(_ltpKey(order))) {
+      return _buildGridItem('Current Price (LTP)', 'Loading...');
+    }
+    if (quote == null) return _buildGridItem('Current Price (LTP)', '--');
+    final isPositive = quote.changePct >= 0;
+    return _buildGridItem(
+      'Current Price (LTP)',
+      '₹${quote.price.toStringAsFixed(2)}',
+      valueColor: isPositive ? AppColors.bull : AppColors.bear,
     );
   }
 

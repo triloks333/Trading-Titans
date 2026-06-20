@@ -424,6 +424,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       final isOptionBuy = widget.instrumentType == 'OPTION' && widget.isBuy;
       final marginRequired = isOptionBuy ? totalValue : (totalValue * 0.15);
       grandTotal = marginRequired + totalCharges;
+    } else if (!widget.isExitOrder && !widget.isBuy && _marginRequired > 0) {
+      // Equity/crypto short: margin is blocked (money out), not proceeds received.
+      grandTotal = _marginRequired + totalCharges;
     }
 
     return Container(
@@ -515,6 +518,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 AppColors.ink3,
               ),
             ],
+            if (!isDeriv && !widget.isBuy && _marginRequired > 0) ...[
+              const SizedBox(height: 4),
+              _buildBillRow(
+                'Margin Required (100%)',
+                '₹${_marginRequired.toStringAsFixed(2)}',
+                AppColors.ink3,
+              ),
+            ],
           ],
           const SizedBox(height: 6),
           Container(height: 0.5, color: AppColors.birch),
@@ -545,7 +556,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               Text(
                 widget.isExitOrder 
                     ? (grandTotal >= 0 ? 'You Receive (approx.)' : 'Total Payable')
-                    : (widget.isBuy ? 'Total Payable' : 'You Receive (approx.)'),
+                    : ((!widget.isBuy && !isDeriv && _marginRequired <= 0) ? 'You Receive (approx.)' : 'Total Payable'),
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,

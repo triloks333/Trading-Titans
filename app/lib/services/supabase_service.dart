@@ -383,6 +383,8 @@ class SupabaseService {
   /// - ITM options: auto-exercised, intrinsic value credited/debited to wallet
   /// - OTM options: expire worthless, position removed
   Future<void> settleExpiredDerivatives() async {
+    // Step 3: expiry settlement is server-side (settle-expired-positions cron).
+    if (_serverExecOnly) return;
     final user = currentUser;
     if (user == null) return;
 
@@ -1515,7 +1517,150 @@ class SupabaseService {
     }
   }
 
+  // Step 2 of the server-trust migration. When true, order placement is routed
+  // through the validated server-side 'place-order' edge function (the trusted
+  // "teller"): the server authenticates the user from their JWT, validates every
+  // field, fetches a trusted price, and runs all money math via the audited
+  // execution engine — the phone never computes balances or writes money rows.
+  // Flip this to false to instantly revert to the legacy on-device path
+  // (_placeOrderLocal) without any other code change. The legacy path still
+  // works because direct table writes are not locked down until Step 3.
+  static const bool _useServerPlaceOrder = true;
+
+  // Step 3: when true, the phone performs NO direct money-table writes — order
+  // execution and expiry settlement run entirely on the server (place-order
+  // triggers execution on placement; crons also run on schedule). This MUST
+  // stay true once the database write-lockdown (RLS) is applied.
+  // ignore: prefer_final_fields
+  static bool _serverExecOnly = true;
+
   Future<Order> placeOrder({
+    required String symbol,
+    required String market,
+    required String side,
+    required double quantity,
+    double? price,
+    bool isMarket = true,
+    String instrumentType = 'EQUITY',
+    double? strikePrice,
+    String? optionType,
+    String? expiryDate,
+    bool isIntraday = false,
+    bool isExitOrder = false,
+  }) async {
+    if (!_useServerPlaceOrder) {
+      return _placeOrderLocal(
+        symbol: symbol,
+        market: market,
+        side: side,
+        quantity: quantity,
+        price: price,
+        isMarket: isMarket,
+        instrumentType: instrumentType,
+        strikePrice: strikePrice,
+        optionType: optionType,
+        expiryDate: expiryDate,
+        isIntraday: isIntraday,
+        isExitOrder: isExitOrder,
+      );
+    }
+
+    final user = currentUser;
+    if (user == null) throw Exception('No authenticated user');
+
+    final body = <String, dynamic>{
+      'symbol': symbol,
+      'market': market,
+      'side': side.toLowerCase(),
+      'quantity': quantity,
+      'isMarket': isMarket,
+      'instrumentType': instrumentType,
+      'isExitOrder': isExitOrder,
+      'price': ?price,
+      'strikePrice': ?strikePrice,
+      'optionType': ?optionType,
+      'expiryDate': ?expiryDate,
+    };
+
+    Map<String, dynamic> data;
+    try {
+      final response = await client.functions.invoke('place-order', body: body);
+      final raw = response.data;
+      if (raw is Map) {
+        data = Map<String, dynamic>.from(raw);
+      } else if (raw is String && raw.isNotEmpty) {
+        data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      } else {
+        throw Exception('Order service returned an empty response');
+      }
+    } on FunctionException catch (e) {
+      // Surface the server's validation/auth error message to the UI.
+      final details = e.details;
+      String msg = 'Order failed. Please try again.';
+      if (details is Map && details['error'] != null) {
+        msg = details['error'].toString();
+      } else if (details is String && details.isNotEmpty) {
+        try {
+          final parsed = jsonDecode(details);
+          if (parsed is Map && parsed['error'] != null) {
+            msg = parsed['error'].toString();
+          } else {
+            msg = details;
+          }
+        } catch (_) {
+          msg = details;
+        }
+      }
+      throw Exception(msg);
+    }
+
+    if (data['error'] != null) {
+      throw Exception(data['error'].toString());
+    }
+
+    final orderId = data['order_id'] as String?;
+    final status = data['status'] as String? ?? 'pending';
+
+    // Fetch the resulting order row to return to the UI. For executed F&O orders
+    // the pending row is replaced by a fresh executed order, so fall back to the
+    // most recent order for this symbol when the original id is gone.
+    Map<String, dynamic>? row;
+    if (orderId != null) {
+      final byId =
+          await client.from('orders').select().eq('id', orderId).maybeSingle();
+      if (byId != null) row = Map<String, dynamic>.from(byId as Map);
+    }
+    if (row == null) {
+      final latest = await client
+          .from('orders')
+          .select()
+          .eq('user_id', user.id)
+          .eq('symbol', symbol)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (latest != null) row = Map<String, dynamic>.from(latest as Map);
+    }
+
+    if (row != null) {
+      return Order.fromJson(row);
+    }
+
+    // Last-resort synthetic order so the UI can still react to the status.
+    return Order(
+      id: orderId ?? '',
+      symbol: symbol,
+      name: symbol,
+      market: market,
+      side: side.toLowerCase(),
+      quantity: quantity,
+      price: price ?? 0.0,
+      total: (price ?? 0.0) * quantity,
+      status: status,
+    );
+  }
+
+  Future<Order> _placeOrderLocal({
     required String symbol,
     required String market,
     required String side,
@@ -2062,16 +2207,12 @@ class SupabaseService {
           // the held quantity so no surplus buy remains.
           final remainingBuyQty = isExitOrder ? 0.0 : quantity - coverQty;
 
+          // Margin model: covering returns the blocked margin plus realised P&L.
+          // Closing never costs buyback cash, so it is not gated on balance.
+          final double releasedMargin = coverQty * oldAvg;
           realizedPnl += (oldAvg - execPrice) * coverQty;
 
-          final double resultingBalance = profile.walletBalance - (coverQty * execPrice) - totalCharges;
-
-          // The closing portion of an exit must never be blocked on balance —
-          // closing reduces exposure and releases capital. Preserve the throw
-          // for non-exit covers.
-          if (!isExitOrder && resultingBalance < 0) {
-            throw Exception('Insufficient wallet balance to cover short position (including charges).');
-          }
+          final double resultingBalance = profile.walletBalance + releasedMargin + realizedPnl - totalCharges;
 
           await client
               .from('profiles')
@@ -2165,10 +2306,11 @@ class SupabaseService {
         if (profile.walletBalance < marginRequired + totalCharges) {
           throw Exception('Insufficient margin to short sell (including charges). Required: ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
         }
-        final double walletDelta = total - totalCharges;
+        // Margin model: opening a short blocks margin (money out); it does NOT
+        // credit the sale proceeds. marginRequired == notional for equity/crypto.
         await client
             .from('profiles')
-            .update({'wallet_balance': profile.walletBalance + walletDelta})
+            .update({'wallet_balance': profile.walletBalance - marginRequired - totalCharges})
             .eq('id', user.id);
         await client.from('holdings').insert({
           'user_id': user.id,
@@ -2254,9 +2396,10 @@ class SupabaseService {
           if (profile.walletBalance < marginRequired + totalCharges) {
             throw Exception('Insufficient margin to add to short. Required (total + charges): ₹${(marginRequired + totalCharges).toStringAsFixed(2)}');
           }
+          // Margin model: adding to a short blocks additional margin (money out).
           await client
               .from('profiles')
-              .update({'wallet_balance': profile.walletBalance + total - totalCharges})
+              .update({'wallet_balance': profile.walletBalance - marginRequired - totalCharges})
               .eq('id', user.id);
           final newQuantity = oldQuantity - quantity;
           final oldQtyAbs = oldQuantity.abs();
@@ -2321,6 +2464,10 @@ class SupabaseService {
   Future<List<Order>>? _pendingRun;
 
   Future<List<Order>> executePendingOrders() {
+    // Step 3: execution is fully server-side. place-order triggers it on
+    // placement and a cron runs every minute, so the phone no longer executes
+    // orders or writes money rows. (Legacy on-device path kept behind the flag.)
+    if (_serverExecOnly) return Future.value(<Order>[]);
     final running = _pendingRun;
     if (running != null) return running;
     final run = _executePendingOrdersInner()
@@ -3110,14 +3257,9 @@ class SupabaseService {
         : planId == 'titan_pro'
         ? 1000000.0
         : 100000.0;
-    await client
-        .from('profiles')
-        .update({
-          'wallet_balance': profile.walletBalance + planCash,
-          'subscription_active': true,
-          'plan': planId,
-        })
-        .eq('id', user.id);
+    // Wallet writes are server-only (Step 3). The validated RPC credits the
+    // caller's wallet by the plan amount it determines server-side.
+    await client.rpc('activate_subscription', params: {'p_plan_id': planId});
 
     return {
       'message':
@@ -3130,16 +3272,8 @@ class SupabaseService {
     if (user == null) {
       throw Exception('No authenticated user');
     }
-
-    final profile = await getUserProfile();
-    if (profile == null) {
-      throw Exception('Profile not found');
-    }
-
-    await client
-        .from('profiles')
-        .update({'wallet_balance': profile.walletBalance + amount})
-        .eq('id', user.id);
+    // Wallet writes are server-only (Step 3): credit via the validated RPC.
+    await client.rpc('credit_demo_cash', params: {'p_amount': amount});
   }
 
   Future<void> purchasePackage(
@@ -3157,11 +3291,8 @@ class SupabaseService {
       throw Exception('Profile not found');
     }
 
-    // 1. Credit the user's wallet
-    await client
-        .from('profiles')
-        .update({'wallet_balance': profile.walletBalance + cashAmount})
-        .eq('id', user.id);
+    // 1. Credit the user's wallet (server-only via validated RPC — Step 3)
+    await client.rpc('credit_demo_cash', params: {'p_amount': cashAmount});
 
     // 2. Check if user was referred by someone
     if (profile.referredBy != null && profile.referredBy!.isNotEmpty) {
@@ -3291,20 +3422,9 @@ class SupabaseService {
   Future<void> claimReward(String rewardId, double amount) async {
     final user = currentUser;
     if (user == null) throw Exception('No authenticated user');
-
-    // 1. Mark reward as claimed
-    await client.from('rewards').update({
-      'is_claimed': true,
-    }).eq('id', rewardId);
-
-    // 2. Add to user profile wallet balance
-    final profile = await getUserProfile();
-    if (profile != null) {
-      final newBalance = profile.walletBalance + amount;
-      await client.from('profiles').update({
-        'wallet_balance': newBalance,
-      }).eq('id', user.id);
-    }
+    // Reward claim is server-only (Step 3): the validated RPC checks the reward
+    // belongs to the caller and is unclaimed, then credits the wallet atomically.
+    await client.rpc('claim_reward', params: {'p_reward_id': rewardId});
   }
 
   Future<void> sendCustomNotification({

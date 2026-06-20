@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
@@ -63,6 +64,19 @@ class MarketService {
       }
     }
 
+    // Server-side price cache: read the centrally-refreshed quote when it is
+    // fresh. This collapses thousands of per-client upstream calls into one
+    // server job and gives every user the SAME price. On a miss/stale entry we
+    // fall through to the live fetch below, so behaviour is unchanged when the
+    // cache is empty (e.g. browsing a symbol nobody holds).
+    if (!forceRefresh) {
+      final cachedQuote = await _readServerCache(symbol, market);
+      if (cachedQuote != null) {
+        _quoteCache[cacheKey] = {'timestamp': now, 'quote': cachedQuote};
+        return cachedQuote;
+      }
+    }
+
     try {
       final response = await http
           .get(
@@ -82,6 +96,61 @@ class MarketService {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Canonical key used to look a symbol up in the server `quotes_cache`,
+  /// matching exactly how the `refresh-quotes` job stores rows (underlying
+  /// symbol for derivatives, index aliases mapped to canonical names, crypto
+  /// upper-cased).
+  static String cacheKeyFor(String sym, String market) {
+    if (market == 'crypto') return sym.toUpperCase().trim();
+    final s = normalizeSymbol(sym, market);
+    if (s == '^NSEI' || s == 'NSEI' || s == 'NIFTY50') return 'NIFTY';
+    if (s == '^NSEBANK' || s == 'NSEBANK') return 'BANKNIFTY';
+    if (s == '^BSESN' || s == 'SENSEX') return 'SENSEX';
+    return s;
+  }
+
+  /// Reads the server-side cached quote if present and fresh (updated within
+  /// the last 45s). Returns null on any miss/stale/error so the caller falls
+  /// back to the live fetch. Never throws.
+  static Future<Quote?> _readServerCache(String symbol, String market) async {
+    try {
+      final key = cacheKeyFor(symbol, market);
+      final row = await Supabase.instance.client
+          .from('quotes_cache')
+          .select()
+          .eq('symbol', key)
+          .eq('market', market)
+          .maybeSingle();
+      if (row == null) return null;
+      final m = Map<String, dynamic>.from(row as Map);
+      final updatedAt = DateTime.tryParse(m['updated_at'] as String? ?? '');
+      if (updatedAt == null) return null;
+      if (DateTime.now().toUtc().difference(updatedAt.toUtc()) >
+          const Duration(seconds: 45)) {
+        return null; // stale -> fall through to a live fetch
+      }
+      final price = (m['price'] as num?)?.toDouble() ?? 0.0;
+      if (price <= 0) return null;
+      return Quote(
+        symbol: symbol,
+        yfSymbol: symbol,
+        name: m['name'] as String? ?? symbol,
+        price: price,
+        previousClose: (m['previous_close'] as num?)?.toDouble() ?? price,
+        change: (m['change'] as num?)?.toDouble() ?? 0.0,
+        changePct: (m['change_pct'] as num?)?.toDouble() ?? 0.0,
+        currency: 'INR',
+        market: market,
+        source: 'cache',
+        dayLow: (m['day_low'] as num?)?.toDouble(),
+        dayHigh: (m['day_high'] as num?)?.toDouble(),
+        open: (m['open'] as num?)?.toDouble(),
+      );
+    } catch (_) {
+      return null; // any failure -> live fallback, never breaks pricing
+    }
   }
 
   static Future<List<Map<String, dynamic>>> search(
