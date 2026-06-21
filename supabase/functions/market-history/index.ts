@@ -4,6 +4,18 @@ import { fetchHistory as yfHistory } from "../_shared/yahoo.ts";
 import { fetchHistory as cgHistory } from "../_shared/coingecko.ts";
 
 serve(async (req) => {
+  const __start = Date.now();
+  let __status = 200;
+  try {
+    const __res = await handleRequest(req);
+    __status = __res.status;
+    return __res;
+  } finally {
+    console.log(`[market-history] ${req.method} ${Date.now() - __start}ms status=${__status}`);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   const cors = handleCors(req);
   if (cors) return cors;
 
@@ -34,4 +46,4 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}

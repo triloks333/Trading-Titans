@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
 import '../../services/auth_service.dart';
+import '../../services/analytics_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -37,7 +39,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool get _hasDigits => RegExp(r'[0-9]').hasMatch(_passwordController.text);
   bool get _hasSpecial => RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(_passwordController.text);
 
-  bool get _isValid => _isLengthValid && _hasUppercase && _hasLowercase && _hasDigits && _hasSpecial;
+  // Only a minimum length is required now (lower onboarding friction). The
+  // other rules feed a soft strength meter but never block sign-up.
+  bool get _isValid => _isLengthValid;
+
+  /// 0..4 strength score from the optional criteria, used only for the meter.
+  int get _strengthScore =>
+      (_hasUppercase ? 1 : 0) +
+      (_hasLowercase ? 1 : 0) +
+      (_hasDigits ? 1 : 0) +
+      (_hasSpecial ? 1 : 0);
+
+  String get _strengthLabel {
+    if (!_isLengthValid) return 'Too short';
+    switch (_strengthScore) {
+      case 4:
+        return 'Strong';
+      case 3:
+        return 'Good';
+      case 2:
+        return 'Fair';
+      default:
+        return 'Weak';
+    }
+  }
+
+  Color get _strengthColor {
+    if (!_isLengthValid) return AppColors.bear;
+    switch (_strengthScore) {
+      case 4:
+        return AppColors.bull;
+      case 3:
+        return AppColors.bull;
+      case 2:
+        return AppColors.imperialGold;
+      default:
+        return AppColors.bear;
+    }
+  }
 
   Future<void> _submit() async {
     if (!_isValid) return;
@@ -49,6 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final auth = context.read<AuthService>();
     try {
+      await AnalyticsService.logSignupMethodSelected('email');
       await auth.register(
         _emailController.text.trim(),
         _passwordController.text,
@@ -65,6 +105,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() {
         _busy = false;
       });
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final auth = context.read<AuthService>();
+    try {
+      // The referral code (if entered) is carried through the OAuth round-trip
+      // and applied automatically when the user returns signed-in.
+      await AnalyticsService.logSignupMethodSelected('google');
+      await auth.signInWithGoogle(
+        referralCode: _hasReferral ? _referralController.text.trim() : null,
+      );
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
     }
   }
 
@@ -96,7 +163,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
-                      Text('Full Name', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
+                      Text('Full Name (optional)', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
                       _buildField(_nameController, 'Arjun Mehra', false),
                       const SizedBox(height: AppSpacing.md),
@@ -106,9 +173,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.md),
                       Text('Password', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
-                      _buildField(_passwordController, 'Min. 8 chars (letters, digits & symbols)', true, isPassword: true),
+                      _buildField(_passwordController, 'Min. 8 characters', true, isPassword: true),
                       const SizedBox(height: AppSpacing.md),
-                      _buildChecklist(),
+                      _buildStrengthMeter(),
                       const SizedBox(height: AppSpacing.md),
                       Row(
                         children: [
@@ -159,6 +226,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ? CircularProgressIndicator(color: AppColors.pureWhite)
                             : Text('Create Account', style: TextStyle(color: _isValid ? AppColors.pureWhite : AppColors.ink4, fontWeight: FontWeight.w600)),
                       ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: AppColors.birch)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                            child: Text('OR', style: TextStyle(color: AppColors.ink4, fontSize: 12)),
+                          ),
+                          Expanded(child: Divider(color: AppColors.birch)),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      OutlinedButton(
+                        onPressed: _busy ? null : _signInWithGoogle,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: AppColors.cream,
+                          side: BorderSide(color: AppColors.birch, width: 1.5),
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SvgPicture.string(
+                              '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22-.03-.63z"/>
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                              </svg>''',
+                              width: 20,
+                              height: 20,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Text(
+                              'Continue with Google',
+                              style: TextStyle(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: AppSpacing.lg),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -183,38 +296,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildChecklist() {
+  Widget _buildStrengthMeter() {
+    final filled = _isLengthValid ? (_strengthScore == 0 ? 1 : _strengthScore) : 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCheckItem('Minimum 8 characters', _isLengthValid),
-        const SizedBox(height: 6),
-        _buildCheckItem('At least 1 uppercase letter', _hasUppercase),
-        const SizedBox(height: 6),
-        _buildCheckItem('At least 1 lowercase letter', _hasLowercase),
-        const SizedBox(height: 6),
-        _buildCheckItem('At least 1 number', _hasDigits),
-        const SizedBox(height: 6),
-        _buildCheckItem('At least 1 special character', _hasSpecial),
-      ],
-    );
-  }
-
-  Widget _buildCheckItem(String text, bool isValid) {
-    return Row(
-      children: [
-        Icon(
-          isValid ? Icons.check_circle : Icons.cancel,
-          color: isValid ? AppColors.bull : AppColors.bear,
-          size: 16,
+        Row(
+          children: List.generate(4, (i) {
+            return Expanded(
+              child: Container(
+                height: 4,
+                margin: EdgeInsets.only(right: i < 3 ? 4 : 0),
+                decoration: BoxDecoration(
+                  color: i < filled ? _strengthColor : AppColors.birch,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            );
+          }),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(height: 6),
         Text(
-          text,
+          _passwordController.text.isEmpty
+              ? 'At least 8 characters'
+              : 'Password strength: $_strengthLabel',
           style: TextStyle(
             fontSize: 12,
-            color: isValid ? AppColors.ink : AppColors.ink4,
-            fontWeight: isValid ? FontWeight.bold : FontWeight.normal,
+            color: _isLengthValid ? AppColors.ink3 : AppColors.ink4,
           ),
         ),
       ],

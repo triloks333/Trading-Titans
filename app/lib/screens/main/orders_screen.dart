@@ -6,6 +6,9 @@ import '../../models/quote.dart' as app_models;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/error_state.dart';
+import '../../services/nav_tab_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -153,11 +156,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
             return const ListSkeleton();
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Unable to load orders: ${snapshot.error}'));
+            return ErrorState(
+              message: "We couldn't load your orders. Check your connection and try again.",
+              onRetry: () => setState(() {
+                _ltpSignature = '';
+                _ordersFuture = _supabase.getOrders();
+              }),
+            );
           }
           final orders = snapshot.data ?? [];
           if (orders.isEmpty) {
-            return Center(child: Text('No orders yet', style: GoogleFonts.inter(color: AppColors.ink4)));
+            return EmptyState(
+              icon: Icons.receipt_long_rounded,
+              title: 'No orders yet',
+              message: 'Your placed, pending, and executed orders will appear here.',
+              actionLabel: 'Start trading',
+              onAction: () {
+                Navigator.of(context).popUntil((r) => r.isFirst);
+                NavTabService.goToTab(NavTabService.trade);
+              },
+            );
           }
           // Batch-fetch all visible orders' LTPs once (kills the per-row N+1).
           WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchLtps(orders));

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/market_service.dart';
+import '../../widgets/empty_state.dart';
 import 'package:intl/intl.dart';
 
 class WhatIfScreen extends StatefulWidget {
@@ -373,12 +374,25 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
 
   Future<void> _search(String query) async {
     setState(() => _loading = true);
-    final results = await MarketService.search(query, widget.market);
-    if (!mounted) return;
-    setState(() {
-      _results = results;
-      _loading = false;
-    });
+    try {
+      final results = await MarketService.search(query, widget.market);
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _results = [];
+        _loading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Search failed. Check your connection and try again.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -453,7 +467,13 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
+                : (_searchController.text.trim().isNotEmpty && displayList.isEmpty)
+                    ? EmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'No results',
+                        message: 'No matches for "${_searchController.text.trim()}". Try a different name or symbol.',
+                      )
+                    : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                     itemCount: displayList.length,
                     itemBuilder: (context, index) {

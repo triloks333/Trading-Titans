@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../widgets/app_network_image.dart';
 import '../../services/supabase_service.dart';
 
 class WishlistModerationScreen extends StatefulWidget {
@@ -223,12 +224,10 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
             const SizedBox(height: AppSpacing.sm),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: Image.network(
-                imageUrl,
+              child: AppNetworkImage(
+                url: imageUrl,
                 height: 120,
                 width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const SizedBox(),
               ),
             ),
           ],

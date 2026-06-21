@@ -11,6 +11,7 @@ import '../models/position_model.dart';
 import '../models/price_alert.dart';
 import '../core/market_hours.dart';
 import '../core/option_pricing.dart';
+import '../core/app_constants.dart';
 import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
@@ -264,20 +265,26 @@ class SupabaseService {
     String? referredById;
     if (referralCode != null && referralCode.trim().isNotEmpty) {
       final codeUpper = referralCode.trim().toUpperCase();
-      final referrerProfile = await client
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', codeUpper)
-          .maybeSingle();
-      if (referrerProfile == null) {
+      // profiles is no longer world-readable; resolve the referrer via a
+      // SECURITY DEFINER RPC that only returns the id for a valid code.
+      final referrerId = await client.rpc(
+        'get_referrer_id_by_code',
+        params: {'p_code': codeUpper},
+      );
+      if (referrerId == null) {
         throw Exception(
           'Invalid referral code. Please check the code and try again.',
         );
       }
-      referredById = referrerProfile['id'] as String;
+      referredById = referrerId as String;
     }
 
-    final Map<String, dynamic> userData = {'name': name};
+    final Map<String, dynamic> userData = {};
+    // Name is optional now. When omitted, handle_new_user() falls back to the
+    // email prefix, so don't send an empty string (which would override that).
+    if (name.trim().isNotEmpty) {
+      userData['name'] = name.trim();
+    }
     if (referredById != null) {
       userData['referred_by'] = referredById;
     }
@@ -305,6 +312,22 @@ class SupabaseService {
     await client.auth.signOut();
   }
 
+  /// Applies a referral code to the currently signed-in user via the
+  /// idempotent `apply_referral_code` RPC. Used for OAuth (Google) signups,
+  /// where the referral cannot be passed through auth signUp metadata.
+  ///
+  /// Returns true only when the referral was actually applied (credited).
+  /// Safe to call more than once: the RPC no-ops when the user is already
+  /// referred or the new-signup window has passed.
+  Future<bool> applyReferralCode(String code) async {
+    final result = await client.rpc(
+      'apply_referral_code',
+      params: {'p_code': code.trim()},
+    );
+    if (result is Map && result['applied'] == true) return true;
+    return false;
+  }
+
   User? get currentUser => client.auth.currentUser;
 
   Future<app_models.User?> getUserProfile() async {
@@ -312,12 +335,29 @@ class SupabaseService {
     if (user == null) return null;
 
     try {
-      final profile = await client
+      var profile = await client
           .from('profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
-      if (profile == null) return null;
+
+      // Self-heal: a signed-in user with no profile row would otherwise be
+      // stuck at login (this is exactly what stranded an early user whose row
+      // was dropped by a maintenance op). ensure_profile() recreates a default
+      // profile server-side and logs the event, then we re-fetch once.
+      if (profile == null) {
+        try {
+          await client.rpc('ensure_profile');
+          profile = await client
+              .from('profiles')
+              .select()
+              .eq('id', user.id)
+              .maybeSingle();
+        } catch (e) {
+          debugPrint('ensure_profile self-heal failed: $e');
+        }
+        if (profile == null) return null;
+      }
 
       final parsed = app_models.User.fromJson(
         Map<String, dynamic>.from(profile as Map),
@@ -1179,8 +1219,10 @@ class SupabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getLeaderboard() async {
+    // Reads from the `leaderboard` view (safe columns only — no email),
+    // since profiles is now restricted to owner/admin reads.
     final data = await client
-        .from('profiles')
+        .from('leaderboard')
         .select('id, name, wallet_balance, plan, total_realized_pnl')
         .order('total_realized_pnl', ascending: false)
         .limit(20);
@@ -1450,14 +1492,14 @@ class SupabaseService {
         uniqueKeys['${a.symbol}\x1F${a.market}'] = a;
       }
       final priceBySymbol = <String, double>{};
-      await Future.wait(uniqueKeys.values.map((a) async {
-        try {
-          final q = await MarketService.quote(a.symbol, a.market);
-          if (q != null && q.price > 0) {
-            priceBySymbol['${a.symbol}\x1F${a.market}'] = q.price;
-          }
-        } catch (_) {}
-      }));
+      final fetched = await MarketService.quotes(
+        uniqueKeys.values
+            .map((a) => (symbol: a.symbol, market: a.market))
+            .toList(),
+      );
+      fetched.forEach((key, q) {
+        if (q.price > 0) priceBySymbol[key] = q.price;
+      });
 
       for (final alert in alerts) {
         final price = priceBySymbol['${alert.symbol}\x1F${alert.market}'];
@@ -1921,7 +1963,7 @@ class SupabaseService {
           walletDebit = execPrice * quantity;
         } else if (instrumentType == 'OPTION' && newNetQty < 0) {
           // Option seller - blocks 15% margin, receives premium
-          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
           final double oldMargin = existingPos?.marginBlocked ?? 0.0;
           final double marginDelta = marginBlocked - oldMargin;
           final double premiumReceived = execPrice * quantity;
@@ -1934,7 +1976,7 @@ class SupabaseService {
           }
         } else {
           // Futures trader - blocks 15% margin
-          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+          marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
           final double oldMargin = existingPos?.marginBlocked ?? 0.0;
           walletDebit = marginBlocked - oldMargin;
         }
@@ -1979,7 +2021,7 @@ class SupabaseService {
             walletCredit = execPrice * closedQtyLots * lotSize;
           } else if (instrumentType == 'OPTION' && existingQty < 0) {
             // Option seller reduces short position - release partial margin, pay premium to buy back
-            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
             final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
             final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
             if (netImpact >= 0) {
@@ -1989,7 +2031,7 @@ class SupabaseService {
             }
           } else {
             // Futures reduces position
-            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
             final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
             final double netImpact = releasedMargin + realizedPnl;
             if (netImpact >= 0) {
@@ -2021,7 +2063,7 @@ class SupabaseService {
             openedPortionDebit = execPrice * remainingQtyLots * lotSize;
           } else if (instrumentType == 'OPTION' && newNetQty < 0) {
             // Opening short option - block margin, credit premium
-            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
             final double premiumReceived = execPrice * remainingQtyLots * lotSize;
             if (premiumReceived >= marginBlocked) {
               openedPortionCredit = premiumReceived - marginBlocked;
@@ -2029,7 +2071,7 @@ class SupabaseService {
               openedPortionDebit = marginBlocked - premiumReceived;
             }
           } else {
-            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+            marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
             openedPortionDebit = marginBlocked;
           }
 
@@ -2611,7 +2653,7 @@ class SupabaseService {
         }
 
         final total = execPrice * quantity;
-        final double marginPct = isDerivative ? 0.15 : 1.0;
+        final double marginPct = isDerivative ? AppConstants.fnoMarginPct : AppConstants.equityMarginPct;
         final double marginRequired = total * marginPct;
 
         if (_activeChargeConfig == null) {
@@ -2693,7 +2735,7 @@ class SupabaseService {
               walletDebit = execPrice * quantity;
             } else if (instrumentType == 'OPTION' && newNetQty < 0) {
               // Option seller - blocks 15% margin, receives premium
-              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
               final double oldMargin = existingPos?.marginBlocked ?? 0.0;
               final double marginDelta = marginBlocked - oldMargin;
               final double premiumReceived = execPrice * quantity;
@@ -2706,7 +2748,7 @@ class SupabaseService {
               }
             } else {
               // Futures trader - blocks 15% margin
-              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+              marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
               final double oldMargin = existingPos?.marginBlocked ?? 0.0;
               walletDebit = marginBlocked - oldMargin;
             }
@@ -2722,7 +2764,7 @@ class SupabaseService {
             final addedLots = tradeQtyLots; // opening/adding adds |addedLots|
             final double requiredCapital = (instrumentType == 'OPTION' && newNetQty > 0)
                 ? execPrice * quantity                     // long option: full premium
-                : execPrice * addedLots * lotSize * 0.15;  // futures / short option: full margin on added lots
+                : execPrice * addedLots * lotSize * AppConstants.fnoMarginPct;  // futures / short option: full margin on added lots
             if (profile.walletBalance < requiredCapital + totalCharges) {
               continue; // leave pending; insufficient true funds (un-claimed)
             }
@@ -2767,7 +2809,7 @@ class SupabaseService {
                 walletCredit = execPrice * closedQtyLots * lotSize;
               } else if (instrumentType == 'OPTION' && existingQty < 0) {
                 // Option seller reduces short position - release partial margin, pay premium to buy back
-                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
                 final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
                 final double netImpact = releasedMargin - (execPrice * closedQtyLots * lotSize);
                 if (netImpact >= 0) {
@@ -2777,7 +2819,7 @@ class SupabaseService {
                 }
               } else {
                 // Futures reduces position
-                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
                 final double releasedMargin = (existingPos?.marginBlocked ?? 0.0) - marginBlocked;
                 final double netImpact = releasedMargin + realizedPnl;
                 if (netImpact >= 0) {
@@ -2809,7 +2851,7 @@ class SupabaseService {
                 openedPortionDebit = execPrice * remainingQtyLots * lotSize;
               } else if (instrumentType == 'OPTION' && newNetQty < 0) {
                 // Opening short option - block margin, credit premium
-                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
                 final double premiumReceived = execPrice * remainingQtyLots * lotSize;
                 if (premiumReceived >= marginBlocked) {
                   openedPortionCredit = premiumReceived - marginBlocked;
@@ -2817,7 +2859,7 @@ class SupabaseService {
                   openedPortionDebit = marginBlocked - premiumReceived;
                 }
               } else {
-                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * 0.15;
+                marginBlocked = newAvgEntryPrice * newNetQty.abs() * lotSize * AppConstants.fnoMarginPct;
                 openedPortionDebit = marginBlocked;
               }
 

@@ -6,6 +6,18 @@ import { fetchFuturesChain as coindcxFuturesChain } from "../_shared/coindcx.ts"
 import { fetchQuote as yfQuote } from "../_shared/yahoo.ts";
 
 serve(async (req) => {
+  const __start = Date.now();
+  let __status = 200;
+  try {
+    const __res = await handleRequest(req);
+    __status = __res.status;
+    return __res;
+  } finally {
+    console.log(`[market-options] ${req.method} ${Date.now() - __start}ms status=${__status}`);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   const cors = handleCors(req);
   if (cors) return cors;
 
@@ -111,7 +123,7 @@ serve(async (req) => {
   } catch (err) {
     return json({ error: err?.message ?? "Unable to fetch derivatives data" }, 500);
   }
-});
+}
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/error_state.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class CompeteScreen extends StatefulWidget {
@@ -38,7 +39,10 @@ class _CompeteScreenState extends State<CompeteScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Failed to load leaderboard: ${snapshot.error}'));
+            return ErrorState(
+              message: "We couldn't load the leaderboard. Check your connection and try again.",
+              onRetry: () => setState(() {}),
+            );
           }
           final rows = snapshot.data ?? [];
           if (rows.isEmpty) {

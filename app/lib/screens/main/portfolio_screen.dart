@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/app_constants.dart';
 import '../../core/option_pricing.dart';
 import '../../models/portfolio.dart';
 import '../../models/position_model.dart';
@@ -12,6 +13,10 @@ import 'order_entry_screen.dart';
 import 'orders_screen.dart';
 import '../../models/quote.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/trend_arrow.dart';
+import '../../widgets/stat_cell.dart';
+import '../../services/nav_tab_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
@@ -34,7 +39,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   void initState() {
     super.initState();
     _load();
-    _pollTimer = Timer.periodic(const Duration(seconds: 12), (_) => _refresh());
+    _pollTimer = Timer.periodic(AppConstants.portfolioPoll, (_) => _refresh());
   }
 
   @override
@@ -44,9 +49,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() => _loading = true);
+    // Capture the provider before any await to avoid using context across an
+    // async gap.
+    final auth = Provider.of<AuthService>(context, listen: false);
+    // Cache-first: show the last-known holdings instantly; the skeleton only
+    // shows on the very first load (no cache yet). Fresh data follows below.
+    await _hydrateFromCache();
     try {
-      final auth = Provider.of<AuthService>(context, listen: false);
       final holdingsData = await _supabase.getHoldings();
       final foPositionsData = await _supabase.getFoPositions();
       await auth.refreshUser();
@@ -80,17 +89,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         }
       }
 
-      final quoteMap = <String, Quote>{};
-      await Future.wait(uniqueSymbols.map((sym) async {
-        try {
-          final q = await MarketService.quote(sym, 'stock');
-          if (q != null) {
-            quoteMap[sym] = q;
-            final norm = MarketService.normalizeSymbol(sym, 'stock');
-            quoteMap[norm] = q;
-          }
-        } catch (_) {}
-      }));
+      final quoteMap = await _fetchQuoteMap(uniqueSymbols);
 
       if (mounted) {
         setState(() {
@@ -105,6 +104,21 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  /// Renders previously cached holdings immediately so returning to the
+  /// portfolio doesn't block on the network. No-op on first run (no cache).
+  Future<void> _hydrateFromCache() async {
+    try {
+      final cached = await _supabase.getCachedHoldings();
+      if (!mounted) return;
+      if (cached.isNotEmpty) {
+        setState(() {
+          _holdings = cached;
+          _loading = false;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _refresh() async {
@@ -142,17 +156,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         }
       }
 
-      final quoteMap = <String, Quote>{};
-      await Future.wait(uniqueSymbols.map((sym) async {
-        try {
-          final q = await MarketService.quote(sym, 'stock');
-          if (q != null) {
-            quoteMap[sym] = q;
-            final norm = MarketService.normalizeSymbol(sym, 'stock');
-            quoteMap[norm] = q;
-          }
-        } catch (_) {}
-      }));
+      final quoteMap = await _fetchQuoteMap(uniqueSymbols);
 
       if (mounted) {
         setState(() {
@@ -162,6 +166,25 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  /// Fetches quotes for all [uniqueSymbols] (treated as stock underlyings) in a
+  /// single batched server-cache read (with live fallback), then maps each by
+  /// both its raw and normalized symbol — identical shape to the previous
+  /// per-symbol fan-out, just fewer round-trips.
+  Future<Map<String, Quote>> _fetchQuoteMap(Set<String> uniqueSymbols) async {
+    final fetched = await MarketService.quotes(
+      uniqueSymbols.map((s) => (symbol: s, market: 'stock')).toList(),
+    );
+    final quoteMap = <String, Quote>{};
+    for (final sym in uniqueSymbols) {
+      final q = fetched['$sym\x1Fstock'];
+      if (q != null) {
+        quoteMap[sym] = q;
+        quoteMap[MarketService.normalizeSymbol(sym, 'stock')] = q;
+      }
+    }
+    return quoteMap;
   }
 
   // Helper to estimate F&O position price
@@ -387,15 +410,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _summaryCardItem(String label, String value, {Color? color}) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: color ?? AppColors.pureWhite)),
-        ],
-      ),
+    return StatCell(
+      label: label,
+      value: value,
+      valueColor: color,
+      labelSize: 11,
+      labelWeight: FontWeight.w500,
+      gap: 2,
+      valueSize: 15,
+      valueWeight: FontWeight.bold,
+      defaultValueColor: AppColors.pureWhite,
     );
   }
 
@@ -405,6 +429,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         Icons.inventory_2_outlined,
         'No holdings yet',
         'Start trading equities to build your portfolio',
+        actionLabel: 'Place a trade',
+        onAction: () => NavTabService.goToTab(NavTabService.trade),
       );
     }
     return ListView.builder(
@@ -420,6 +446,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         Icons.trending_up_rounded,
         'No active F&O positions',
         'Live futures and options positions will show here',
+        actionLabel: 'Trade F&O',
+        onAction: () => NavTabService.goToTab(NavTabService.trade),
       );
     }
     return ListView.builder(
@@ -444,18 +472,19 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  Widget _buildEmptyState(IconData icon, String title, String subtitle) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: AppColors.ink5),
-          const SizedBox(height: AppSpacing.md),
-          Text(title, style: GoogleFonts.inter(color: AppColors.ink4, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5)),
-        ],
-      ),
+  Widget _buildEmptyState(
+    IconData icon,
+    String title,
+    String subtitle, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return EmptyState(
+      icon: icon,
+      title: title,
+      message: subtitle,
+      actionLabel: actionLabel,
+      onAction: onAction,
     );
   }
 
@@ -575,13 +604,19 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           final priceDiff = h.currentPrice - h.previousClose;
                           final pct = h.previousClose > 0 ? (priceDiff / h.previousClose) * 100 : 0.0;
                           final isPctPositive = pct >= 0;
-                          return Text(
-                            '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isPctPositive ? AppColors.bull : AppColors.bear,
-                            ),
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TrendArrow(isPositive: isPctPositive, size: 16),
+                              Text(
+                                '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isPctPositive ? AppColors.bull : AppColors.bear,
+                                ),
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -732,13 +767,19 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isPositive ? AppColors.bull : AppColors.bear,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TrendArrow(isPositive: isPositive, size: 16),
+                      Text(
+                        '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isPositive ? AppColors.bull : AppColors.bear,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -825,15 +866,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Widget _holdingStat(String label, String value, {Color? valueColor}) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink4)),
-          const SizedBox(height: 1),
-          Text(value, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: valueColor ?? AppColors.ink2)),
-        ],
-      ),
-    );
+    return StatCell(label: label, value: value, valueColor: valueColor);
   }
 }

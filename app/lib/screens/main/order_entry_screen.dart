@@ -7,9 +7,11 @@ import '../../core/theme.dart';
 import '../../models/quote.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/fo_instruments_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/swipe_button.dart';
+import '../../widgets/info_tooltip.dart';
 import 'wallet_screen.dart';
 
 class OrderEntryScreen extends StatefulWidget {
@@ -265,6 +267,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
       await authProvider.refreshUser(); // Update wallet balance
 
+      // Funnel: record the user's first-ever trade (fires once per install).
+      await AnalyticsService.logFirstTradeOnce(widget.quote.market);
+
       // Trigger push notification based on execution status
       if (order.isExecuted) {
         NotificationService().showNotification(
@@ -301,6 +306,82 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// A beginner helper shown above the quantity inputs: tappable chips that
+  /// open a plain-English definition for the terms relevant to this order type.
+  Widget _buildTermHelp() {
+    List<String> terms;
+    if (widget.instrumentType == 'OPTION') {
+      terms = ['Strike Price', 'Premium', 'Lot', 'Margin', 'Expiry'];
+    } else if (widget.instrumentType == 'FUTURE') {
+      terms = ['Lot', 'Margin', 'Expiry', 'LTP'];
+    } else {
+      terms = ['LTP', 'Market Order', 'Limit Order', 'Intraday'];
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.school_rounded, size: 14, color: AppColors.goldDeep),
+              const SizedBox(width: 6),
+              Text(
+                'New here? Tap a term to learn',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: terms.map((t) {
+              return GestureDetector(
+                onTap: () => showTermSheet(context, t),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.pureWhite,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.birch),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        t,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.ink2,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.help_outline_rounded,
+                          size: 13, color: AppColors.ink4),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildToggleTab(String title, bool isSelected, VoidCallback onTap, {bool isExpanded = false}) {
@@ -787,6 +868,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       ],
                       
                       // Quantity section
+                      _buildTermHelp(),
                       if (_isCrypto) ...[
                         // Mode toggle: Qty vs Amount
                         Row(

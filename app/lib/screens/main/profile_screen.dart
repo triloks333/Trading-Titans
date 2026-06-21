@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme.dart';
+import '../../core/app_constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/tour_service.dart';
 import '../../widgets/crown_logo.dart';
 import 'subscribe_screen.dart';
 import 'orders_screen.dart';
 import 'analytics_screen.dart';
 import 'autopsy_screen.dart';
+import 'glossary_screen.dart';
 import 'whatif_screen.dart';
 import 'watchlist_screen.dart';
 import 'notifications_screen.dart';
@@ -54,7 +58,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: AppSpacing.md),
                   Text(user?.name ?? 'Titan', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink)),
                   const SizedBox(height: AppSpacing.xs),
-                  Text(user?.email ?? 'you@domain.com', style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4)),
+                  Text(
+                    user == null
+                        ? 'you@domain.com'
+                        : (user.email.endsWith(AppConstants.guestEmailDomain)
+                            ? 'Guest account'
+                            : user.email),
+                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4),
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
@@ -106,6 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItem(context, Icons.card_giftcard, 'Refer & Earn', const ReferEarnScreen()),
             _menuItem(context, Icons.lightbulb_outline, 'What-If Simulator', const WhatIfScreen()),
             _menuItem(context, Icons.medical_services_outlined, 'Autopsy', const AutopsyScreen()),
+            _menuItem(context, Icons.school_outlined, 'Trading Glossary', const GlossaryScreen()),
             
             const SizedBox(height: AppSpacing.md),
             Padding(
@@ -120,6 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
             _menuItem(context, Icons.forum_outlined, 'Community Wishlist', const CommunityWishlistScreen()),
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
+            _menuItemAction(context, Icons.replay_circle_filled_outlined, 'Replay App Tour', () => _replayTour(context)),
             _menuItemActionWithSubtitle(context, Icons.palette_outlined, 'App Theme', themeName, () => _showThemeSelector(context)),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
@@ -143,6 +156,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _replayTour(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('pending_tour_replay', true);
+    TourService.requestReplay();
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Starting the app tour…')),
     );
   }
 

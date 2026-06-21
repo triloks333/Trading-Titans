@@ -69,6 +69,20 @@ type Quote = {
 };
 
 serve(async (req) => {
+  const __start = Date.now();
+  let __status = 200;
+  try {
+    const __res = await handleRequest(req);
+    __status = __res.status;
+    return __res;
+  } finally {
+    // Timing instrumentation (no behavior change): surfaces slow requests in
+    // the function logs so we can spot the slowest endpoints.
+    console.log(`[market-quote] ${req.method} ${Date.now() - __start}ms status=${__status}`);
+  }
+});
+
+async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -107,7 +121,7 @@ serve(async (req) => {
     console.error("market-quote fatal error:", err);
     return json({ error: errorMessage(err) }, 500);
   }
-});
+}
 
 async function attempt<T>(
   fn: () => Promise<T | null>,

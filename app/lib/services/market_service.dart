@@ -98,6 +98,97 @@ class MarketService {
     return null;
   }
 
+  /// Batch variant of [quote]: resolves many symbols with a single server-cache
+  /// read per market (collapsing an N-reads-per-list pattern into one), then
+  /// falls back to the live per-symbol [quote] for anything not fresh in the
+  /// cache. Result is identical to calling [quote] on each pair — just fewer
+  /// round-trips. Returns a map keyed by `symbol\x1Fmarket`. Never throws.
+  static Future<Map<String, Quote>> quotes(
+    List<({String symbol, String market})> pairs,
+  ) async {
+    final result = <String, Quote>{};
+    if (pairs.isEmpty) return result;
+
+    // Dedupe requested pairs.
+    final unique = <String, ({String symbol, String market})>{};
+    for (final p in pairs) {
+      if (p.symbol.trim().isEmpty) continue;
+      unique['${p.symbol}\x1F${p.market}'] = p;
+    }
+
+    // Group by market so we can batch the server-cache read into one IN query.
+    final byMarket = <String, List<({String symbol, String market})>>{};
+    for (final p in unique.values) {
+      byMarket.putIfAbsent(p.market, () => []).add(p);
+    }
+
+    final resolved = <String>{};
+    for (final entry in byMarket.entries) {
+      final market = entry.key;
+      final ps = entry.value;
+      final cacheKeys =
+          ps.map((p) => cacheKeyFor(p.symbol, market)).toSet().toList();
+      if (cacheKeys.isEmpty) continue;
+      try {
+        final rows = await Supabase.instance.client
+            .from('quotes_cache')
+            .select()
+            .inFilter('symbol', cacheKeys)
+            .eq('market', market);
+        final rowByKey = <String, Map<String, dynamic>>{};
+        for (final r in (rows as List)) {
+          final m = Map<String, dynamic>.from(r as Map);
+          rowByKey[m['symbol'] as String] = m;
+        }
+        final nowUtc = DateTime.now().toUtc();
+        for (final p in ps) {
+          final m = rowByKey[cacheKeyFor(p.symbol, market)];
+          if (m == null) continue;
+          final updatedAt = DateTime.tryParse(m['updated_at'] as String? ?? '');
+          if (updatedAt == null) continue;
+          if (nowUtc.difference(updatedAt.toUtc()) >
+              const Duration(seconds: 45)) {
+            continue; // stale -> live fallback
+          }
+          final price = (m['price'] as num?)?.toDouble() ?? 0.0;
+          if (price <= 0) continue;
+          final reqKey = '${p.symbol}\x1F${p.market}';
+          result[reqKey] = Quote(
+            symbol: p.symbol,
+            yfSymbol: p.symbol,
+            name: m['name'] as String? ?? p.symbol,
+            price: price,
+            previousClose: (m['previous_close'] as num?)?.toDouble() ?? price,
+            change: (m['change'] as num?)?.toDouble() ?? 0.0,
+            changePct: (m['change_pct'] as num?)?.toDouble() ?? 0.0,
+            currency: 'INR',
+            market: market,
+            source: 'cache',
+            dayLow: (m['day_low'] as num?)?.toDouble(),
+            dayHigh: (m['day_high'] as num?)?.toDouble(),
+            open: (m['open'] as num?)?.toDouble(),
+          );
+          resolved.add(reqKey);
+        }
+      } catch (_) {
+        // Ignore; unresolved pairs fall back to the live fetch below.
+      }
+    }
+
+    // Live fallback for anything not served fresh from cache (parallel — the
+    // same behaviour as the previous per-symbol code path).
+    final pending = unique.values
+        .where((p) => !resolved.contains('${p.symbol}\x1F${p.market}'));
+    await Future.wait(pending.map((p) async {
+      try {
+        final q = await quote(p.symbol, p.market);
+        if (q != null) result['${p.symbol}\x1F${p.market}'] = q;
+      } catch (_) {}
+    }));
+
+    return result;
+  }
+
   /// Canonical key used to look a symbol up in the server `quotes_cache`,
   /// matching exactly how the `refresh-quotes` job stores rows (underlying
   /// symbol for derivatives, index aliases mapped to canonical names, crypto

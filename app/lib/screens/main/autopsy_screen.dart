@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 import '../../models/order.dart';
+import '../../widgets/error_state.dart';
 
 class AutopsyScreen extends StatelessWidget {
   const AutopsyScreen({super.key});
@@ -41,7 +42,12 @@ class AutopsyScreen extends StatelessWidget {
               backgroundColor: AppColors.parchment,
               centerTitle: false,
             ),
-            body: Center(child: Text('Failed to load autopsy: ${snapshot.error}')),
+            body: ErrorState(
+              message: "We couldn't load your autopsy. Check your connection and try again.",
+              onRetry: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const AutopsyScreen()),
+              ),
+            ),
           );
         }
 
@@ -171,13 +177,7 @@ class AutopsyScreen extends StatelessWidget {
                   color: AppColors.pureWhite,
                   borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(color: AppColors.birch),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+                  boxShadow: AppShadows.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

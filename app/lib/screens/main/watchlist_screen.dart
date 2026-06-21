@@ -5,6 +5,8 @@ import '../../services/supabase_service.dart';
 
 import '../../widgets/stock_action_sheet.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/empty_state.dart';
+import '../../services/nav_tab_service.dart';
 
 class WatchlistScreen extends StatefulWidget {
   const WatchlistScreen({super.key});
@@ -57,17 +59,15 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
         child: _loading
             ? const ListSkeleton()
             : _items.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.star_border, size: 64, color: AppColors.ink4),
-                        const SizedBox(height: AppSpacing.md),
-                        Text('No items in watchlist', style: GoogleFonts.inter(color: AppColors.ink4)),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text('Star stocks and crypto to track them here', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink5)),
-                      ],
-                    ),
+                ? EmptyState(
+                    icon: Icons.star_border_rounded,
+                    title: 'No items in watchlist',
+                    message: 'Star stocks and crypto to track their prices here.',
+                    actionLabel: 'Browse stocks',
+                    onAction: () {
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      NavTabService.goToTab(NavTabService.trade);
+                    },
                   )
                 : RefreshIndicator(
                     onRefresh: _load,

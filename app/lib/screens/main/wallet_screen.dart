@@ -5,6 +5,7 @@ import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/skeleton.dart';
+import '../../services/nav_tab_service.dart';
 import 'subscribe_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -108,8 +109,39 @@ class _WalletScreenState extends State<WalletScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     if (_orders.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
-                        child: Center(child: Text('No transactions yet. Place your first order.', style: GoogleFonts.inter(color: AppColors.ink4))),
+                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  color: AppColors.goldPale,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.receipt_long_rounded, size: 34, color: AppColors.imperialGold),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text('No transactions yet', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                              const SizedBox(height: 4),
+                              Text('Your buys and sells will show up here', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                              const SizedBox(height: AppSpacing.md),
+                              ElevatedButton(
+                                onPressed: () => NavTabService.goToTab(NavTabService.trade),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.imperialGold,
+                                  foregroundColor: AppColors.pureWhite,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                                ),
+                                child: Text('Place your first order', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                              ),
+                            ],
+                          ),
+                        ),
                       )
                     else
                       ..._orders.map((order) => _buildTransactionRow(order)),

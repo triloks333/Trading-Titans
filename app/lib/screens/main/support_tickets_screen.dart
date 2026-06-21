@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../widgets/app_network_image.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/skeleton.dart';
 
@@ -269,20 +270,10 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
             const SizedBox(height: AppSpacing.md),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.md),
-              child: Image.network(
-                ticket['image_url'] as String,
+              child: AppNetworkImage(
+                url: ticket['image_url'] as String,
                 height: 160,
                 width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 60,
-                  color: AppColors.birch,
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Failed to load image attachment',
-                    style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
-                  ),
-                ),
               ),
             ),
           ],

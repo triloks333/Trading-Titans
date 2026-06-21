@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/app_network_image.dart';
 import 'stock_detail_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -99,29 +101,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _notifications.isEmpty
-                ? ListView(
-                    children: [
-                      const SizedBox(height: 120),
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.notifications_none,
-                                size: 48, color: AppColors.ink5),
-                            const SizedBox(height: AppSpacing.md),
-                            Text('No notifications yet',
-                                style:
-                                    GoogleFonts.inter(color: AppColors.ink4)),
-                            const SizedBox(height: 4),
-                            Text(
-                              'You\'ll see order updates here',
-                              style: GoogleFonts.inter(
-                                  fontSize: 12, color: AppColors.ink5),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                ? const EmptyState(
+                    icon: Icons.notifications_none_rounded,
+                    title: 'You\'re all caught up',
+                    message: 'Order fills, price alerts, and announcements will appear here.',
                   )
                 : ListView.builder(
                     padding:
@@ -245,12 +228,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 },
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    imageUrl,
+                  child: AppNetworkImage(
+                    url: imageUrl,
                     height: 150,
                     width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -411,10 +392,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             },
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+                              child: AppNetworkImage(
+                                url: imageUrl,
+                                width: double.infinity,
                               ),
                             ),
                           ),

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
+import '../../core/app_constants.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
 import '../../widgets/skeleton.dart';
@@ -47,7 +49,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshPrices());
+    _pollTimer = Timer.periodic(AppConstants.dashboardPricePoll, (_) => _refreshPrices());
   }
 
   @override
@@ -75,9 +77,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    // Capture the provider before any await to avoid using context across an
+    // async gap.
+    final auth = context.read<AuthService>();
+    // Cache-first: paint the last-known data instantly so the screen never
+    // blocks on the network when we've shown it before. The skeleton only
+    // appears on the very first load (no cache yet).
+    await _hydrateFromCache();
     try {
-      final auth = context.read<AuthService>();
       final results = await Future.wait([
         SupabaseService().getMarketOverview(),
         SupabaseService().getHoldings(),
@@ -97,7 +104,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() => _loading = false);
       }
+      // After the dashboard content is laid out, start the interactive tour
+      // on first run (or when a replay was requested from Profile).
+      unawaited(_maybeStartTour());
     }
+  }
+
+  /// Loads any previously cached dashboard data and renders it immediately,
+  /// dismissing the skeleton. Safe no-op when nothing is cached (first run).
+  Future<void> _hydrateFromCache() async {
+    try {
+      final svc = SupabaseService();
+      final cached = await Future.wait([
+        svc.getCachedMarketOverview(),
+        svc.getCachedHoldings(),
+        svc.getCachedWatchlist(),
+      ]);
+      if (!mounted) return;
+      final overview = cached[0] as List<Quote>;
+      final holdings = cached[1] as List<Holding>;
+      final watchlist = cached[2] as List<Quote>;
+      if (overview.isNotEmpty || holdings.isNotEmpty || watchlist.isNotEmpty) {
+        setState(() {
+          if (overview.isNotEmpty) _overview = overview;
+          if (holdings.isNotEmpty) _holdings = holdings;
+          if (watchlist.isNotEmpty) _watchlist = watchlist;
+          _loading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  /// Starts the showcase tour once for new users, and again whenever a replay
+  /// was requested. Best-effort: never throws into the load path.
+  Future<void> _maybeStartTour() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getBool('dashboard_tour_seen') ?? false;
+      final pendingReplay = prefs.getBool('pending_tour_replay') ?? false;
+      if (seen && !pendingReplay) return;
+      await prefs.setBool('dashboard_tour_seen', true);
+      if (pendingReplay) await prefs.remove('pending_tour_replay');
+      if (!mounted) return;
+      // Wait for the next frame so all showcase target widgets are built.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startGuide();
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadUnreadNotificationsCount() async {
@@ -160,18 +213,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              const CrownLogo(size: 36, withRing: false),
-                              const SizedBox(width: AppSpacing.sm),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Welcome,', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4)),
-                                  Text(user?.name ?? 'Titan', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                                ],
-                              ),
-                            ],
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const CrownLogo(size: 36, withRing: false),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Welcome,', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4)),
+                                      Text(user?.name ?? 'Titan', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           Row(
                             children: [
@@ -181,16 +238,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'Interactive Guide',
                                 description: 'Tap this question mark to launch the tour guide again anytime you want a walkthrough.',
                                 child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
                                   onTap: _startGuide,
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.cream,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.birch),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Center(
+                                      child: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.cream,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppColors.birch),
+                                        ),
+                                        child: Icon(Icons.help_outline, size: 20, color: AppColors.ink2),
+                                      ),
                                     ),
-                                    child:       Icon(Icons.help_outline, size: 20, color: AppColors.ink2),
                                   ),
                                 ),
                               ),
@@ -201,36 +265,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 title: 'System Notifications',
                                 description: 'View system messages, custom alerts, and real-time order fill updates here.',
                                 child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
                                   onTap: () async {
                                     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotificationsScreen()));
                                     _loadUnreadNotificationsCount();
                                   },
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.cream,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.birch),
-                                    ),
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                              Icon(Icons.notifications_outlined, size: 20, color: AppColors.ink2),
-                                        if (_unreadNotificationsCount > 0)
-                                          Positioned(
-                                            top: 8,
-                                            right: 8,
-                                            child: Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: const BoxDecoration(
-                                                color: Colors.red,
-                                                shape: BoxShape.circle,
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: Center(
+                                      child: Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.cream,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppColors.birch),
+                                        ),
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Icon(Icons.notifications_outlined, size: 20, color: AppColors.ink2),
+                                            if (_unreadNotificationsCount > 0)
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  width: 8,
+                                                  height: 8,
+                                                  decoration: const BoxDecoration(
+                                                    color: Colors.red,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                      ],
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -238,16 +309,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(width: AppSpacing.xs),
                               // Order History Button
                               GestureDetector(
+                                behavior: HitTestBehavior.opaque,
                                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.cream,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.birch),
+                                child: SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Center(
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.cream,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.birch),
+                                      ),
+                                      child: Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
+                                    ),
                                   ),
-                                  child:       Icon(Icons.receipt_outlined, size: 20, color: AppColors.ink2),
                                 ),
                               ),
                             ],

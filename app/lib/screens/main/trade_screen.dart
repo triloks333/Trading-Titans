@@ -5,6 +5,7 @@ import '../../services/market_service.dart';
 import '../../models/quote.dart';
 
 import '../../widgets/stock_action_sheet.dart';
+import '../../widgets/empty_state.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TradeScreen extends StatefulWidget {
@@ -56,12 +57,25 @@ class _TradeScreenState extends State<TradeScreen> {
 
   Future<void> _search(String query) async {
     setState(() => _loading = true);
-    final results = await MarketService.search(query, _market);
-    if (query != _searchQuery.trim()) return;
-    setState(() {
-      _results = results;
-      _loading = false;
-    });
+    try {
+      final results = await MarketService.search(query, _market);
+      if (query != _searchQuery.trim() || !mounted) return;
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (_) {
+      if (query != _searchQuery.trim() || !mounted) return;
+      setState(() {
+        _results = [];
+        _loading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Search failed. Check your connection and try again.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -174,7 +188,13 @@ class _TradeScreenState extends State<TradeScreen> {
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
+                  : (_searchQuery.trim().isNotEmpty && displayList.isEmpty)
+                      ? EmptyState(
+                          icon: Icons.search_off_rounded,
+                          title: 'No results',
+                          message: 'No matches for "${_searchQuery.trim()}". Try a different name or symbol.',
+                        )
+                      : ListView.builder(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                       itemCount: displayList.length,
                       itemBuilder: (context, index) {
@@ -266,12 +286,16 @@ class _LivePriceWidgetState extends State<_LivePriceWidget> {
 
   Future<void> _fetch() async {
     setState(() => _loading = true);
-    final q = await MarketService.quote(widget.symbol, widget.market);
-    if (mounted) {
-      setState(() {
-        _quote = q;
-        _loading = false;
-      });
+    try {
+      final q = await MarketService.quote(widget.symbol, widget.market);
+      if (mounted) {
+        setState(() {
+          _quote = q;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 

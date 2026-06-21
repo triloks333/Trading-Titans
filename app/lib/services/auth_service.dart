@@ -8,6 +8,8 @@ import '../models/user.dart' as app_models;
 import 'dart:async';
 import 'notification_service.dart';
 import 'firebase_service.dart';
+import 'analytics_service.dart';
+import 'diagnostics_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
@@ -343,6 +345,8 @@ class AuthService extends ChangeNotifier {
       final session = data.session;
       if (event == AuthChangeEvent.signedIn && session != null) {
         refreshUser();
+        unawaited(_applyPendingReferral());
+        unawaited(_logPendingSignupAnalytics());
         unawaited(NotificationService.instance.setup());
         if (FirebaseService.instance.isInitialized) {
           unawaited(FirebaseAnalytics.instance.setUserId(id: session.user.id));
@@ -360,6 +364,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> login(String email, String password) async {
+    unawaited(DiagnosticsService.logStep('email_signin_attempt', identifier: email));
     try {
       await _supabase.signIn(email: email, password: password);
       _user = await _supabase.getUserProfile();
@@ -369,20 +374,41 @@ class AuthService extends ChangeNotifier {
           unawaited(FirebaseAnalytics.instance.setUserId(id: _supabase.client.auth.currentUser!.id));
           unawaited(FirebaseCrashlytics.instance.setCustomKey('user_id', _supabase.client.auth.currentUser!.id));
         }
+      } else {
+        // Auth succeeded but no profile loaded — this is exactly what strands a
+        // user at login. Record it (with device context) so we can see it.
+        unawaited(DiagnosticsService.logLoginFailure(
+          'profile_missing_after_signin',
+          StateError('signed in but profile is null'),
+          StackTrace.current,
+          email,
+        ));
       }
       notifyListeners();
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('email_signin', e, st, email));
       throw Exception(mapAuthException(e));
     }
   }
 
   Future<void> register(String email, String password, String name, {String? referralCode}) async {
+    unawaited(DiagnosticsService.logStep('register_attempt', identifier: email));
     try {
       await _supabase.signUp(email: email, password: password, name: name, referralCode: referralCode);
       for (int i = 0; i < 5; i++) {
         _user = await _supabase.getUserProfile();
         if (_user != null) break;
         await Future.delayed(const Duration(milliseconds: 500));
+      }
+      // Funnel step 3: account created via email.
+      unawaited(AnalyticsService.logSignupCompleted('email'));
+      if (_user == null) {
+        unawaited(DiagnosticsService.logLoginFailure(
+          'profile_missing_after_register',
+          StateError('registered but profile is null after retries'),
+          StackTrace.current,
+          email,
+        ));
       }
       if (isAuthenticated) {
         unawaited(NotificationService.instance.setup());
@@ -392,20 +418,107 @@ class AuthService extends ChangeNotifier {
         }
       }
       notifyListeners();
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('register', e, st, email));
       throw Exception(mapAuthException(e));
     }
   }
 
-  Future<void> signInWithGoogle() async {
+  /// Signs the user in anonymously ("guest" mode) so they can explore and
+  /// trade immediately with the starting balance. The profile is created by
+  /// the handle_new_user() trigger right after sign-in, so we poll briefly
+  /// (mirroring [register]) before reporting success. Guests are blocked
+  /// server-side from topping up / buying plans / referral payouts.
+  Future<void> continueAsGuest() async {
+    unawaited(DiagnosticsService.logStep('guest_signin_attempt'));
     try {
+      await _supabase.client.auth.signInAnonymously();
+      for (int i = 0; i < 5; i++) {
+        _user = await _supabase.getUserProfile();
+        if (_user != null) break;
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      // Funnel step 3: guest session created.
+      unawaited(AnalyticsService.logSignupCompleted('guest'));
+      if (_user == null) {
+        unawaited(DiagnosticsService.logLoginFailure(
+          'profile_missing_after_guest',
+          StateError('guest signed in but profile is null after retries'),
+          StackTrace.current,
+        ));
+      }
+      if (isAuthenticated) {
+        unawaited(NotificationService.instance.setup());
+        if (FirebaseService.instance.isInitialized) {
+          unawaited(FirebaseAnalytics.instance.setUserId(id: _supabase.client.auth.currentUser!.id));
+          unawaited(FirebaseCrashlytics.instance.setCustomKey('user_id', _supabase.client.auth.currentUser!.id));
+        }
+      }
+      notifyListeners();
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('guest_signin', e, st));
+      throw Exception(mapAuthException(e));
+    }
+  }
+
+  Future<void> signInWithGoogle({String? referralCode}) async {
+    try {
+      // OAuth can't carry signup metadata the way email/password does, so we
+      // stash the referral code locally and apply it via RPC once the user
+      // returns signed-in. Persisted so it survives the browser round-trip.
+      final code = referralCode?.trim();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (code != null && code.isNotEmpty) {
+          await prefs.setString('pending_referral_code', code);
+        } else {
+          await prefs.remove('pending_referral_code');
+        }
+        // Funnel: remember the method so we can log signup_completed when the
+        // OAuth round-trip returns the user signed-in.
+        await prefs.setString('pending_signup_method', 'google');
+      } catch (_) {}
+
       await _supabase.client.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: 'io.supabase.tradingtitans://login-callback/',
       );
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('google_oauth', e, st));
       throw Exception(mapAuthException(e));
     }
+  }
+
+  /// Applies any referral code stashed before a Google sign-in. Best-effort:
+  /// failures never block login, and the underlying RPC is idempotent (it
+  /// no-ops for already-referred users or outside the new-signup window).
+  Future<void> _applyPendingReferral() async {
+    String? code;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      code = prefs.getString('pending_referral_code');
+      if (code == null || code.trim().isEmpty) return;
+      final applied = await _supabase.applyReferralCode(code);
+      await prefs.remove('pending_referral_code');
+      if (applied) {
+        await refreshUser();
+      }
+    } catch (e) {
+      debugPrint('Pending referral apply skipped: $e');
+    }
+  }
+
+  /// Fires the signup_completed funnel event for an OAuth (Google) sign-in that
+  /// originated from one of our auth buttons. Best-effort and one-shot (the
+  /// pending marker is cleared immediately).
+  Future<void> _logPendingSignupAnalytics() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final method = prefs.getString('pending_signup_method');
+      if (method == null) return;
+      await prefs.remove('pending_signup_method');
+      await AnalyticsService.logSignupCompleted(method);
+    } catch (_) {}
   }
 
   Future<void> sendPasswordResetEmail(String email) async {

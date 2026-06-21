@@ -1,0 +1,51 @@
+name: Edge Functions (Deno)
+
+# Static checks for Supabase edge functions. Verify-only: it lints and
+# type-checks the Deno code but NEVER deploys anything. Runs only when an edge
+# function actually changes.
+#
+# These steps are ADVISORY (continue-on-error) for now because the existing
+# functions may not yet be fully lint/format/type clean. Once a function area
+# is cleaned up, drop `continue-on-error` to make it a hard gate.
+
+on:
+  push:
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions.yml'
+  workflow_dispatch:
+
+jobs:
+  deno-checks:
+    name: Lint, format & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Lint (advisory)
+        continue-on-error: true
+        run: deno lint supabase/functions
+
+      - name: Format check (advisory)
+        continue-on-error: true
+        run: deno fmt --check supabase/functions
+
+      - name: Type-check entrypoints (advisory)
+        continue-on-error: true
+        run: |
+          shopt -s nullglob
+          for f in supabase/functions/*/index.ts; do
+            echo "::group::deno check $f"
+            deno check "$f" || true
+            echo "::endgroup::"
+          done

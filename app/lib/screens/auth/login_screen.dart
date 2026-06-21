@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
 import '../../services/auth_service.dart';
+import '../../services/analytics_service.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -19,6 +20,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   String? _error;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Funnel step 1: the auth screen was shown.
+    AnalyticsService.logOnboardingOpen();
+  }
 
   @override
   void dispose() {
@@ -55,6 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final auth = context.read<AuthService>();
     try {
+      await AnalyticsService.logSignupMethodSelected('google');
       await auth.signInWithGoogle();
     } catch (e) {
       setState(() {
@@ -64,6 +73,29 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _busy = false;
       });
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+
+    final auth = context.read<AuthService>();
+    try {
+      await AnalyticsService.logSignupMethodSelected('guest');
+      await auth.continueAsGuest();
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
     }
   }
 
@@ -307,6 +339,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextButton(
+                        onPressed: _busy ? null : _continueAsGuest,
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: Text(
+                          'Explore as guest',
+                          style: TextStyle(
+                            color: AppColors.ink3,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.lg),

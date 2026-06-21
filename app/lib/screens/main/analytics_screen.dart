@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/error_state.dart';
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -21,10 +22,10 @@ class AnalyticsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Could not load analytics: ${snapshot.error}',
-                style: GoogleFonts.inter(color: AppColors.bear, fontWeight: FontWeight.bold),
+            return ErrorState(
+              message: "We couldn't load your analytics. Check your connection and try again.",
+              onRetry: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
               ),
             );
           }
@@ -46,13 +47,7 @@ class AnalyticsScreen extends StatelessWidget {
                   color: AppColors.pureWhite,
                   borderRadius: BorderRadius.circular(AppRadius.xl),
                   border: Border.all(color: AppColors.birch),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  boxShadow: AppShadows.md,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

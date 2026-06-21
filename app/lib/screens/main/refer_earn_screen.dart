@@ -35,13 +35,15 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
       final userId = auth.user?.id;
       if (userId == null) return;
 
-      // 1. Fetch referred profiles (friends who used this referral code during signup)
-      final friendsResponse = await SupabaseService().client
-          .from('profiles')
-          .select('id, name, created_at')
-          .eq('referred_by', userId);
+      // 1. Fetch referred profiles (friends who used this referral code during
+      // signup). profiles is owner/admin-only now, so we use a SECURITY DEFINER
+      // RPC that returns only id/name/created_at for people you referred.
+      final friendsResponse =
+          await SupabaseService().client.rpc('get_my_referrals');
 
-      final friendsList = List<Map<String, dynamic>>.from(friendsResponse);
+      final friendsList = List<Map<String, dynamic>>.from(
+        (friendsResponse as List).map((e) => Map<String, dynamic>.from(e as Map)),
+      );
 
       final List<Map<String, dynamic>> mappedFriends = [];
       double totalEarned = friendsList.length * 5000.0;

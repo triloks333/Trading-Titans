@@ -4,9 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/app_constants.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/tour_service.dart';
+import '../../services/nav_tab_service.dart';
 import '../../widgets/reward_celebration_dialog.dart';
 import '../../widgets/update_dialogs.dart';
 import 'dashboard_screen.dart';
@@ -30,8 +33,13 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
+    // When a tour replay is requested (e.g. from Profile), jump to the Home
+    // tab. Switching to index 0 recreates the dashboard, which then reads the
+    // pending-replay flag and starts the tour.
+    TourService.goHomeTick.addListener(_onTourReplay);
+    NavTabService.tabRequest.addListener(_onTabRequest);
     // Check for unclaimed rewards every 10 seconds
-    _rewardCheckTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _rewardCheckTimer = Timer.periodic(AppConstants.rewardCheckPoll, (_) {
       _checkRewards();
       SupabaseService().evaluatePriceAlerts();
     });
@@ -41,6 +49,17 @@ class _MainNavigationState extends State<MainNavigation> {
       _checkSoftUpdate();
       SupabaseService().evaluatePriceAlerts();
     });
+  }
+
+  void _onTourReplay() {
+    if (!mounted) return;
+    setState(() => _currentIndex = 0);
+  }
+
+  void _onTabRequest() {
+    final i = NavTabService.tabRequest.value;
+    if (!mounted || i < 0 || i > 4) return;
+    setState(() => _currentIndex = i);
   }
 
   void _checkSoftUpdate() {
@@ -62,6 +81,8 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   void dispose() {
+    TourService.goHomeTick.removeListener(_onTourReplay);
+    NavTabService.tabRequest.removeListener(_onTabRequest);
     _rewardCheckTimer?.cancel();
     super.dispose();
   }

@@ -209,6 +209,7 @@ class AppTheme {
         elevation: 0,
         iconTheme: IconThemeData(color: Color(0xFF0B1B2B)),
       ),
+      pageTransitionsTheme: _pageTransitions,
     );
   }
 
@@ -236,8 +237,22 @@ class AppTheme {
         elevation: 0,
         iconTheme: IconThemeData(color: Color(0xFFF4F7FB)),
       ),
+      pageTransitionsTheme: _pageTransitions,
     );
   }
+
+  /// One consistent page transition across the whole app (and every platform),
+  /// so navigation always feels the same: a smooth fade + slight upward slide.
+  static const PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.fuchsia: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+      TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+    },
+  );
 }
 
 class AppFormat {
