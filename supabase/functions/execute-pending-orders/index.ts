@@ -25,7 +25,6 @@ function extractUnderlying(symbolRaw: string): string {
   return s;
 }
 
-// OptionPricing port (identical to app/lib/core/option_pricing.dart)
 function nCDF(x: number): number { const t = 1 / (1 + 0.2316419 * Math.abs(x)); const d = 0.3989422804 * Math.exp(-x * x / 2); const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))); return x >= 0 ? 1 - p : p; }
 function bs(opt: string, spot: number, strike: number, T: number): number { if (spot <= 0 || strike <= 0) return 0.05; if (T <= 0) return opt === "CE" ? Math.max(0, spot - strike) : Math.max(0, strike - spot); const r = 0.065, sig = 0.25; const d1 = (Math.log(spot / strike) + (r + 0.5 * sig * sig) * T) / (sig * Math.sqrt(T)); const d2 = d1 - sig * Math.sqrt(T); let p; if (opt === "CE") p = spot * nCDF(d1) - strike * Math.exp(-r * T) * nCDF(d2); else p = strike * Math.exp(-r * T) * nCDF(-d2) - spot * nCDF(-d1); return Math.max(0.05, Math.round(p * 100) / 100); }
 function optionPremium(opt: string, spot: number, strike: number, days: number): number { return bs(opt, spot, strike, Math.max(0.0001, days) / 365); }
@@ -64,10 +63,23 @@ function computeCharges(cfg: Record<string, number>, itype: string, side: string
   return { brokerage: r(brokerage), stamp_duty: r(stampDuty), tax_charges: r(taxCharges), total_charges: r(totalCharges) };
 }
 
-async function getLotSize(supabase: any, symbol: string): Promise<number> {
+// Resolve the contract lot size. Prefer the contract whose expiry matches the
+// ORDER's expiry (exact date, then year-month) because an underlying can have
+// multiple active expiries with DIFFERENT lot sizes (e.g. HDFCBANK Jun=550,
+// Jul=650). Falling back to an arbitrary first row silently produced a wrong
+// lot, which made trunc(qty/lot)=0 and dropped the whole position.
+async function getLotSize(supabase: any, symbol: string, expiryDate?: string | null): Promise<number> {
   const underlying = extractUnderlying(symbol);
   const { data } = await supabase.from("instruments").select("symbol, expiry_date, lot_size").in("instrument_type", ["OPTION", "FUTURE"]).like("symbol", `NSE:${underlying}%`);
   if (!data || data.length === 0) return 1;
+  if (expiryDate) {
+    const ed = String(expiryDate);
+    const exact = data.find((e: any) => String(e.expiry_date) === ed);
+    if (exact) return Number(exact.lot_size) || 1;
+    const ym = ed.slice(0, 7);
+    const monthMatch = data.find((e: any) => String(e.expiry_date).startsWith(ym));
+    if (monthMatch) return Number(monthMatch.lot_size) || 1;
+  }
   const clean = symbol.toUpperCase().replace("NSE:", "").replace("-EQ-", "-");
   if (clean.includes("-")) {
     const parts = clean.split("-");
@@ -85,7 +97,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const force = url.searchParams.get("force") === "1";
     const commit = url.searchParams.get("commit") === "1";
-    const onlyUser = url.searchParams.get("user"); // optional: restrict to one user for testing
+    const onlyUser = url.searchParams.get("user");
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     const cfgRow = await supabase.from("charge_configurations").select("id, config").order("effective_from", { ascending: false }).limit(1).maybeSingle();
@@ -98,7 +110,6 @@ serve(async (req) => {
     if (error) return json({ error: error.message }, 500);
     if (!pending || pending.length === 0) return json({ pending: 0, executed: 0, report: [] });
 
-    // cached underlying prices
     const { data: cacheRows } = await supabase.from("quotes_cache").select("symbol, market, price");
     const priceMap = new Map<string, number>();
     for (const r of (cacheRows ?? [])) priceMap.set(`${r.symbol}\u001f${r.market}`, Number(r.price));
@@ -145,7 +156,7 @@ serve(async (req) => {
       const totalRealizedPnl = Number(profRes.data.total_realized_pnl ?? 0);
 
       const claim = async (): Promise<boolean> => {
-        if (!commit) return true; // dry-run: pretend claim succeeded
+        if (!commit) return true;
         const c = await supabase.from("orders").update({ status: "executing" }).eq("id", o.id).eq("status", "pending").select();
         return Array.isArray(c.data) && c.data.length > 0;
       };
@@ -154,11 +165,15 @@ serve(async (req) => {
 
       try {
         if (isDerivative) {
-          const lotSize = await getLotSize(supabase, o.symbol);
-          let tradeQtyLots = Math.trunc(quantity / lotSize);
           const sign = side === "buy" ? 1 : -1;
           const exRes = await supabase.from("fo_positions").select("*").eq("user_id", userId).eq("symbol", o.symbol).eq("instrument_type", itype).eq("option_type", o.option_type ?? "").eq("strike_price", o.strike_price ?? 0).eq("expiry_date", o.expiry_date ?? "").eq("is_settled", false).maybeSingle();
           const ex = exRes.data;
+          // Prefer the lot size the position was opened with; otherwise resolve
+          // by the order's expiry (an underlying can have multiple expiries with
+          // different lot sizes). Re-deriving blindly broke the close/open math.
+          const lotSize = (ex && Number(ex.lot_size) > 0) ? Number(ex.lot_size) : await getLotSize(supabase, o.symbol, o.expiry_date);
+          let tradeQtyLots = Math.trunc(quantity / lotSize);
+          if (tradeQtyLots < 1) tradeQtyLots = 1; // never silently drop a real order to 0 lots
           const existingQty = ex ? Number(ex.net_qty) : 0;
           const existingAvg = ex ? Number(ex.avg_entry_price) : 0;
           const oldMargin = ex ? Number(ex.margin_blocked) : 0;
@@ -172,7 +187,7 @@ serve(async (req) => {
             else if (itype === "OPTION" && newNetQty < 0) { marginBlocked = newAvg * Math.abs(newNetQty) * lotSize * 0.15; const delta = marginBlocked - oldMargin; const prem = execPrice * quantity; if (prem >= delta) walletCredit = prem - delta; else walletDebit = delta - prem; }
             else { marginBlocked = newAvg * Math.abs(newNetQty) * lotSize * 0.15; walletDebit = marginBlocked - oldMargin; }
             const requiredCapital = (itype === "OPTION" && newNetQty > 0) ? execPrice * quantity : execPrice * tradeQtyLots * lotSize * 0.15;
-            if (walletBalance < requiredCapital + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (!isExit && walletBalance < requiredCapital + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
           } else {
             newAvg = existingAvg;
             const closedQtyLots = Math.abs(tradeQtyLots) > Math.abs(existingQty) ? Math.abs(existingQty) : Math.abs(tradeQtyLots);
@@ -203,7 +218,7 @@ serve(async (req) => {
 
           let finalDebit = walletDebit, finalCredit = walletCredit;
           if (totalCharges > 0) { if (walletCredit >= totalCharges) finalCredit = walletCredit - totalCharges; else { finalCredit = 0; finalDebit = walletDebit + (totalCharges - walletCredit); } }
-          if (walletBalance + finalCredit - finalDebit < 0) { report.push({ id: o.id, skipped: "insufficient_net" }); continue; }
+          if (!isExit && walletBalance + finalCredit - finalDebit < 0) { report.push({ id: o.id, skipped: "insufficient_net" }); continue; }
 
           const positionData = { symbol: o.symbol, instrument_type: itype, option_type: o.option_type ?? "", strike_price: o.strike_price ?? 0, expiry_date: o.expiry_date ?? "", lot_size: lotSize, net_qty: newNetQty, avg_entry_price: newAvg };
           const orderData = { symbol: o.symbol, name, market, side, quantity, price: execPrice, total, realized_pnl: realizedPnl, status: "executed", order_type: orderType, instrument_type: itype, strike_price: o.strike_price ?? 0, option_type: o.option_type ?? "", expiry_date: o.expiry_date ?? "", charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges };
@@ -217,22 +232,20 @@ serve(async (req) => {
           continue;
         }
 
-        // EQUITY (and crypto) path
         const exRes = await supabase.from("holdings").select("*").eq("user_id", userId).eq("symbol", o.symbol).eq("market", market).maybeSingle();
         const ex = exRes.data;
         if (side === "buy") {
           if (!ex) {
-            if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_BUY_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
-            await supabase.from("profiles").update({ wallet_balance: walletBalance - (isDerivative ? marginRequired : total) - totalCharges }).eq("id", userId);
+            await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
             await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date });
           } else {
             const oq = Number(ex.quantity), oa = Number(ex.avg_price);
             if (oq < 0) {
               const coverQty = quantity > -oq ? -oq : quantity;
-              const remainingBuyQty = quantity - coverQty;
-              // Covering a short returns the blocked margin plus realised P&L; it never costs buyback cash, so it is not gated on balance.
+              const remainingBuyQty = isExit ? 0 : quantity - coverQty;
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_COVER" }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
               const releasedMargin = coverQty * oa;
@@ -242,52 +255,49 @@ serve(async (req) => {
               if (Math.abs(newQty) < 1e-8) await supabase.from("holdings").delete().eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
               else await supabase.from("holdings").update({ quantity: newQty }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
               if (remainingBuyQty > 0) {
-                const remTotal = remainingBuyQty * execPrice; const remMargin = remTotal * marginPct;
+                const remTotal = remainingBuyQty * execPrice;
                 const up = await supabase.from("profiles").select("wallet_balance").eq("id", userId).maybeSingle();
                 const upBal = Number(up.data?.wallet_balance ?? 0);
-                if (upBal >= remMargin) { await supabase.from("profiles").update({ wallet_balance: upBal - (isDerivative ? remMargin : remTotal) }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: remainingBuyQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
+                if (upBal >= remTotal + totalCharges) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: remainingBuyQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
               }
             } else {
-              if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+              if (!isExit && walletBalance < total + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_ADD_LONG" }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
-              await supabase.from("profiles").update({ wallet_balance: walletBalance - (isDerivative ? marginRequired : total) - totalCharges }).eq("id", userId);
+              await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
               const nq = oq + quantity; const na = nq > 0 ? ((oa * oq) + (execPrice * quantity)) / nq : execPrice;
               await supabase.from("holdings").update({ quantity: nq, avg_price: na, name }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
             }
           }
         } else {
-          // sell
           if (!ex) {
-            if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_SHORT_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
-            // Margin model: opening a short BLOCKS margin (money out), it does not credit proceeds.
             await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);
             await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date });
           } else {
             const oq = Number(ex.quantity), oa = Number(ex.avg_price);
             if (oq > 0) {
               const sellQty = quantity > oq ? oq : quantity;
-              const remainingSellQty = quantity - sellQty;
+              const remainingSellQty = isExit ? 0 : quantity - sellQty;
               realizedPnl += (execPrice - oa) * sellQty;
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_SELL_CLOSE", realizedPnl }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
-              await supabase.from("profiles").update({ wallet_balance: walletBalance + (isDerivative ? (sellQty * oa * marginPct + realizedPnl) : (sellQty * execPrice)) - totalCharges, total_realized_pnl: totalRealizedPnl + realizedPnl - totalCharges }).eq("id", userId);
+              await supabase.from("profiles").update({ wallet_balance: walletBalance + (sellQty * execPrice) - totalCharges, total_realized_pnl: totalRealizedPnl + realizedPnl - totalCharges }).eq("id", userId);
               const newQty = oq - sellQty;
               if (Math.abs(newQty) < 1e-8) await supabase.from("holdings").delete().eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
               else await supabase.from("holdings").update({ quantity: newQty, avg_price: oa, name }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
               if (remainingSellQty > 0) {
-                const remTotal = remainingSellQty * execPrice; const remMargin = remTotal * marginPct;
+                const remTotal = remainingSellQty * execPrice;
                 const up = await supabase.from("profiles").select("wallet_balance").eq("id", userId).maybeSingle();
                 const upBal = Number(up.data?.wallet_balance ?? 0);
-                if (upBal >= remMargin) { await supabase.from("profiles").update({ wallet_balance: upBal - remMargin }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -remainingSellQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
+                if (upBal >= remTotal) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -remainingSellQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
               }
             } else {
-              if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+              if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_ADD_SHORT" }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
-              // Margin model: adding to a short BLOCKS additional margin (money out).
               await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);
               const nq = oq - quantity; const oqAbs = Math.abs(oq); const na = (oqAbs + quantity) > 0 ? ((oa * oqAbs) + (execPrice * quantity)) / (oqAbs + quantity) : execPrice;
               await supabase.from("holdings").update({ quantity: nq, avg_price: na, name }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
@@ -295,7 +305,6 @@ serve(async (req) => {
           }
         }
 
-        // finalize equity order (mark executed)
         if (commit) {
           await supabase.from("orders").update({ status: "executed", price: execPrice, total, realized_pnl: realizedPnl, executed_at: new Date().toISOString(), charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges }).eq("id", o.id);
           executed++; report.push({ id: o.id, executed: true, kind: "EQUITY" });

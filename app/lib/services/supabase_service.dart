@@ -1155,7 +1155,7 @@ class SupabaseService {
     return overview;
   }
 
-  Future<Quote?> getQuote(String symbol, String market) async {
+  Future<Quote?> getQuote(String symbol, String market, {String? expiryDate}) async {
     final parts = symbol.split('-');
     final isOption = parts.length >= 5 && (parts.last == 'CE' || parts.last == 'PE');
     final isFuture = symbol.contains(' FUT');
@@ -1169,8 +1169,16 @@ class SupabaseService {
       double previousClose = 0.0;
 
       if (isFuture) {
-        price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: 15.0);
-        previousClose = OptionPricing.futurePrice(spot: spotQuote.previousClose, daysToExpiry: 15.0);
+        // Use the contract's ACTUAL days-to-expiry so the LTP matches the
+        // portfolio screen and the fill engine (previously hardcoded 15 days,
+        // which made the same future show a different price across screens).
+        double daysToExpiry = 15.0;
+        final fExpiry = expiryDate != null ? DateTime.tryParse(expiryDate) : null;
+        if (fExpiry != null) {
+          daysToExpiry = fExpiry.difference(DateTime.now()).inHours / 24.0;
+        }
+        price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: daysToExpiry);
+        previousClose = OptionPricing.futurePrice(spot: spotQuote.previousClose, daysToExpiry: daysToExpiry + 1.0);
       } else {
         // Option — priced with the shared Black-Scholes estimator so the LTP
         // matches the portfolio screen and the limit-fill engine exactly.
@@ -1216,6 +1224,168 @@ class SupabaseService {
     }
 
     return await MarketService.quote(symbol, market);
+  }
+
+  /// Builds an option chain from REAL NSE strikes (the `instruments` table),
+  /// priced with the same Black-Scholes estimator the fill engine + portfolio
+  /// use — so the chain price always matches the fill/position price. Returns
+  /// null when no F&O instruments exist for the symbol (caller then falls back
+  /// to the live providers / mock chain).
+  Future<Map<String, dynamic>?> getOptionChainFromDb(
+    String symbol, {
+    String market = 'stock',
+    int strikeCount = 25,
+  }) async {
+    if (market != 'stock') return null;
+
+    final clean =
+        symbol.toUpperCase().trim().replaceAll('.NS', '').replaceAll('.BO', '');
+    String und = clean;
+    if (clean == '^NSEI' || clean == 'NIFTY' || clean == 'NIFTY50' || clean == 'NIFTY 50') {
+      und = 'NIFTY';
+    } else if (clean == '^NSEBANK' || clean == 'BANKNIFTY' || clean == 'BANK NIFTY') {
+      und = 'BANKNIFTY';
+    } else if (clean == '^BSESN' || clean == 'SENSEX') {
+      und = 'SENSEX';
+    }
+
+    final spotQuote = await MarketService.quote(symbol, market);
+    if (spotQuote == null || spotQuote.price <= 0) return null;
+    final double spot = spotQuote.price;
+    final double prevClose =
+        spotQuote.previousClose > 0 ? spotQuote.previousClose : spot;
+
+    List<dynamic> rows;
+    try {
+      final res = await client.rpc('get_option_chain_strikes', params: {
+        'p_underlying': und,
+        'p_spot': spot,
+        'p_strike_count': strikeCount,
+      });
+      rows = (res as List<dynamic>?) ?? [];
+    } catch (e) {
+      debugPrint('getOptionChainFromDb RPC failed: $e');
+      return null;
+    }
+    if (rows.isEmpty) return null;
+
+    final Map<String, List<Map<String, dynamic>>> byExpiry = {};
+    for (final r in rows) {
+      final m = Map<String, dynamic>.from(r as Map);
+      final ed = m['expiry_date'].toString();
+      (byExpiry[ed] ??= []).add(m);
+    }
+
+    final now = DateTime.now();
+    final chains = <Map<String, dynamic>>[];
+    for (final entry in byExpiry.entries) {
+      final expiry = entry.key;
+      final expDate = DateTime.tryParse(expiry) ?? now;
+      final daysLeft = expDate.difference(now).inHours / 24.0;
+      final strikes = <Map<String, dynamic>>[];
+      for (final row in entry.value) {
+        final strike = (row['strike_price'] as num).toDouble();
+        strikes.add({
+          'strike_price': strike,
+          'call': _buildDbOption(clean, expiry, strike, 'CE', spot, prevClose, daysLeft),
+          'put': _buildDbOption(clean, expiry, strike, 'PE', spot, prevClose, daysLeft),
+        });
+      }
+      chains.add({
+        'expiry_date': expiry,
+        'days_to_expiry': daysLeft.ceil().clamp(0, 100000),
+        'strikes': strikes,
+      });
+    }
+    if (chains.isEmpty) return null;
+
+    return {
+      'underlying': clean,
+      'spot_price': spot,
+      'change': spotQuote.change,
+      'change_pct': spotQuote.changePct,
+      'expiries': chains.map((c) => c['expiry_date']).toList(),
+      'chains': chains,
+      'futures': _buildDbFutures(clean, spot, spotQuote.change, spotQuote.changePct),
+      'derivative_type': 'options',
+      'source': 'nse_db',
+    };
+  }
+
+  Map<String, dynamic> _buildDbOption(
+    String clean, String expiry, double strike, String optType,
+    double spot, double prevClose, double daysToExpiry,
+  ) {
+    final price = OptionPricing.optionPremium(
+        optionType: optType, spot: spot, strike: strike, daysToExpiry: daysToExpiry);
+    final prev = OptionPricing.optionPremium(
+        optionType: optType, spot: prevClose, strike: strike, daysToExpiry: daysToExpiry + 1.0);
+    final change = price - prev;
+    final changePct = prev > 0 ? (change / prev) * 100.0 : 0.0;
+    // Deterministic, ATM-peaked pseudo open-interest so PCR / Max-Pain / OI bars
+    // stay meaningful (real per-strike OI isn't stored). Stable across reloads.
+    final moneyness = spot > 0 ? (strike - spot) / (0.06 * spot) : 0.0;
+    final oi = (60000 * math.exp(-(moneyness * moneyness))).round();
+    final strikeLabel =
+        strike == strike.roundToDouble() ? strike.toInt().toString() : strike.toString();
+    return {
+      'symbol': '$clean-$expiry-$strikeLabel-$optType',
+      'provider_symbol': '$clean-$expiry-$strikeLabel-$optType',
+      'underlying': clean,
+      'strike_price': strike,
+      'expiry_date': expiry,
+      'option_type': optType,
+      'name': '$clean $expiry $strikeLabel $optType',
+      'price': price,
+      'previous_close': prev,
+      'change': change,
+      'change_pct': changePct,
+      'open_interest': oi,
+      'volume': (oi * 0.4).round(),
+      'bid': (price * 0.98 * 100).round() / 100,
+      'ask': (price * 1.02 * 100).round() / 100,
+      'source': 'nse_db',
+    };
+  }
+
+  List<Map<String, dynamic>> _buildDbFutures(
+    String clean, double spot, double change, double changePct,
+  ) {
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    final now = DateTime.now();
+    final futures = <Map<String, dynamic>>[];
+    int monthOffset = 0;
+    while (futures.length < 3 && monthOffset < 6) {
+      final d = DateTime(now.year, now.month + monthOffset, 1);
+      final lastDay = DateTime(d.year, d.month + 1, 0);
+      var diff = lastDay.weekday - DateTime.thursday;
+      if (diff < 0) diff += 7;
+      final lastThu = lastDay.subtract(Duration(days: diff));
+      final expiryDt = DateTime(lastThu.year, lastThu.month, lastThu.day, 15, 30);
+      monthOffset++;
+      if (expiryDt.isBefore(now)) continue;
+      final daysLeft = expiryDt.difference(now).inHours / 24.0;
+      final fut = OptionPricing.futurePrice(spot: spot, daysToExpiry: daysLeft);
+      final futRounded = (fut * 100).round() / 100;
+      final futChange = (change * (spot > 0 ? fut / spot : 1.0) * 100).round() / 100;
+      final expiryStr =
+          '${lastThu.year}-${lastThu.month.toString().padLeft(2, '0')}-${lastThu.day.toString().padLeft(2, '0')}';
+      futures.add({
+        'symbol': '$clean ${months[lastThu.month - 1]} FUT',
+        'name': 'NSE FUTURES · $expiryStr',
+        'price': futRounded,
+        'previous_close': ((futRounded - futChange) * 100).round() / 100,
+        'change': futChange,
+        'change_pct': changePct,
+        'expiry_date': expiryStr,
+        'currency': 'INR',
+        'source': 'nse_db',
+        'low': (futRounded * 0.985 * 100).round() / 100,
+        'high': (futRounded * 1.015 * 100).round() / 100,
+        'volume': 150000,
+      });
+    }
+    return futures;
   }
 
   Future<List<Map<String, dynamic>>> getLeaderboard() async {

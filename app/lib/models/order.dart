@@ -14,6 +14,9 @@ class Order {
 
   final String? orderType;
   final String? instrumentType;
+  final double? strikePrice;
+  final String? optionType;
+  final String? expiryDate;
   final String? chargeConfigId;
   final double brokerage;
   final double stampDuty;
@@ -35,6 +38,9 @@ class Order {
     this.executedAt,
     this.orderType,
     this.instrumentType,
+    this.strikePrice,
+    this.optionType,
+    this.expiryDate,
     this.chargeConfigId,
     this.brokerage = 0.0,
     this.stampDuty = 0.0,
@@ -62,6 +68,9 @@ class Order {
           : null,
       orderType: json['order_type'] as String?,
       instrumentType: json['instrument_type'] as String?,
+      strikePrice: (json['strike_price'] as num?)?.toDouble(),
+      optionType: json['option_type'] as String?,
+      expiryDate: json['expiry_date'] as String?,
       chargeConfigId: json['charge_config_id'] as String?,
       brokerage: (json['brokerage'] as num?)?.toDouble() ?? 0.0,
       stampDuty: (json['stamp_duty'] as num?)?.toDouble() ?? 0.0,

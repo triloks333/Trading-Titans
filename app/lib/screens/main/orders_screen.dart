@@ -48,7 +48,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final results = <String, app_models.Quote?>{};
     await Future.wait(pairs.entries.map((e) async {
       try {
-        results[e.key] = await _supabase.getQuote(e.value.symbol, e.value.market);
+        results[e.key] = await _supabase.getQuote(e.value.symbol, e.value.market,
+            expiryDate: e.value.expiryDate);
       } catch (_) {
         results[e.key] = null;
       }

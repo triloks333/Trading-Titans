@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'option_detail_screen.dart';
 import 'order_entry_screen.dart';
+import '../../services/supabase_service.dart';
 
 class OptionChainScreen extends StatefulWidget {
   final String underlyingSymbol;
@@ -50,7 +51,18 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
     });
 
     try {
-      final data = await MarketService.getOptionChain(
+      // Prefer real NSE strikes from our DB (priced with the same estimator as
+      // the fill engine). Fall back to the live providers / mock chain.
+      Map<String, dynamic>? data;
+      try {
+        data = await SupabaseService().getOptionChainFromDb(
+          widget.underlyingSymbol,
+          market: widget.market,
+        );
+      } catch (_) {
+        data = null;
+      }
+      data ??= await MarketService.getOptionChain(
         widget.underlyingSymbol,
         market: widget.market,
       );

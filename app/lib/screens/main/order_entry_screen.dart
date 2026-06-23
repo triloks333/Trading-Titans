@@ -470,12 +470,6 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     final totalValue = qty * price;
     final totalCharges = charges['total_charges'] ?? 0.0;
 
-    final brokerage = charges['brokerage'] ?? 0.0;
-    final stampDuty = charges['stamp_duty'] ?? 0.0;
-    final stt = charges['stt'] ?? 0.0;
-    final exchangeCharges = charges['exchange_charges'] ?? 0.0;
-    final gst = charges['gst'] ?? 0.0;
-
     if (qty <= 0) return const SizedBox.shrink();
 
     final isDeriv = widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION';
@@ -560,14 +554,6 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             AppColors.ink,
             isMain: true,
           ),
-          if (isDeriv) ...[
-            const SizedBox(height: 4),
-            _buildBillRow(
-              'Contract / Notional Value',
-              '₹${totalValue.toStringAsFixed(2)}',
-              AppColors.ink3,
-            ),
-          ],
           if (widget.isExitOrder) ...[
             if (marginUsed > 0) ...[
               const SizedBox(height: 4),
@@ -611,23 +597,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           const SizedBox(height: 6),
           Container(height: 0.5, color: AppColors.birch),
           const SizedBox(height: 6),
-          _buildBillRow('Brokerage', '+ ₹${brokerage.toStringAsFixed(2)}', AppColors.ink3),
-          if (stampDuty > 0) ...[
-            const SizedBox(height: 4),
-            _buildBillRow('Stamp Duty', '+ ₹${stampDuty.toStringAsFixed(2)}', AppColors.ink3),
-          ],
-          if (stt > 0) ...[
-            const SizedBox(height: 4),
-            _buildBillRow('STT', '+ ₹${stt.toStringAsFixed(2)}', AppColors.ink3),
-          ],
-          if (exchangeCharges > 0) ...[
-            const SizedBox(height: 4),
-            _buildBillRow('Exchange Charges', '+ ₹${exchangeCharges.toStringAsFixed(2)}', AppColors.ink3),
-          ],
-          if (gst > 0) ...[
-            const SizedBox(height: 4),
-            _buildBillRow('GST (18%)', '+ ₹${gst.toStringAsFixed(2)}', AppColors.ink3),
-          ],
+          _buildBillRow('Charges & taxes', '+ ₹${totalCharges.toStringAsFixed(2)}', AppColors.ink3),
           const SizedBox(height: 8),
           Container(height: 1.5, color: color.withValues(alpha: 0.25)),
           const SizedBox(height: 8),
