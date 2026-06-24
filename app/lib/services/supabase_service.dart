@@ -1299,7 +1299,7 @@ class SupabaseService {
     }
     if (chains.isEmpty) return null;
 
-    return {
+    final result = <String, dynamic>{
       'underlying': clean,
       'spot_price': spot,
       'change': spotQuote.change,
@@ -1310,6 +1310,11 @@ class SupabaseService {
       'derivative_type': 'options',
       'source': 'nse_db',
     };
+    // Normalize to plain JSON types (List<dynamic>/Map<String,dynamic>) so the
+    // UI's firstWhere(orElse: () => null) and `as List<dynamic>` casts behave
+    // exactly as they do for the provider/mock chain. Avoids reified-generic
+    // type errors from the strongly-typed maps built above.
+    return jsonDecode(jsonEncode(result)) as Map<String, dynamic>;
   }
 
   Map<String, dynamic> _buildDbOption(
