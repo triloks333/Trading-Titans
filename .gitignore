@@ -103,3 +103,8 @@ credentials.json
 *.pdf
 promo.mp4
 
+
+# Google Play service-account key (used by the google-play MCP server) — never commit
+secrets/
+*play-service-account*.json
+*-service-account.json

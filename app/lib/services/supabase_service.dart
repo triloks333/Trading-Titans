@@ -1257,12 +1257,22 @@ class SupabaseService {
 
     List<dynamic> rows;
     try {
-      final res = await client.rpc('get_option_chain_strikes', params: {
+      // Prefer REAL open interest + EOD close from the daily NSE bhavcopy.
+      final q = await client.rpc('get_option_chain_quotes', params: {
         'p_underlying': und,
         'p_spot': spot,
         'p_strike_count': strikeCount,
       });
-      rows = (res as List<dynamic>?) ?? [];
+      rows = (q as List<dynamic>?) ?? [];
+      if (rows.isEmpty) {
+        // Fallback: real strikes from the instruments table (no OI/close).
+        final s = await client.rpc('get_option_chain_strikes', params: {
+          'p_underlying': und,
+          'p_spot': spot,
+          'p_strike_count': strikeCount,
+        });
+        rows = (s as List<dynamic>?) ?? [];
+      }
     } catch (e) {
       debugPrint('getOptionChainFromDb RPC failed: $e');
       return null;
@@ -1287,8 +1297,10 @@ class SupabaseService {
         final strike = (row['strike_price'] as num).toDouble();
         strikes.add({
           'strike_price': strike,
-          'call': _buildDbOption(clean, expiry, strike, 'CE', spot, prevClose, daysLeft),
-          'put': _buildDbOption(clean, expiry, strike, 'PE', spot, prevClose, daysLeft),
+          'call': _buildDbOption(clean, expiry, strike, 'CE', spot, prevClose, daysLeft,
+              realOi: row['ce_oi'] as num?, realClose: row['ce_close'] as num?),
+          'put': _buildDbOption(clean, expiry, strike, 'PE', spot, prevClose, daysLeft,
+              realOi: row['pe_oi'] as num?, realClose: row['pe_close'] as num?),
         });
       }
       chains.add({
@@ -1320,6 +1332,7 @@ class SupabaseService {
   Map<String, dynamic> _buildDbOption(
     String clean, String expiry, double strike, String optType,
     double spot, double prevClose, double daysToExpiry,
+    {num? realOi, num? realClose}
   ) {
     final price = OptionPricing.optionPremium(
         optionType: optType, spot: spot, strike: strike, daysToExpiry: daysToExpiry);
@@ -1327,10 +1340,16 @@ class SupabaseService {
         optionType: optType, spot: prevClose, strike: strike, daysToExpiry: daysToExpiry + 1.0);
     final change = price - prev;
     final changePct = prev > 0 ? (change / prev) * 100.0 : 0.0;
-    // Deterministic, ATM-peaked pseudo open-interest so PCR / Max-Pain / OI bars
-    // stay meaningful (real per-strike OI isn't stored). Stable across reloads.
-    final moneyness = spot > 0 ? (strike - spot) / (0.06 * spot) : 0.0;
-    final oi = (60000 * math.exp(-(moneyness * moneyness))).round();
+    // Open interest: use the REAL value from the NSE bhavcopy when available
+    // (so PCR / Max-Pain / OI bars are genuine market data). Only fall back to
+    // a deterministic, ATM-peaked estimate when no real OI exists for a strike.
+    final int oi;
+    if (realOi != null) {
+      oi = realOi.round();
+    } else {
+      final moneyness = spot > 0 ? (strike - spot) / (0.06 * spot) : 0.0;
+      oi = (60000 * math.exp(-(moneyness * moneyness))).round();
+    }
     final strikeLabel =
         strike == strike.roundToDouble() ? strike.toInt().toString() : strike.toString();
     return {
@@ -1343,13 +1362,15 @@ class SupabaseService {
       'name': '$clean $expiry $strikeLabel $optType',
       'price': price,
       'previous_close': prev,
+      // Real NSE end-of-day close for this contract (null if not in bhavcopy).
+      'nse_close': realClose,
       'change': change,
       'change_pct': changePct,
       'open_interest': oi,
       'volume': (oi * 0.4).round(),
       'bid': (price * 0.98 * 100).round() / 100,
       'ask': (price * 1.02 * 100).round() / 100,
-      'source': 'nse_db',
+      'source': realOi != null ? 'nse_bhavcopy' : 'nse_db',
     };
   }
 
