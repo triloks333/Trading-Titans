@@ -794,6 +794,7 @@ class SupabaseService {
           'option_type': f['option_type'],
           'expiry_date': f['expiry_date'],
           'product_type': 'NRML',
+          'margin_blocked': f['margin_blocked'],
           'created_at': f['created_at'],
         });
       }
@@ -985,6 +986,19 @@ class SupabaseService {
       final invested = avgPrice * quantity.abs();
       final currentValue = currentPrice * quantity.abs();
 
+      // Capital actually deployed. For F&O futures and SHORT options you only
+      // block margin (~15% of notional), not the full contract value — so the
+      // "invested" base must be the blocked margin. This makes the dashboard
+      // reconcile with the portfolio screen: wallet + positions == total value.
+      // (Long options already use premium paid = notional, so they're correct.)
+      final double? marginBlocked =
+          (activeRow?['margin_blocked'] as num?)?.toDouble();
+      final bool foMarginBased =
+          (instType == 'FUTURE' || (instType == 'OPTION' && quantity < 0)) &&
+              marginBlocked != null &&
+              marginBlocked > 0;
+      final double capitalBase = foMarginBased ? marginBlocked : invested;
+
       double dayPnl = 0.0;
       double dayPnlPct = 0.0;
 
@@ -1029,7 +1043,7 @@ class SupabaseService {
           ? (currentPrice - avgPrice) * quantity
           : realizedPnlToday;
       final double pnlPct = quantity != 0.0
-          ? (invested != 0 ? (pnl / invested) * 100 : 0.0)
+          ? (capitalBase != 0 ? (pnl / capitalBase) * 100 : 0.0)
           : 0.0;
 
       results.add(
@@ -1041,8 +1055,8 @@ class SupabaseService {
           avgPrice: avgPrice,
           currentPrice: currentPrice,
           previousClose: previousClose,
-          invested: invested,
-          current: invested + pnl,
+          invested: capitalBase,
+          current: capitalBase + pnl,
           pnl: pnl,
           pnlPct: pnlPct,
           dayPnl: dayPnl,

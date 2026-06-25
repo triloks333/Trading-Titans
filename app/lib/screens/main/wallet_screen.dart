@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/app_constants.dart';
 import '../../models/order.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
@@ -154,6 +155,12 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Widget _buildTransactionRow(Order order) {
     final isBuy = order.side == 'buy';
+    // Futures move only margin (~15% of notional), not the full contract value,
+    // so the wallet history shows the margin actually charged — keeping it
+    // consistent with the wallet balance and the portfolio's deployed capital.
+    final bool isFuture = order.instrumentType == 'FUTURE';
+    final double displayAmount =
+        isFuture ? order.total * AppConstants.fnoMarginPct : order.total;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -182,7 +189,7 @@ class _WalletScreenState extends State<WalletScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('₹${order.total.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+              Text('₹${displayAmount.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
               const SizedBox(height: 2),
               Text(order.createdAt != null ? '${order.createdAt!.day}/${order.createdAt!.month}/${order.createdAt!.year}' : '-', style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
             ],
