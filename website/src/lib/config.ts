@@ -6,7 +6,7 @@
 //    Leave it as an empty string until then — the site will automatically show
 //    a "Link coming soon" state on the Pre-register button.
 // ─────────────────────────────────────────────────────────────────────────
-export const PLAY_STORE_URL = '';
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.kwm.tradingtitans&pcampaignid=web_share';
 
 /** Amount of virtual practice cash gifted to pre-registration users. */
 export const PREREG_GIFT_AMOUNT = '₹50,000';

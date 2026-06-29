@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X } from 'lucide-react';
+import { PLAY_STORE_URL, isPlayStoreLive } from '../lib/config';
 
 const LINKS = [
   { label: 'Features', id: 'features' },
@@ -14,6 +15,15 @@ const scrollTo = (id: string) => {
     return;
   }
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+};
+
+/** Go to Google Play pre-registration if the link is set, else scroll to CTA. */
+const goPreRegister = () => {
+  if (isPlayStoreLive()) {
+    window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
+  } else {
+    scrollTo('prereg');
+  }
 };
 
 export const Navbar: React.FC = () => {
@@ -49,7 +59,7 @@ export const Navbar: React.FC = () => {
       {/* Right: Pre-register */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => scrollTo('prereg')}
+          onClick={goPreRegister}
           className="hidden md:block bg-white text-gray-900 text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-gray-100 transition-colors"
         >
           Pre-register
@@ -83,7 +93,7 @@ export const Navbar: React.FC = () => {
                 </button>
               ))}
               <button
-                onClick={() => { scrollTo('prereg'); setIsOpen(false); }}
+                onClick={() => { goPreRegister(); setIsOpen(false); }}
                 className="mt-1 bg-white text-gray-900 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-gray-100"
               >
                 Pre-register

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Gift } from 'lucide-react';
-import { PREREG_GIFT_AMOUNT } from '../lib/config';
+import { PREREG_GIFT_AMOUNT, PLAY_STORE_URL, isPlayStoreLive } from '../lib/config';
 
 const BG_IMAGE_1 =
   'https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_195923_b0ba8ace-1d1d-4f2c-9a28-1ab84b330680.png&w=1280&q=85';
@@ -97,7 +97,11 @@ export const SpotlightHero: React.FC = () => {
   }, []);
 
   const scrollToCta = () => {
-    document.getElementById('prereg')?.scrollIntoView({ behavior: 'smooth' });
+    if (isPlayStoreLive()) {
+      window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
+    } else {
+      document.getElementById('prereg')?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   return (
