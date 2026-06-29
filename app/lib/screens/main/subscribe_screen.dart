@@ -4,6 +4,68 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/auth_service.dart';
 
+/// A one-time, consumable top-up product. These map 1:1 to Google Play
+/// **in-app products** (one-time purchases, NOT subscriptions). [productId]
+/// must match the product ID created in the Play Console.
+///
+/// NOTE: the Play Billing paywall is not wired yet — tapping "Top up" still
+/// shows the beta-phase dialog. The product definitions below are ready so
+/// that hooking up `in_app_purchase` later only needs to read this list.
+class TopUpProduct {
+  final String productId; // Play Console one-time product ID
+  final String title;
+  final int price; // INR
+  final int cash; // demo cash credited
+  final bool popular;
+
+  const TopUpProduct({
+    required this.productId,
+    required this.title,
+    required this.price,
+    required this.cash,
+    this.popular = false,
+  });
+}
+
+const List<TopUpProduct> kTopUpProducts = [
+  TopUpProduct(
+    productId: 'topup_starter_199',
+    title: 'Starter Boost',
+    price: 199,
+    cash: 100000,
+    popular: true,
+  ),
+  TopUpProduct(
+    productId: 'topup_titan_599',
+    title: 'Titan Plus',
+    price: 599,
+    cash: 500000,
+  ),
+  TopUpProduct(
+    productId: 'topup_pro_999',
+    title: 'Pro Launch',
+    price: 999,
+    cash: 1000000,
+  ),
+];
+
+/// Pre-registration reward — a FREE one-time product (price ₹0) granted by
+/// Google Play to users who pre-registered for the app. It is NOT sold and is
+/// intentionally excluded from [kTopUpProducts] (the purchasable list).
+///
+/// Setup: in the Play Console, create an in-app product with this exact ID and
+/// price 0, then attach it as the reward on the Pre-registration campaign.
+/// Delivery (when Play Billing is wired): on first launch, Play reports the
+/// pre-reg entitlement as an owned purchase of this product — the app verifies
+/// it server-side, credits [cash] demo cash once, then acknowledges/consumes it.
+/// Amount below is adjustable.
+const TopUpProduct kPreRegistrationGift = TopUpProduct(
+  productId: 'prereg_gift',
+  title: 'Pre-registration Gift',
+  price: 0,
+  cash: 50000,
+);
+
 class SubscribeScreen extends StatelessWidget {
   const SubscribeScreen({super.key});
 
@@ -24,18 +86,20 @@ class SubscribeScreen extends StatelessWidget {
           children: [
             Text('Current balance', style: TextStyle(color: AppColors.ink4, fontSize: 13)),
             const SizedBox(height: AppSpacing.xs),
-            Text('₹${wallet.toStringAsFixed(0)}', style:       TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.ink)),
+            Text('₹${wallet.toStringAsFixed(0)}', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.ink)),
             const SizedBox(height: AppSpacing.lg),
-                  Text('Select a demo top-up plan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            Text('One-time top-up products', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            const SizedBox(height: AppSpacing.xs),
+            Text('A single purchase — credited once, not a subscription.',
+                style: TextStyle(fontSize: 12, color: AppColors.ink4)),
             const SizedBox(height: AppSpacing.md),
             Expanded(
               child: ListView(
                 children: [
-                  _planCard(context, 'Starter Boost', 199, 100000, true),
-                  const SizedBox(height: AppSpacing.sm),
-                  _planCard(context, 'Titan Plus', 599, 500000, false),
-                  const SizedBox(height: AppSpacing.sm),
-                  _planCard(context, 'Pro Launch', 999, 1000000, false),
+                  for (final p in kTopUpProducts) ...[
+                    _productCard(context, p),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                 ],
               ),
             ),
@@ -45,7 +109,7 @@ class SubscribeScreen extends StatelessWidget {
     );
   }
 
-  Widget _planCard(BuildContext context, String title, int price, int cash, bool popular) {
+  Widget _productCard(BuildContext context, TopUpProduct product) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.pureWhite,
@@ -56,27 +120,30 @@ class SubscribeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (popular)
+          if (product.popular)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
               decoration: BoxDecoration(color: AppColors.imperialGold, borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child:       Text('MOST POPULAR', style: TextStyle(color: AppColors.pureWhite, fontSize: 10)),
+              child: Text('MOST POPULAR', style: TextStyle(color: AppColors.pureWhite, fontSize: 10)),
             ),
-          if (popular) const SizedBox(height: AppSpacing.sm),
-          Text(title, style:       TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+          if (product.popular) const SizedBox(height: AppSpacing.sm),
+          Text(product.title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.xs),
-          Text('₹$cash demo cash', style:       TextStyle(color: AppColors.ink4)),
+          Text('₹${product.cash} demo cash', style: TextStyle(color: AppColors.ink4)),
+          const SizedBox(height: 2),
+          Text('One-time purchase', style: TextStyle(fontSize: 11, color: AppColors.ink5, fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.lg),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('₹$price', style:       TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Text('₹${product.price}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
               ElevatedButton(
                 onPressed: () {
+                  // Paywall not wired yet — keep the beta-phase notice.
                   _showBetaPhaseDialog(context);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold),
-                child:       Text('Top up', style: TextStyle(color: AppColors.pureWhite)),
+                child: Text('Top up', style: TextStyle(color: AppColors.pureWhite)),
               ),
             ],
           ),
@@ -135,4 +202,3 @@ class SubscribeScreen extends StatelessWidget {
     );
   }
 }
-
