@@ -1,48 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Gift } from 'lucide-react';
+import { Gift } from 'lucide-react';
 import { PlayStoreButton } from './PlayStoreButton';
 import { PREREG_GIFT_AMOUNT } from '../lib/config';
 
-const SUPABASE_URL = 'https://bftvimnhpoiuoyryyiff.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak';
-
 export const PreRegSection: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const handleJoin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setIsSubmitting(true);
-    setErrorMsg('');
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/waitlist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          Prefer: 'return=minimal',
-        },
-        body: JSON.stringify({ email }),
-      });
-      if (res.ok) {
-        setIsSuccess(true);
-      } else {
-        const j = await res.json().catch(() => ({}));
-        setErrorMsg(j.message?.includes('duplicate') ? "You're already on the list!" : j.message || 'Failed to submit. Please try again.');
-      }
-    } catch {
-      setErrorMsg('Connection error. Please check your network.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <section id="rewards" className="relative bg-zinc-950 py-24 px-6 md:px-12 border-t border-white/5">
       <span id="prereg" className="block relative -top-24" />
@@ -76,35 +38,6 @@ export const PreRegSection: React.FC = () => {
               <a href="/prereg-terms" className="text-[11px] text-white/55 hover:text-white font-semibold underline underline-offset-2">
                 Pre-registration reward terms apply
               </a>
-            </div>
-
-            {/* Secondary: email capture */}
-            <div className="mt-10 w-full max-w-md">
-              <span className="block text-xs font-bold uppercase tracking-widest text-white/45 mb-2">Or get notified by email</span>
-              {!isSuccess ? (
-                <form onSubmit={handleJoin} className="bg-white rounded-xl p-1.5 pl-4 flex items-center shadow-md">
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email..."
-                    className="w-full bg-transparent py-3 text-zinc-900 placeholder-zinc-400 focus:outline-none text-sm font-medium"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="bg-[#e8702a] hover:bg-[#d2611f] text-white w-10 h-10 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-50"
-                  >
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </form>
-              ) : (
-                <div className="bg-white/10 text-[#9fff00] rounded-xl px-5 py-4 text-sm font-semibold text-center border border-white/15">
-                  ✓ You're on the list! We'll notify you the moment access opens.
-                </div>
-              )}
-              {errorMsg && <p className="text-xs text-red-400 mt-2 font-semibold">{errorMsg}</p>}
             </div>
           </div>
         </motion.div>
