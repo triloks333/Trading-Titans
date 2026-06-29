@@ -38,7 +38,7 @@ export const PlayStoreButton: React.FC<{ size?: 'lg' | 'md' }> = ({ size = 'lg' 
   if (!live) {
     return (
       <div
-        className={`inline-flex items-center gap-3 ${pad} rounded-2xl bg-[#1a1a1a]/60 text-white/80 border border-white/10 cursor-not-allowed select-none shadow-sm`}
+        className={`inline-flex items-center gap-3 ${pad} rounded-2xl bg-white/10 text-white/80 border border-white/15 cursor-not-allowed select-none shadow-sm`}
         title="The Google Play pre-registration link will be added soon."
         aria-disabled="true"
       >
@@ -52,7 +52,7 @@ export const PlayStoreButton: React.FC<{ size?: 'lg' | 'md' }> = ({ size = 'lg' 
       href={PLAY_STORE_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className={`inline-flex items-center gap-3 ${pad} rounded-2xl bg-[#1a1a1a] hover:bg-zinc-800 text-white border border-black/10 transition-all shadow-md hover:shadow-lg`}
+      className={`inline-flex items-center gap-3 ${pad} rounded-2xl bg-white text-[#1a1a1a] hover:bg-zinc-100 border border-white/20 transition-all shadow-md hover:shadow-lg`}
     >
       {inner}
     </a>
