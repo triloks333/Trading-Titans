@@ -60,7 +60,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onPageChange }) => 
             }} 
             className="bg-[#1a1a1a] hover:bg-zinc-800 text-white text-xs md:text-sm font-bold px-5 py-2.5 rounded-full flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
           >
-            Join Waitlist <ArrowUpRight className="w-4 h-4" />
+            Pre-register <ArrowUpRight className="w-4 h-4" />
           </button>
           
           {/* Mobile Menu Icon */}

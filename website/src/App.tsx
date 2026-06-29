@@ -7,6 +7,7 @@ import { Features } from './components/Features';
 import { TopupPage } from './components/TopupPage';
 import { ConfirmPage } from './components/ConfirmPage';
 import { TermsPage } from './components/TermsPage';
+import { PreregTermsPage } from './components/PreregTermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
 import { DeleteAccountPage } from './components/DeleteAccountPage';
 
@@ -15,6 +16,7 @@ function App() {
   const [isTopup, setIsTopup] = useState(false);
   const [isConfirm, setIsConfirm] = useState(false);
   const [isTerms, setIsTerms] = useState(false);
+  const [isPreregTerms, setIsPreregTerms] = useState(false);
   const [isPrivacy, setIsPrivacy] = useState(false);
   const [isDelete, setIsDelete] = useState(false);
 
@@ -24,6 +26,8 @@ function App() {
       setIsTopup(true);
     } else if (path === '/confirm' || path === '/confirm/') {
       setIsConfirm(true);
+    } else if (path === '/prereg-terms' || path === '/prereg-terms/') {
+      setIsPreregTerms(true);
     } else if (path === '/terms' || path === '/terms/') {
       setIsTerms(true);
     } else if (path === '/privacy' || path === '/privacy/') {
@@ -34,6 +38,7 @@ function App() {
       setIsTopup(false);
       setIsConfirm(false);
       setIsTerms(false);
+      setIsPreregTerms(false);
       setIsPrivacy(false);
       setIsDelete(false);
     }
@@ -41,6 +46,10 @@ function App() {
 
   if (isConfirm) {
     return <ConfirmPage />;
+  }
+
+  if (isPreregTerms) {
+    return <PreregTermsPage />;
   }
 
   if (isTerms) {
@@ -75,6 +84,7 @@ function App() {
           <div className="mt-2 flex justify-center gap-4 text-[10px] text-[#7888A3]">
             <span>© {new Date().getFullYear()} Trading Titans. All rights reserved.</span>
             <a href="/terms" className="hover:underline font-semibold text-[#525E75]">Terms & Conditions</a>
+            <a href="/prereg-terms" className="hover:underline font-semibold text-[#525E75]">Pre-registration Terms</a>
             <a href="/privacy" className="hover:underline font-semibold text-[#525E75]">Privacy Policy</a>
           </div>
         </div>

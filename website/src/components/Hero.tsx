@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, Shield, Zap, Sparkles } from 'lucide-react';
+import { ArrowRight, Shield, Zap, Sparkles, Gift } from 'lucide-react';
+import { PlayStoreButton } from './PlayStoreButton';
+import { PREREG_GIFT_AMOUNT } from '../lib/config';
 
 export const Hero: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -114,7 +116,7 @@ export const Hero: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 border border-black/5 shadow-sm backdrop-blur-md"
           >
             <span className="w-2 h-2 rounded-full bg-[#9fff00] animate-pulse"></span>
-            <span className="text-xs font-extrabold uppercase tracking-widest text-[#1a1a1a]">Going Live on Play Store soon</span>
+            <span className="text-xs font-extrabold uppercase tracking-widest text-[#1a1a1a]">Pre-register now on Google Play</span>
           </motion.div>
 
           {/* Main Title Heading */}
@@ -137,6 +139,33 @@ export const Hero: React.FC = () => {
             </span>{' '}
             <span className="text-[#3c3c3d]">mental wellbeing.</span>
           </motion.h1>
+
+          {/* Pre-registration gift callout */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.05 }}
+            className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-black text-white shadow-lg max-w-md"
+          >
+            <Gift className="w-6 h-6 text-[#9fff00] shrink-0" />
+            <span className="text-sm font-semibold leading-snug">
+              Pre-register and get <span className="text-[#9fff00] font-extrabold">{PREREG_GIFT_AMOUNT}</span> in
+              virtual practice cash, free at launch.
+            </span>
+          </motion.div>
+
+          {/* Primary CTA — Google Play pre-register button (link added via config) */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.08 }}
+            className="flex flex-col items-center md:items-start gap-2"
+          >
+            <PlayStoreButton />
+            <a href="/prereg-terms" className="text-[11px] text-zinc-500 hover:text-black font-semibold underline underline-offset-2">
+              Pre-registration reward terms apply
+            </a>
+          </motion.div>
 
           {/* Interactive Countdown Timer */}
           <motion.div
@@ -174,6 +203,7 @@ export const Hero: React.FC = () => {
             className="max-w-md w-full"
             id="waitlist"
           >
+            <span className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2 text-center md:text-left">Or get notified by email</span>
             {!isSuccess ? (
               <form onSubmit={handleJoin} className="bg-white rounded-xl border border-black/10 p-1.5 pl-4 flex items-center shadow-md relative">
                 <input 
