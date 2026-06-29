@@ -6,7 +6,6 @@ const LINKS = [
   { label: 'Features', id: 'features' },
   { label: 'How it works', id: 'how' },
   { label: 'Rewards', id: 'rewards' },
-  { label: 'App', id: 'showcase' },
 ];
 
 const scrollTo = (id: string) => {
