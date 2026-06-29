@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Gift } from 'lucide-react';
 import { PlayStoreButton } from './PlayStoreButton';
@@ -8,30 +8,11 @@ const SUPABASE_URL = 'https://bftvimnhpoiuoyryyiff.supabase.co';
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak';
 
-const TARGET = new Date('2026-06-28T00:00:00+05:30');
-
 export const PreRegSection: React.FC = () => {
   const [email, setEmail] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [time, setTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  useEffect(() => {
-    const tick = () => {
-      const diff = TARGET.getTime() - Date.now();
-      if (diff <= 0) return setTime({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-      setTime({
-        days: Math.floor(diff / 86400000),
-        hours: Math.floor((diff % 86400000) / 3600000),
-        minutes: Math.floor((diff % 3600000) / 60000),
-        seconds: Math.floor((diff % 60000) / 1000),
-      });
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,13 +43,6 @@ export const PreRegSection: React.FC = () => {
     }
   };
 
-  const units = [
-    { v: time.days, l: 'Days' },
-    { v: time.hours, l: 'Hrs' },
-    { v: time.minutes, l: 'Mins' },
-    { v: time.seconds, l: 'Secs' },
-  ];
-
   return (
     <section id="rewards" className="relative bg-zinc-950 py-24 px-6 md:px-12 border-t border-white/5">
       <span id="prereg" className="block relative -top-24" />
@@ -96,18 +70,8 @@ export const PreRegSection: React.FC = () => {
               {PREREG_GIFT_AMOUNT} of practice cash so you can start trading from day one.
             </p>
 
-            {/* Countdown */}
-            <div className="mt-8 grid grid-cols-4 gap-3 sm:gap-4 max-w-md w-full">
-              {units.map((u) => (
-                <div key={u.l} className="bg-white/5 border border-white/10 rounded-2xl py-4">
-                  <div className="text-2xl md:text-3xl font-extrabold text-white">{u.v}</div>
-                  <div className="text-[10px] uppercase font-bold text-white/50 tracking-wider">{u.l}</div>
-                </div>
-              ))}
-            </div>
-
             {/* Primary CTA */}
-            <div className="mt-9 flex flex-col items-center gap-3">
+            <div className="mt-10 flex flex-col items-center gap-3">
               <PlayStoreButton />
               <a href="/prereg-terms" className="text-[11px] text-white/55 hover:text-white font-semibold underline underline-offset-2">
                 Pre-registration reward terms apply

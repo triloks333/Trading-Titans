@@ -26,7 +26,7 @@ export const PlayStoreButton: React.FC<{ size?: 'lg' | 'md' }> = ({ size = 'lg' 
       <GooglePlayGlyph className={size === 'lg' ? 'w-7 h-7' : 'w-6 h-6'} />
       <span className="flex flex-col items-start leading-tight">
         <span className="text-[10px] font-medium uppercase tracking-wider opacity-80">
-          {live ? 'Pre-register on' : 'Coming soon to'}
+          {live ? 'Pre-register on' : 'Pre-register now on'}
         </span>
         <span className={size === 'lg' ? 'text-lg font-bold' : 'text-base font-bold'}>
           Google Play
