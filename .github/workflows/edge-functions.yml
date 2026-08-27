@@ -49,3 +49,14 @@ jobs:
             deno check "$f" || true
             echo "::endgroup::"
           done
+
+      # NOT advisory. The steps above are continue-on-error because the existing
+      # functions are not yet lint/format clean, but the tests are a hard gate:
+      # there were *_test.ts files in this repo that nothing ever executed, which
+      # is worse than having no tests at all because it looks like coverage.
+      #
+      # Tests live in supabase/functions/_shared/ so they import dependency-free
+      # modules. A function's index.ts calls serve() and reads env vars at module
+      # scope, so importing one from a test would boot an HTTP server.
+      - name: Test
+        run: deno test --allow-net --allow-read supabase/functions/

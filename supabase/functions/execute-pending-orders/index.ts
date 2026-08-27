@@ -1,14 +1,36 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { US_MARKET, getUsdInrRate, isUsMarketOpen } from "../_shared/us_market.ts";
+import { isRestingLimit, resolveFillPrice } from "../_shared/fill_price.ts";
+import { pickLotSize } from "../_shared/lot_size.ts";
+// Session window lives in _shared so the four functions that gate on it cannot
+// drift apart again; the old inline copy closed at 15:15 instead of 15:30.
+import { isStockOpen } from "../_shared/market_hours.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
+/// How old a `quotes_cache` row may be and still be used to price a fill.
+///
+/// `refresh-quotes` rewrites open-market symbols every ~18s and its cron ticks
+/// every minute, so a healthy row is under ~80s old. 10 minutes leaves generous
+/// headroom for a few failed upstream passes while still refusing the multi-hour
+/// and multi-day rows that orphaned cache entries accumulate.
+///
+/// ponytail: one flat threshold for every market, rather than per-market tuning.
+/// The ceiling is that a market with a genuinely slower feed would be treated as
+/// stale; the upgrade path is a per-market map keyed the same way as `priceMap`.
+/// Safe today because the per-order `market_closed` check runs BEFORE this one,
+/// so a closed market's frozen quotes never reach it.
+const MAX_QUOTE_AGE_MS = 10 * 60 * 1000;
+
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } }); }
-function istNow(): Date { return new Date(Date.now() + 5.5 * 3600 * 1000); }
-function isStockOpen(): boolean { const i = istNow(); const d = i.getUTCDay(); if (d === 0 || d === 6) return false; const m = i.getUTCHours() * 60 + i.getUTCMinutes(); return m >= 555 && m < 915; }
-function isMarketOpen(market: string): boolean { return market === "crypto" ? true : isStockOpen(); }
+function isMarketOpen(market: string): boolean {
+  if (market === "crypto") return true;
+  if (market === US_MARKET) return isUsMarketOpen();
+  return isStockOpen();
+}
 
 function extractUnderlying(symbolRaw: string): string {
   let s = (symbolRaw || "").toUpperCase().trim();
@@ -70,26 +92,18 @@ function computeCharges(cfg: Record<string, number>, itype: string, side: string
 // lot, which made trunc(qty/lot)=0 and dropped the whole position.
 async function getLotSize(supabase: any, symbol: string, expiryDate?: string | null): Promise<number> {
   const underlying = extractUnderlying(symbol);
-  const { data } = await supabase.from("instruments").select("symbol, expiry_date, lot_size").in("instrument_type", ["OPTION", "FUTURE"]).like("symbol", `NSE:${underlying}%`);
-  if (!data || data.length === 0) return 1;
-  if (expiryDate) {
-    const ed = String(expiryDate);
-    const exact = data.find((e: any) => String(e.expiry_date) === ed);
-    if (exact) return Number(exact.lot_size) || 1;
-    const ym = ed.slice(0, 7);
-    const monthMatch = data.find((e: any) => String(e.expiry_date).startsWith(ym));
-    if (monthMatch) return Number(monthMatch.lot_size) || 1;
-  }
-  const clean = symbol.toUpperCase().replace("NSE:", "").replace("-EQ-", "-");
-  if (clean.includes("-")) {
-    const parts = clean.split("-");
-    if (parts.length >= 4) {
-      const expiryStr = `${parts[1]}-${parts[2].padStart(2, "0")}-${parts[3].padStart(2, "0")}`;
-      const match = data.find((e: any) => String(e.expiry_date).startsWith(expiryStr));
-      if (match) return Number(match.lot_size) || 1;
-    }
-  }
-  return Number(data[0].lot_size) || 1;
+  // The ORDER BY is load-bearing, not cosmetic: the pick below takes the first
+  // matching row, and without an ordering Postgres was free to return the
+  // colliding siblings (see _shared/lot_size.ts) in any order, so the same
+  // contract could resolve to a different lot size between runs.
+  const { data } = await supabase
+    .from("instruments")
+    .select("symbol, expiry_date, lot_size")
+    .in("instrument_type", ["OPTION", "FUTURE"])
+    .like("symbol", `NSE:${underlying}%`)
+    .order("expiry_date", { ascending: true })
+    .order("symbol", { ascending: true });
+  return pickLotSize(data ?? [], underlying, symbol, expiryDate);
 }
 
 serve(async (req) => {
@@ -110,9 +124,15 @@ serve(async (req) => {
     if (error) return json({ error: error.message }, 500);
     if (!pending || pending.length === 0) return json({ pending: 0, executed: 0, report: [] });
 
-    const { data: cacheRows } = await supabase.from("quotes_cache").select("symbol, market, price");
-    const priceMap = new Map<string, number>();
-    for (const r of (cacheRows ?? [])) priceMap.set(`${r.symbol}\u001f${r.market}`, Number(r.price));
+    const { data: cacheRows } = await supabase.from("quotes_cache").select("symbol, market, price, updated_at, source");
+    const priceMap = new Map<string, { price: number; updatedAt: number; source: string | null }>();
+    for (const r of (cacheRows ?? [])) {
+      priceMap.set(`${r.symbol}\u001f${r.market}`, {
+        price: Number(r.price),
+        updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : 0,
+        source: r.source ?? null,
+      });
+    }
 
     let executed = 0;
     const report: Record<string, unknown>[] = [];
@@ -123,26 +143,87 @@ serve(async (req) => {
       const side = o.side;
       const quantity = Number(o.quantity);
       const orderType = o.order_type || "market";
-      const limit = Number(o.price ?? 0);
+      // Prefer the dedicated column now that it exists; `price` is only the limit
+      // while a row is pending, so reading it is correct here but ambiguous.
+      // Same currency in both (a pending US row carries USD in each), so the
+      // limit comparison below is unaffected.
+      const limit = Number(o.limit_price ?? o.price ?? 0);
       const isExit = o.is_exit === true;
       const userId = o.user_id;
       const isDerivative = itype === "FUTURE" || itype === "OPTION";
 
       if (!(isMarketOpen(market) || force)) { report.push({ id: o.id, skipped: "market_closed" }); continue; }
 
-      const underlyingKey = market === "crypto" ? String(o.symbol).toUpperCase() : extractUnderlying(o.symbol);
-      const spot = priceMap.get(`${underlyingKey}\u001f${market}`);
-      if (spot == null) { report.push({ id: o.id, skipped: "no_cached_price" }); continue; }
+      const isUs = market === US_MARKET;
+      const underlyingKey = (market === "crypto" || isUs) ? String(o.symbol).toUpperCase() : extractUnderlying(o.symbol);
+      const quote = priceMap.get(`${underlyingKey}\u001f${market}`);
+      if (quote == null) { report.push({ id: o.id, skipped: "no_cached_price" }); continue; }
 
-      let execPrice: number;
-      if (itype === "FUTURE") execPrice = futurePrice(spot, daysToExpiry(o.expiry_date) ?? 15);
-      else if (itype === "OPTION") execPrice = optionPremium(o.option_type || "CE", spot, Number(o.strike_price ?? 0), daysToExpiry(o.expiry_date) ?? 7);
-      else execPrice = spot;
+      // Refuse to price a trade off a stale quote. `quotes_cache` keeps a row per
+      // symbol forever, but `refresh-quotes` only rewrites symbols that are still
+      // in its universe (holdings + pending orders + popular list) AND whose
+      // market is open. Orphaned rows therefore sit at their last known price
+      // indefinitely — production had rows over 1000 hours old. Without this
+      // check the engine would happily trigger a limit order against a price from
+      // weeks ago, in either direction.
+      //
+      // `force` deliberately bypasses it: force already means "the market is
+      // closed, use the last known price on purpose", so gating it here would
+      // break that existing flow rather than protect it.
+      const ageMs = Date.now() - quote.updatedAt;
+      if (!force && ageMs > MAX_QUOTE_AGE_MS) {
+        report.push({ id: o.id, skipped: "stale_price", ageSeconds: Math.round(ageMs / 1000), source: quote.source });
+        continue;
+      }
+      const spot = quote.price;
 
+      // Prices a spot through this order's instrument model. Applied to BOTH the
+      // live spot and the placement-time reference price, so the marketability
+      // test below compares like with like: `execution_reference_price` stores
+      // the underlying spot, while a derivative's limit is on the premium.
+      const priceFor = (s: number): number => {
+        if (itype === "FUTURE") return futurePrice(s, daysToExpiry(o.expiry_date) ?? 15);
+        if (itype === "OPTION") return optionPremium(o.option_type || "CE", s, Number(o.strike_price ?? 0), daysToExpiry(o.expiry_date) ?? 7);
+        return s;
+      };
+
+      let execPrice = priceFor(spot);
+      const refSpot = Number(o.execution_reference_price ?? 0);
+      const refExec = refSpot > 0 ? priceFor(refSpot) : null;
+
+      // The limit comparison happens in the order's own currency. For a US order
+      // both the cached spot and the stored limit are USD, so this must run
+      // BEFORE the conversion below.
       if (orderType === "limit") {
         if (side === "buy" && execPrice > limit) { report.push({ id: o.id, skipped: "limit_not_reached" }); continue; }
         if (side === "sell" && execPrice < limit) { report.push({ id: o.id, skipped: "limit_not_reached" }); continue; }
       }
+
+      // Triggered. Book the fill at the limit for a resting order, or at the
+      // polled price for one that was already marketable at placement. Stays in
+      // native currency so the US conversion below still runs exactly once.
+      const restingFill = isRestingLimit(side, orderType, limit, refExec);
+      execPrice = resolveFillPrice(side, orderType, limit, execPrice, refExec);
+
+      // US equities are quoted and displayed in USD, but the wallet is a single
+      // INR balance. Convert exactly once, here, so every downstream number
+      // (total, margin, charges, realized P&L, wallet debit/credit) stays INR
+      // and the money logic below is untouched. The rate is stored on the order
+      // so the trade can be reconciled later.
+      const nativePrice = isUs ? execPrice : null;
+      const fxRate = isUs ? await getUsdInrRate() : null;
+      if (isUs) {
+        if (!(fxRate! > 0)) { report.push({ id: o.id, skipped: "no_fx_rate" }); continue; }
+        execPrice = execPrice * fxRate!;
+      }
+      const nativeCols = isUs
+        ? { native_price: nativePrice, native_currency: "USD", fx_rate: fxRate }
+        : {};
+      // Holdings keep a parallel USD average purely so the app can show a US
+      // position's cost basis in dollars. Wallet math never reads it. Returns an
+      // empty object for INR markets, so those writes are unchanged.
+      const nativeAvg = (px: number | null) =>
+        isUs ? { native_avg_price: px, native_currency: "USD" } : {};
 
       const total = execPrice * quantity;
       const marginPct = isDerivative ? 0.15 : 1.0;
@@ -221,7 +302,10 @@ serve(async (req) => {
           if (!isExit && walletBalance + finalCredit - finalDebit < 0) { report.push({ id: o.id, skipped: "insufficient_net" }); continue; }
 
           const positionData = { symbol: o.symbol, instrument_type: itype, option_type: o.option_type ?? "", strike_price: o.strike_price ?? 0, expiry_date: o.expiry_date ?? "", lot_size: lotSize, net_qty: newNetQty, avg_entry_price: newAvg };
-          const orderData = { symbol: o.symbol, name, market, side, quantity, price: execPrice, total, realized_pnl: realizedPnl, status: "executed", order_type: orderType, instrument_type: itype, strike_price: o.strike_price ?? 0, option_type: o.option_type ?? "", expiry_date: o.expiry_date ?? "", charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges };
+          // `limit_price` is carried across explicitly: this path DELETES the
+          // pending row and inserts a fresh executed one, so anything not copied
+          // here is lost. The equity path below updates in place and keeps it.
+          const orderData = { symbol: o.symbol, name, market, side, quantity, price: execPrice, limit_price: o.limit_price ?? null, total, realized_pnl: realizedPnl, status: "executed", order_type: orderType, instrument_type: itype, strike_price: o.strike_price ?? 0, option_type: o.option_type ?? "", expiry_date: o.expiry_date ?? "", charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges };
 
           if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "FO", newNetQty, finalDebit, finalCredit, marginBlocked }); executed++; continue; }
           if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
@@ -240,9 +324,10 @@ serve(async (req) => {
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_BUY_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
             await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
-            await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date });
+            await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) });
           } else {
             const oq = Number(ex.quantity), oa = Number(ex.avg_price);
+            const oaNative = Number(ex.native_avg_price ?? 0);
             if (oq < 0) {
               const coverQty = quantity > -oq ? -oq : quantity;
               const remainingBuyQty = isExit ? 0 : quantity - coverQty;
@@ -258,7 +343,7 @@ serve(async (req) => {
                 const remTotal = remainingBuyQty * execPrice;
                 const up = await supabase.from("profiles").select("wallet_balance").eq("id", userId).maybeSingle();
                 const upBal = Number(up.data?.wallet_balance ?? 0);
-                if (upBal >= remTotal + totalCharges) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: remainingBuyQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
+                if (upBal >= remTotal + totalCharges) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: remainingBuyQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) }); }
               }
             } else {
               if (!isExit && walletBalance < total + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
@@ -266,7 +351,8 @@ serve(async (req) => {
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
               await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
               const nq = oq + quantity; const na = nq > 0 ? ((oa * oq) + (execPrice * quantity)) / nq : execPrice;
-              await supabase.from("holdings").update({ quantity: nq, avg_price: na, name }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
+              const naNative = isUs ? (nq > 0 ? ((oaNative * oq) + (nativePrice! * quantity)) / nq : nativePrice) : null;
+              await supabase.from("holdings").update({ quantity: nq, avg_price: na, name, ...nativeAvg(naNative) }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
             }
           }
         } else {
@@ -275,9 +361,10 @@ serve(async (req) => {
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_SHORT_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
             await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);
-            await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date });
+            await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -quantity, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) });
           } else {
             const oq = Number(ex.quantity), oa = Number(ex.avg_price);
+            const oaNative = Number(ex.native_avg_price ?? 0);
             if (oq > 0) {
               const sellQty = quantity > oq ? oq : quantity;
               const remainingSellQty = isExit ? 0 : quantity - sellQty;
@@ -292,7 +379,7 @@ serve(async (req) => {
                 const remTotal = remainingSellQty * execPrice;
                 const up = await supabase.from("profiles").select("wallet_balance").eq("id", userId).maybeSingle();
                 const upBal = Number(up.data?.wallet_balance ?? 0);
-                if (upBal >= remTotal) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -remainingSellQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date }); }
+                if (upBal >= remTotal) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -remainingSellQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) }); }
               }
             } else {
               if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
@@ -300,14 +387,19 @@ serve(async (req) => {
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
               await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);
               const nq = oq - quantity; const oqAbs = Math.abs(oq); const na = (oqAbs + quantity) > 0 ? ((oa * oqAbs) + (execPrice * quantity)) / (oqAbs + quantity) : execPrice;
-              await supabase.from("holdings").update({ quantity: nq, avg_price: na, name }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
+              const naNative = isUs ? ((oqAbs + quantity) > 0 ? ((oaNative * oqAbs) + (nativePrice! * quantity)) / (oqAbs + quantity) : nativePrice) : null;
+              await supabase.from("holdings").update({ quantity: nq, avg_price: na, name, ...nativeAvg(naNative) }).eq("user_id", userId).eq("symbol", o.symbol).eq("market", market);
             }
           }
         }
 
         if (commit) {
-          await supabase.from("orders").update({ status: "executed", price: execPrice, total, realized_pnl: realizedPnl, executed_at: new Date().toISOString(), charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges }).eq("id", o.id);
-          executed++; report.push({ id: o.id, executed: true, kind: "EQUITY" });
+          await supabase.from("orders").update({ status: "executed", price: execPrice, total, realized_pnl: realizedPnl, executed_at: new Date().toISOString(), charge_config_id: chargeConfigId, brokerage: charges.brokerage, stamp_duty: charges.stamp_duty, tax_charges: charges.tax_charges, total_charges: totalCharges, ...nativeCols }).eq("id", o.id);
+          // `priceSource` and `restingFill` make the two things that silently went
+          // wrong before visible without a redeploy: which feed priced the fill
+          // (Yahoo NSE quotes are delayed; the Fyers websocket is not), and
+          // whether it filled at its limit or took price improvement.
+          executed++; report.push({ id: o.id, executed: true, kind: "EQUITY", priceSource: quote.source, fillPrice: execPrice, restingFill });
         }
       } catch (e) {
         if (commit) { await supabase.from("orders").update({ status: "failed" }).eq("id", o.id).eq("status", "executing"); }

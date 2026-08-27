@@ -1,0 +1,47 @@
+-- Remove the two index families that break NIFTY's lot-size lookup.
+--
+-- REPORTED AS: "nifty futures lot size is 65 not 25".
+--
+-- The stored lot sizes were never wrong. `instruments` has NIFTY at 65 on all
+-- 9,666 contracts, matching the NSE revision effective 30 Dec 2025 (75 -> 65).
+-- The bug is the LOOKUP: both resolvers query
+--   LIKE 'NSE:<underlying>%'
+-- which is a PREFIX match, then take the first matching row from an unordered
+-- result. `NSE:NIFTY%` therefore also returns:
+--
+--   NIFTYNXT50  lot 25    4,380 contracts, monthly expiries only
+--   NIFTYFPI    lot 1100  1,348 contracts
+--
+-- NIFTYNXT50 outnumbers NIFTY on monthly expiry dates (757 rows vs 489 on
+-- 2026-08-25), so NIFTY MONTHLY contracts resolved to 25 while weeklies resolved
+-- correctly to 65. Confirmed in production: of 7 live `^NSEI` positions, the 3 on
+-- the 2026-08-25 monthly carry lot_size 25 and the 4 on weeklies carry 65.
+--
+-- Exactly 3 of 219 F&O underlyings can be hit this way -- NIFTY, LT (LTF, LTIM)
+-- and PNB (PNBHOUSING). Only the SHORTER name breaks; `NSE:LTF%` matches LTF
+-- alone, which is why LTF trades were always correct.
+--
+-- WHY DELETE RATHER THAN FIX THE QUERY
+-- The engine-side resolver is fixed properly in _shared/lot_size.ts (exact
+-- underlying boundary + deterministic ordering), which covers LT and PNB too.
+-- But the Flutter client holds its own copy of the same prefix query at
+-- app/lib/services/fo_instruments_service.dart:139 and that cannot change without
+-- an app release. Removing these rows fixes the shipped client with no update.
+--
+-- WHY THIS IS SAFE
+--   * Zero orders and zero fo_positions have ever referenced either family.
+--   * Neither is reachable in the app: the UI maps only NIFTY, BANKNIFTY,
+--     FINNIFTY, MIDCPNIFTY and SENSEX as index underlyings.
+--   * `instruments` is derived data, regenerated from the Fyers NSE_FO.csv feed by
+--     sync-instruments, so this is reversible by removing the skip added there.
+--   * sync_lots_from_staging() only UPDATEs `instruments`, never INSERTs, so the
+--     lot-size cron cannot resurrect these rows. The upsert in sync-instruments
+--     (cron fyers-instrument-sync, 03:20 UTC) is the only writer that would, and
+--     it now skips both families. That change MUST be deployed before this runs,
+--     or the rows return overnight.
+--
+-- ROLLBACK: remove the skip in sync-instruments/index.ts and redeploy; the next
+-- fyers-instrument-sync run restores both families in full.
+delete from public.instruments
+where instrument_type in ('FUTURE', 'OPTION')
+  and upper(replace(symbol, 'NSE:', '')) ~ '^(NIFTYNXT50|NIFTYFPI)[0-9]';

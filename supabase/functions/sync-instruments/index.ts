@@ -75,6 +75,30 @@ serve(async (req) => {
       // 0: token, 1: name, 2: inst_type, 3: lot, 8: expiry_epoch, 9: symbol, 15: strike, 16: opt_type
       const symbol = r[9].trim();
       const name = r[1].trim();
+
+      // Index families the app does not offer, and which actively break the
+      // lot-size lookup for the index it DOES offer.
+      //
+      // Lot size is resolved with `LIKE 'NSE:<underlying>%'`, a prefix match, so
+      // `NSE:NIFTY%` returns NIFTYNXT50 (lot 25) and NIFTYFPI (lot 1100)
+      // alongside NIFTY (lot 65). NIFTYNXT50 lists only monthly expiries and
+      // outnumbers NIFTY on those dates, so NIFTY monthlies were resolving to 25
+      // and users saw the wrong lot size on the order screen.
+      //
+      // The engine-side resolver now filters on an exact underlying boundary
+      // (see _shared/lot_size.ts), but the Flutter client carries its own copy of
+      // the prefix query at fo_instruments_service.dart and cannot be fixed
+      // without an app release. Keeping these two families out of `instruments`
+      // removes the ambiguity at the source, so the shipped client resolves NIFTY
+      // correctly with no update. Neither index has ever been traded (zero orders,
+      // zero positions) and neither is reachable in the UI, which only maps
+      // NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and SENSEX.
+      //
+      // ponytail: an exclusion list, not a general rule. The ceiling is that a
+      // future NSE index prefixing an offered one has to be added here by hand;
+      // the query in docs that enumerates prefix collisions is the early warning.
+      // Remove these lines once the client resolver is fixed and shipped.
+      if (/^(NIFTYNXT50|NIFTYFPI)\d/.test(symbol.toUpperCase())) continue;
       const optType = r.length > 16 ? r[16].trim() : "XX";
       
       let instType = "FUTURE";
