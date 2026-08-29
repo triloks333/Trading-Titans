@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../models/quote.dart';
 import '../../models/portfolio.dart';
 import '../../services/market_service.dart';
@@ -432,7 +433,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Text(q.name, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           const SizedBox(height: AppSpacing.sm),
-          Text('₹${q.price.toStringAsFixed(2)}',
+          Text(Money.wallet(q.price, decimals: 2),
               style:       TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.sm),
           Row(children: [
@@ -443,12 +444,12 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.tag),
               ),
               child: Text(
-                '${_isUp ? '+' : ''}${q.change.toStringAsFixed(2)} (${q.changePct.toStringAsFixed(2)}%)',
+                '${_isUp ? '+' : ''}${Money.wallet(q.change, decimals: 2)} (${q.changePct.toStringAsFixed(2)}%)',
                 style: TextStyle(color: _changeColor),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text('UNDERLYING: ${widget.underlyingSymbol} (₹${widget.underlyingSpotPrice.toStringAsFixed(2)})', style:       TextStyle(color: AppColors.ink4, fontSize: 11)),
+            Text('UNDERLYING: ${widget.underlyingSymbol} (${Money.wallet(widget.underlyingSpotPrice, decimals: 2)})', style:       TextStyle(color: AppColors.ink4, fontSize: 11)),
           ]),
         ],
       ),
@@ -618,21 +619,36 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _statRow('Strike Price', '₹${strike.toStringAsFixed(0)}'),
+          _statRow('Strike Price', Money.wallet(strike, decimals: 0)),
           _divider(),
           _statRow('Option Type', optionType == 'CE' ? 'Call Option (CE)' : 'Put Option (PE)'),
           _divider(),
           _statRow('Expiry Date', expiry),
           _divider(),
+          // The exchange's own last close for this exact contract, straight from
+          // the daily NSE bhavcopy. The premium shown at the top of this screen
+          // is a Black-Scholes estimate off the live spot -- deliberately, so it
+          // matches what the fill engine will charge -- and users had no way to
+          // see how far that sat from the real board. Absent for a strike NSE did
+          // not publish (an untraded far-OTM series), so the row is conditional
+          // rather than showing a misleading zero.
+          if ((widget.optionData['nse_close'] as num?) != null) ...[
+            _statRow(
+              'NSE Last Close',
+              Money.wallet((widget.optionData['nse_close'] as num).toDouble(), decimals: 2),
+              valueColor: AppColors.ink,
+            ),
+            _divider(),
+          ],
           _statRow('Open Interest', openInterest.toString()),
           _divider(),
           _statRow('Volume', volume.toString()),
           _divider(),
           // Intrinsic & Time Value breakdown
-          _statRow('Intrinsic Value', '₹${intrinsic.toStringAsFixed(2)}',
+          _statRow('Intrinsic Value', Money.wallet(intrinsic, decimals: 2),
               valueColor: intrinsic > 0 ? AppColors.bull : AppColors.ink4),
           _divider(),
-          _statRow('Time Value', '₹${timeValue.toStringAsFixed(2)}',
+          _statRow('Time Value', Money.wallet(timeValue, decimals: 2),
               valueColor: AppColors.ink3),
         ],
       ),
@@ -813,7 +829,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 color: isShort ? AppColors.bear : AppColors.bull,
               )),
           const SizedBox(height: AppSpacing.xs),
-          Text('Avg price: ₹${_holding!.avgPrice.toStringAsFixed(2)}',
+          Text('Avg price: ${Money.wallet(_holding!.avgPrice, decimals: 2)}',
               style:       TextStyle(color: AppColors.ink4)),
           // P&L display
           if (_quote != null) ...[
@@ -827,7 +843,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               final pnlPct = investedVal > 0 ? (positionPnl / investedVal) * 100 : 0.0;
               final pnlUp = positionPnl >= 0;
               return Text(
-                'P&L: ${pnlUp ? '+' : ''}₹${positionPnl.toStringAsFixed(2)} (${pnlPct.toStringAsFixed(2)}%)',
+                'P&L: ${pnlUp ? '+' : ''}${Money.wallet(positionPnl, decimals: 2)} (${pnlPct.toStringAsFixed(2)}%)',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,

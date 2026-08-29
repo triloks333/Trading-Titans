@@ -212,11 +212,29 @@ class FoInstrumentsService {
     return instruments.first.lotSize;
   }
 
-  /// Get list of available expiry dates for a given underlying
+  /// Get list of available expiry dates for a given underlying.
+  ///
+  /// Expired contracts are filtered out HERE rather than in
+  /// [_getInstrumentsForUnderlying], and that placement is deliberate.
+  /// `instruments` never drops a row, so the underlying's contract list reaches
+  /// back months; this method feeds the expiry picker, so without a filter the
+  /// app offered contracts that settled long ago. [getLotSize] shares the same
+  /// cached list and must keep seeing expired rows, because an open position on
+  /// an expired contract still has to resolve its real lot size at settlement —
+  /// filtering upstream would silently fall back to a lot size of 1 and settle
+  /// those positions at a fraction of their value.
   Future<List<DateTime>> getAvailableExpiries(String underlying) async {
     final cleanUnderlying = extractUnderlying(underlying);
     final instruments = await _getInstrumentsForUnderlying(cleanUnderlying);
-    final expiries = instruments.map((e) => e.expiryDate).toSet().toList();
+    // Date-only comparison: a contract is tradeable through its whole expiry
+    // day, so `today` itself must pass.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final expiries = instruments
+        .map((e) => e.expiryDate)
+        .where((d) => !DateTime(d.year, d.month, d.day).isBefore(today))
+        .toSet()
+        .toList();
     expiries.sort();
     return expiries;
   }

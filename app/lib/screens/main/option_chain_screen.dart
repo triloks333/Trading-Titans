@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../models/quote.dart';
 import '../../services/market_service.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -294,7 +295,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         children: [
           _summaryChip('PCR', pcr.toStringAsFixed(2), AppColors.imperialGold),
           Container(width: 1, height: 28, color: AppColors.birch),
-          _summaryChip('Max Pain', '₹${maxPain.toStringAsFixed(0)}', AppColors.bear),
+          _summaryChip('Max Pain', Money.wallet(maxPain, decimals: 0), AppColors.bear),
           Container(width: 1, height: 28, color: AppColors.birch),
           _summaryChip('ATM IV', atmIv, AppColors.bull),
         ],
@@ -367,7 +368,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '${_spotPrice.toStringAsFixed(2)}  |  ${isUp ? '+' : ''}${_change.toStringAsFixed(2)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
+                  '${Money.instrument(_spotPrice, market: widget.market)}  |  ${isUp ? '+' : ''}${Money.instrument(_change, market: widget.market)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
                   style: GoogleFonts.inter(
                     color: Colors.white,
                     fontSize: 11,
@@ -376,6 +377,49 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Says out loud that the premiums in the table are modelled, not quoted.
+  ///
+  /// The app has no live options feed, so every premium shown here is a
+  /// Black-Scholes estimate off the live spot. That is a deliberate design
+  /// choice — it keeps the chain price identical to the price the fill engine
+  /// uses, so a limit order cannot fill at a number the user never saw — but it
+  /// does mean the figure can sit some way from the exchange's own. Users were
+  /// reporting that gap as a bug, so the screen now states it and points at the
+  /// real closing price, which the strike detail carries per contract.
+  ///
+  /// Open interest, by contrast, IS real market data from the daily NSE
+  /// bhavcopy, so the notice is careful not to tar it with the same brush.
+  Widget _buildEstimateNotice() {
+    if (_derivativeType != 'options' || _currentStrikes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      color: AppColors.goldPale.withValues(alpha: 0.35),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 13, color: AppColors.goldDeep),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Premiums are estimated from the live spot price and may differ from '
+              'the exchange. Open interest is real NSE data. Tap a strike for its '
+              'last traded close.',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+                color: AppColors.ink3,
+              ),
             ),
           ),
         ],
@@ -491,7 +535,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      '₹${callPrice.toStringAsFixed(2)}',
+                      Money.wallet(callPrice, decimals: 2),
                       style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
@@ -565,7 +609,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      '₹${putPrice.toStringAsFixed(2)}',
+                      Money.wallet(putPrice, decimals: 2),
                       style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
@@ -673,7 +717,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
               ],
             ),
             Text(
-              'Spot: ₹${_spotPrice.toStringAsFixed(2)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
+              'Spot: ${Money.wallet(_spotPrice, decimals: 2)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
               style: TextStyle(
                 fontSize: 12,
                 color: isUp ? AppColors.bull : AppColors.bear,
@@ -880,6 +924,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                               ),
                             ),
                                   Divider(height: 1, color: AppColors.birch),
+                            _buildEstimateNotice(),
                             // Table Header
                             Container(
                               color: AppColors.cream,
@@ -1127,7 +1172,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       child: _futureMeta(
                         'Day Range',
                         future['low'] != null && future['high'] != null
-                            ? '₹${(future['low'] as num).toStringAsFixed(0)} - ₹${(future['high'] as num).toStringAsFixed(0)}'
+                            ? '${Money.wallet((future['low'] as num), decimals: 0)} - ${Money.wallet((future['high'] as num), decimals: 0)}'
                             : '--',
                       ),
                     ),

@@ -5,10 +5,78 @@ and user-facing (no internal jargon), per `.kiro/steering/release-process.md`.
 
 ---
 
-## 1.1.8 (versionCode 40)
+## 1.1.8 (versionCode 41)
 
-Consent and disclosure on the auth screens. Entirely user-facing, so unlike 1.1.7
-this one genuinely needs the binary.
+A large batch: consent and disclosure on the auth screens, plus fixes for four
+separate user complaints — expired F&O still on the board, option premiums far from
+the real market, limit orders that would not fill, and P&L that disagreed with
+itself between screens.
+
+Most of it is server-side and is already live for users on older builds. The
+version NAME stays 1.1.8 as requested; only the build number moved, 40 to 41,
+because 40 was built but never rolled out and Play refuses a code it has seen.
+
+| change | needs binary |
+|---|---|
+| T&C + Privacy consent and the virtual-money disclaimer on both auth screens | yes |
+| 117,247 expired F&O contracts hidden, with a daily sweep after each expiry | no |
+| Expiry picker stops offering dates that have already passed | yes |
+| NSE bhavcopy sync repaired — real premiums and open interest, 8 days stale to current | no |
+| Option chain says premiums are estimated, and shows the exchange's last close | yes |
+| Futures contract symbols no longer open a chain around a ₹0.00 spot | no |
+| Limit orders fill when the market crosses them, even if the price cache lagged | no |
+| Crypto perpetual orders can be priced at all (one had been stuck 6 days) | no |
+| Quote refresh no longer fails silently or rate-limits itself | no |
+| Total P&L shows its minus sign; Dashboard and Portfolio now agree | yes |
+| Order details show gross → charges → net instead of one ambiguous figure | yes |
+
+### The four complaints, and what was actually wrong
+
+**Expired F&O still showing.** `instruments` never deletes a row, and all 117,247
+already-expired futures and options were still flagged tradeable, going back to
+2026-06-09. They are now flagged off, with a daily sweep at midnight IST — after
+settlement, and never before a contract's own expiry day is over. Flagged rather
+than deleted on purpose: lot-size lookup ignores the tradeable flag, so deleting
+the rows would have settled open positions on expired contracts at a lot size of 1.
+
+**Option premiums far from the market.** The daily NSE bhavcopy download had been
+returning 404 for five straight trading days. The cause was not the date logic:
+NSE's CDN serves a 404, not a 403, to requests without a browsing context, and the
+same URLs returned a 900KB file from a normal connection. The sync now primes NSE
+session cookies first and walks back through recent dates instead of giving up
+after today. A second failure was hiding behind it — the import then died on
+"numeric field overflow", because turnover was capped at ₹1e13. Result: DIXON
+15000 CE went from a stale ₹427.95 to Friday's real ₹273.25.
+
+Premiums shown in the chain are still Black-Scholes estimates off the live spot,
+and deliberately so: that is the same number the fill engine charges, so an order
+cannot fill at a price the user never saw. What was missing was saying so. The
+chain now states it, and each strike's detail shows the exchange's own last close
+next to the estimate.
+
+**Limit orders not filling.** Reported on an AEROENTER sell limit at ₹145.80 that
+sat through a print above it. The engine refuses to price a fill off a quote older
+than ten minutes, which is right, but it then gave up — and the refresher is
+best-effort, so one failed upstream pass left that symbol behind. The engine now
+fetches a live quote before writing an order off. The refresher itself was doing a
+74-wide simultaneous fan-out and swallowing every per-symbol error, so a pass that
+refreshed 32 of 54 symbols looked identical to a healthy one; it now runs a bounded
+pool, retries, and reports which symbols failed. That report immediately surfaced
+two real faults on its first run: Supabase was rate-limiting our own quote function
+(three internal passes per minute, now one), and a crypto perpetual symbol had been
+404ing forever.
+
+**P&L disagreeing between screens.** Four distinct defects, none of them arithmetic:
+the Portfolio card formatted losses with `.abs()` and only prepended a sign when
+positive, so a loss rendered as "₹3654 (-2.27%)" in red; the Dashboard summed every
+holding while Portfolio summed only open ones, so closing a trade made the two
+screens disagree; order details showed gross realized P&L while the Portfolio showed
+the same trade net of charges; and "Charges reduced your return by X%" divided one
+order's charges by gross P&L, so a ₹1 win against ₹20 brokerage announced
+"2000.0%". Net of charges is now the canonical figure everywhere, and order details
+show the full arithmetic instead of asking the user to trust a total.
+
+### Consent, in detail
 
 Two additions, both on the sign-in AND sign-up screens:
 
@@ -35,17 +103,20 @@ retro-consented, and the column tells you exactly who has and has not accepted.
 ### Play Store "What's new" (paste this)
 
 ```
-• Terms & Conditions and Privacy Policy must now be accepted when creating an account
-• Both documents open right from the sign-in screen — no need to leave the app
-• A clear notice on sign-in and sign-up: every price, balance, profit and reward here is simulated
-• We're not a registered broker, and market data may be delayed — now stated up front
+• Expired F&O contracts no longer appear anywhere in the app
+• Option premiums and open interest now use the latest NSE data
+• Limit orders no longer sit unfilled once the market passes your price
+• Profit & loss now matches across Portfolio, Dashboard and order details, with a breakdown showing charges
+• Terms & Conditions and Privacy Policy acceptance added at sign-up, plus a clear notice that all money here is simulated
 ```
 
-(341 characters, limit 500)
+(437 characters, limit 500)
 
-Four bullets. The disclaimer and the checkbox are stated separately on purpose:
-they are two different things a user will see, and collapsing them into one bullet
-reads as though ticking a box is the whole change.
+Five bullets, ordered by how many people complained. The consent work is last
+despite being the only thing that strictly needed this build: it is the change
+users asked for least. The P&L bullet names all three screens on purpose — the
+complaint was specifically that they disagreed with each other, so naming them is
+what tells a user their issue is the one that got fixed.
 
 ---
 

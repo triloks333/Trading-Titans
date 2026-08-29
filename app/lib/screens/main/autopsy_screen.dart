@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../services/supabase_service.dart';
 import '../../models/order.dart';
 import '../../widgets/error_state.dart';
@@ -234,8 +235,8 @@ class AutopsyScreen extends StatelessWidget {
                                 ),
                                 Text(
                                   isProfit 
-                                    ? '+₹${pnlAmount.toStringAsFixed(2)}' 
-                                    : '-₹${pnlAmount.abs().toStringAsFixed(2)}', 
+                                    ? '+${Money.wallet(pnlAmount, decimals: 2)}' 
+                                    : '-${Money.wallet(pnlAmount.abs(), decimals: 2)}', 
                                   style: GoogleFonts.inter(
                                     color: isProfit ? AppColors.bull : AppColors.bear, 
                                     fontWeight: FontWeight.w700,
@@ -273,7 +274,7 @@ class AutopsyScreen extends StatelessWidget {
                                     ],
                                   ),
                                   Text(
-                                    '-₹${totalCharges.toStringAsFixed(2)}',
+                                    '-${Money.wallet(totalCharges, decimals: 2)}',
                                     style: GoogleFonts.inter(
                                       color: AppColors.bear,
                                       fontWeight: FontWeight.w600,
@@ -294,8 +295,8 @@ class AutopsyScreen extends StatelessWidget {
                                   ),
                                   Text(
                                     isNetProfit 
-                                      ? '+₹${netPnl.toStringAsFixed(2)}' 
-                                      : '-₹${netPnl.abs().toStringAsFixed(2)}', 
+                                      ? '+${Money.wallet(netPnl, decimals: 2)}' 
+                                      : '-${Money.wallet(netPnl.abs(), decimals: 2)}', 
                                     style: GoogleFonts.inter(
                                       color: isNetProfit ? AppColors.bull : AppColors.bear, 
                                       fontWeight: FontWeight.w800,
@@ -327,10 +328,17 @@ class AutopsyScreen extends StatelessWidget {
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
+                                      // Was "Charges reduced your return by X%",
+                                      // with X = totalCharges / gross P&L. On a
+                                      // thin winner that printed percentages in
+                                      // the thousands, and it implied round-trip
+                                      // coverage when `totalCharges` here comes
+                                      // from a single matched order. State the
+                                      // amounts instead of a ratio.
                                       child: Text(
-                                        pnlAmount > 0
-                                            ? 'Charges reduced your return by ${((totalCharges / pnlAmount) * 100).toStringAsFixed(1)}% (Deducted from virtual cash).'
-                                            : 'Charges increased this loss by ₹${totalCharges.toStringAsFixed(2)} (Deducted from virtual cash).',
+                                        'Gross ${Money.signedWallet(pnlAmount, decimals: 2)}, '
+                                        'less ${Money.wallet(totalCharges, decimals: 2)} charges on this order, '
+                                        'nets ${Money.signedWallet(pnlAmount - totalCharges, decimals: 2)} (virtual cash).',
                                         style: GoogleFonts.inter(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,

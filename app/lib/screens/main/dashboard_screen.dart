@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../core/app_constants.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
@@ -181,13 +182,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   String _formatValue(double value) {
-    if (value.abs() < 1) return '₹${value.toStringAsFixed(2)}';
-    return '₹${value.toStringAsFixed(0)}';
+    if (value.abs() < 1) return Money.wallet(value, decimals: 2);
+    return Money.wallet(value, decimals: 0);
   }
 
-  double get investedValue => _holdings.fold(0.0, (sum, holding) => sum + holding.invested);
-  double get currentValue => _holdings.fold(0.0, (sum, holding) => sum + holding.current);
-  double get unrealizedPnl => _holdings.fold(0.0, (sum, holding) => sum + holding.pnl);
+  /// Signed amount, for gains and losses. [_formatValue] puts the currency
+  /// symbol before the minus ("₹-3654"); this reads as "-₹3654" and matches the
+  /// portfolio screen, so the same figure looks the same on both.
+  String _formatSigned(double value) =>
+      '${value >= 0 ? '+' : '-'}${_formatValue(value.abs())}';
+
+  /// Open positions only.
+  ///
+  /// These folds ran over every holding, including fully closed ones. A closed
+  /// row carries `quantity == 0` with `pnl` set to today's REALIZED P&L (see
+  /// SupabaseService.getHoldings), so closing a trade added a realized figure
+  /// into a total the dashboard labels "unrealized" — and into `currentValue`,
+  /// which feeds `totalValue = wallet + positions`. The portfolio screen has
+  /// always filtered on `quantity != 0`, so the two screens reported different
+  /// numbers for the same portfolio. That mismatch is the bug users hit; the
+  /// portfolio screen's definition is the correct one.
+  Iterable<Holding> get _openHoldings => _holdings.where((h) => h.quantity != 0);
+
+  double get investedValue => _openHoldings.fold(0.0, (sum, holding) => sum + holding.invested);
+  double get currentValue => _openHoldings.fold(0.0, (sum, holding) => sum + holding.current);
+  double get unrealizedPnl => _openHoldings.fold(0.0, (sum, holding) => sum + holding.pnl);
   double get unrealizedPnlPct => investedValue > 0 ? (unrealizedPnl / investedValue) * 100 : 0.0;
   double get totalValue => (context.read<AuthService>().user?.walletBalance ?? 0.0) + currentValue;
   double get totalPnL => unrealizedPnl;
@@ -356,7 +375,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     Icon(isPositive ? Icons.trending_up : Icons.trending_down, size: 14, color: isPositive ? AppColors.bull : AppColors.bear),
                                     const SizedBox(width: 4),
                                     Text(
-                                      '${_formatValue(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
+                                      '${_formatSigned(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
                                       style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
                                     ),
                                   ],

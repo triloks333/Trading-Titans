@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
+import '../../core/market_hours.dart';
 import '../../models/order.dart';
 import '../../models/quote.dart' as app_models;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -26,6 +29,75 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final SupabaseService _supabase = SupabaseService();
   late Future<List<Order>> _ordersFuture;
   RealtimeChannel? _ordersSubscription;
+
+  /// A single day rarely runs long, but an active F&O session can, and silently
+  /// truncating a day the user explicitly asked for would misrepresent history.
+  static const int _dayLimit = 200;
+
+  /// The IST calendar day on screen. Defaults to today so the page opens on the
+  /// current session rather than an ever-growing all-time list.
+  DateTime _selectedIstDate = MarketHours.istDate();
+
+  bool get _isToday => _selectedIstDate == MarketHours.istDate();
+
+  /// Earliest selectable day: the account's creation date, since no order can
+  /// predate it. Falls back to a fixed floor before the app existed (the first
+  /// migration is May 2026) when the timestamp cannot be read.
+  DateTime get _firstSelectableDate {
+    final createdAt = _supabase.client.auth.currentUser?.createdAt;
+    final parsed = DateTime.tryParse(createdAt ?? '');
+    return MarketHours.istDate(parsed ?? DateTime.utc(2026, 1, 1));
+  }
+
+  String get _dateLabel {
+    final today = MarketHours.istDate();
+    if (_selectedIstDate == today) return 'Today';
+    if (_selectedIstDate == DateTime.utc(today.year, today.month, today.day - 1)) {
+      return 'Yesterday';
+    }
+    return DateFormat('dd MMM yyyy').format(_selectedIstDate);
+  }
+
+  /// The one place the list is (re)loaded, so every path — first build,
+  /// pull-to-refresh, retry, cancel, modify, and the realtime subscription —
+  /// stays on the selected day instead of silently falling back to all-time.
+  /// Call inside `setState`.
+  void _reload() {
+    _ltpSignature = ''; // force fresh LTPs for the new set
+    _ordersFuture =
+        _supabase.getOrders(onIstDate: _selectedIstDate, limit: _dayLimit);
+  }
+
+  void _goToDate(DateTime istDate) {
+    setState(() {
+      _selectedIstDate = istDate;
+      _reload();
+    });
+  }
+
+  /// Steps [days] from the selected day, clamped to the selectable range.
+  /// `DateTime.utc` normalises month/year rollover.
+  void _shiftDay(int days) {
+    final target = DateTime.utc(
+        _selectedIstDate.year, _selectedIstDate.month, _selectedIstDate.day + days);
+    if (target.isAfter(MarketHours.istDate())) return;
+    if (target.isBefore(_firstSelectableDate)) return;
+    _goToDate(target);
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedIstDate,
+      firstDate: _firstSelectableDate,
+      lastDate: MarketHours.istDate(),
+      helpText: 'Select order date',
+    );
+    if (picked == null || !mounted) return;
+    // showDatePicker returns a local DateTime; re-key it as a UTC date so it
+    // compares equal to MarketHours.istDate().
+    _goToDate(DateTime.utc(picked.year, picked.month, picked.day));
+  }
 
   // Batched LTP cache for the visible orders. Instead of each row firing its
   // own quote request (an N+1), we fetch the unique symbols once into this map
@@ -60,7 +132,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void initState() {
     super.initState();
-    _ordersFuture = _supabase.getOrders();
+    _reload();
     _subscribeToOrders();
   }
 
@@ -80,12 +152,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             value: user.id,
           ),
           callback: (payload) {
-            if (mounted) {
-              setState(() {
-                _ltpSignature = ''; // force fresh LTPs on the next build
-                _ordersFuture = _supabase.getOrders();
-              });
-            }
+            if (mounted) setState(_reload);
           },
         );
     _ordersSubscription?.subscribe();
@@ -103,9 +170,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       await _supabase.cancelOrder(id);
       if (mounted) {
-        setState(() {
-          _ordersFuture = _supabase.getOrders();
-        });
+        setState(_reload);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order cancelled successfully'),
@@ -150,6 +215,74 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildOrdersBody() {
+    return Column(
+      children: [
+        _buildDateBar(),
+        Expanded(child: _buildOrdersList()),
+      ],
+    );
+  }
+
+  /// Day selector: arrows for stepping, the label itself opens a picker for
+  /// jumping. Deliberately sits outside the [FutureBuilder] so an empty or
+  /// failed day can still be navigated away from.
+  Widget _buildDateBar() {
+    final canGoBack = _selectedIstDate.isAfter(_firstSelectableDate);
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        border: Border(bottom: BorderSide(color: AppColors.birch)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: canGoBack ? () => _shiftDay(-1) : null,
+            icon: const Icon(Icons.chevron_left_rounded),
+            color: AppColors.ink3,
+            tooltip: 'Previous day',
+          ),
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: 'Showing orders for $_dateLabel. Tap to change date.',
+              child: InkWell(
+                onTap: _pickDate,
+                borderRadius: BorderRadius.circular(AppRadius.tag),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.calendar_today_rounded,
+                          size: 14, color: AppColors.ink4),
+                      const SizedBox(width: 6),
+                      Text(
+                        _dateLabel,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: _isToday ? null : () => _shiftDay(1),
+            icon: const Icon(Icons.chevron_right_rounded),
+            color: AppColors.ink3,
+            tooltip: 'Next day',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrdersList() {
     return FutureBuilder<List<Order>>(
         future: _ordersFuture,
         builder: (context, snapshot) {
@@ -159,32 +292,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
           if (snapshot.hasError) {
             return ErrorState(
               message: "We couldn't load your orders. Check your connection and try again.",
-              onRetry: () => setState(() {
-                _ltpSignature = '';
-                _ordersFuture = _supabase.getOrders();
-              }),
+              onRetry: () => setState(_reload),
             );
           }
           final orders = snapshot.data ?? [];
           if (orders.isEmpty) {
+            // A past day with no trades is normal, not an onboarding moment, so
+            // it offers a way back to today instead of a "start trading" CTA.
             return EmptyState(
               icon: Icons.receipt_long_rounded,
-              title: 'No orders yet',
-              message: 'Your placed, pending, and executed orders will appear here.',
-              actionLabel: 'Start trading',
-              onAction: () {
-                Navigator.of(context).popUntil((r) => r.isFirst);
-                NavTabService.goToTab(NavTabService.trade);
-              },
+              title: _isToday ? 'No orders today' : 'No orders on $_dateLabel',
+              message: _isToday
+                  ? 'Your placed, pending, and executed orders will appear here.'
+                  : 'Nothing was traded on this day. Use the arrows above to look at another day.',
+              actionLabel: _isToday ? 'Start trading' : 'Back to today',
+              onAction: _isToday
+                  ? () {
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      NavTabService.goToTab(NavTabService.trade);
+                    }
+                  : () => _goToDate(MarketHours.istDate()),
             );
           }
           // Batch-fetch all visible orders' LTPs once (kills the per-row N+1).
           WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchLtps(orders));
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() {
-                _ordersFuture = _supabase.getOrders();
-              });
+              setState(_reload);
               await _ordersFuture;
             },
             child: ListView.separated(
@@ -247,12 +381,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)} @ ₹${order.price.toStringAsFixed(2)}', style: GoogleFonts.inter(color: AppColors.ink3)),
+                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.inter(color: AppColors.ink3)),
                               const SizedBox(height: 2),
                               _buildLtpWidget(order),
                             ],
                           ),
-                          Text('Total: ₹${order.total.toStringAsFixed(2)}', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.ink)),
+                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.ink)),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xs),
@@ -331,7 +465,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
         final statusColor = _statusColor(order.status);
         final localizedCreated = order.createdAt?.toLocal().toString().split('.').first ?? 'N/A';
         final localizedExecuted = order.executedAt?.toLocal().toString().split('.').first ?? 'N/A';
-        final totalValue = order.total;
         
         return Container(
           decoration:       BoxDecoration(
@@ -428,16 +561,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
               const SizedBox(height: 24),
               _buildDetailGrid([
                 _buildGridItem('Quantity', order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)),
-                _buildGridItem('Price', '₹${order.price.toStringAsFixed(2)}'),
+                _buildGridItem('Price', Money.instrument(order.displayPrice, market: order.market)),
                 _buildLtpGridItem(order),
-                _buildGridItem('Total Value', '₹${totalValue.toStringAsFixed(2)}'),
+                _buildGridItem('Total Value', Money.instrument(order.displayTotal, market: order.market)),
                 _buildGridItem('Instrument', (order.instrumentType ?? 'EQUITY').toUpperCase()),
                 _buildGridItem('Order Type', (order.orderType ?? 'market').toUpperCase()),
-                _buildGridItem('Realized P&L', '₹${order.realizedPnl.toStringAsFixed(2)}', 
-                    valueColor: order.realizedPnl > 0 
-                        ? AppColors.bull 
-                        : order.realizedPnl < 0 
-                            ? AppColors.bear 
+                // Net, not gross. This tile used to show the raw `realized_pnl`
+                // column while the portfolio's closed-position card showed the
+                // same trade net of charges, so the two screens disagreed on the
+                // same number. The full arithmetic is broken out in the charges
+                // box below.
+                _buildGridItem('Realized P&L (net)', Money.wallet(order.netRealizedPnl, decimals: 2),
+                    valueColor: order.netRealizedPnl > 0
+                        ? AppColors.bull
+                        : order.netRealizedPnl < 0
+                            ? AppColors.bear
                             : AppColors.ink),
                 _buildGridItem('Placed At', localizedCreated),
                 _buildGridItem('Executed At', order.isExecuted ? localizedExecuted : '--'),
@@ -495,7 +633,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '${order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)} × ₹${order.price.toStringAsFixed(2)}',
+                            '${Money.quantity(order.quantity, market: order.market)} × ${Money.instrument(order.displayPrice, market: order.market)}',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -503,7 +641,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             ),
                           ),
                           Text(
-                            '₹${totalValue.toStringAsFixed(2)}',
+                            Money.instrument(order.displayTotal, market: order.market),
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -515,57 +653,98 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       const SizedBox(height: 10),
                       Container(height: 0.5, color: AppColors.birch),
                       const SizedBox(height: 10),
-                      _buildChargeRow('Brokerage', '₹${order.brokerage.toStringAsFixed(2)}'),
+                      _buildChargeRow('Brokerage', Money.wallet(order.brokerage, decimals: 2)),
                       const SizedBox(height: 8),
-                      _buildChargeRow('Stamp Duty', '₹${order.stampDuty.toStringAsFixed(2)}'),
+                      _buildChargeRow('Stamp Duty', Money.wallet(order.stampDuty, decimals: 2)),
                       const SizedBox(height: 8),
-                      _buildChargeRow('Taxes & Exchange Fees', '₹${order.taxCharges.toStringAsFixed(2)}'),
+                      _buildChargeRow('Taxes & Exchange Fees', Money.wallet(order.taxCharges, decimals: 2)),
                       const SizedBox(height: 12),
                       Divider(color: AppColors.birch, height: 1),
                       const SizedBox(height: 12),
                       _buildChargeRow(
                         'Total Charges',
-                        '₹${order.totalCharges.toStringAsFixed(2)}',
+                        Money.wallet(order.totalCharges, decimals: 2),
                         isTotal: true,
                       ),
                     ],
                   ),
                 ),
+                // The money box: gross, then charges, then net, so the number on
+                // the tile above can be checked by eye.
+                //
+                // What used to be here was a single sentence, "Charges reduced
+                // your return by X%", computed as totalCharges / realizedPnl. Two
+                // things were wrong with it. The denominator was gross P&L, so a
+                // ₹1 profit against ₹20 of brokerage announced "2000.0%". And it
+                // read as though it covered the whole trade when it only ever had
+                // the charges on THIS order -- the entry leg's brokerage, stamp
+                // duty and GST sit on a different row. Showing the arithmetic is
+                // both more useful and honest about its scope.
                 if (order.realizedPnl != 0.0) ...[
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: order.realizedPnl > 0
+                      color: order.netRealizedPnl >= 0
                           ? AppColors.bullLight.withValues(alpha: 0.3)
                           : AppColors.bearLight.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: order.realizedPnl > 0
+                        color: order.netRealizedPnl >= 0
                             ? AppColors.bull.withValues(alpha: 0.2)
                             : AppColors.bear.withValues(alpha: 0.2),
                       ),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          order.realizedPnl > 0
-                              ? Icons.trending_up_rounded
-                              : Icons.trending_down_rounded,
-                          color: order.realizedPnl > 0 ? AppColors.bull : AppColors.bear,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            order.realizedPnl > 0
-                                ? 'Charges reduced your return by ${((order.totalCharges / order.realizedPnl) * 100).toStringAsFixed(1)}%.'
-                                : 'Charges increased this loss by ₹${order.totalCharges.toStringAsFixed(2)}.',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: order.realizedPnl > 0 ? AppColors.bull : AppColors.bear,
+                        Row(
+                          children: [
+                            Icon(
+                              order.netRealizedPnl >= 0
+                                  ? Icons.trending_up_rounded
+                                  : Icons.trending_down_rounded,
+                              color: order.netRealizedPnl >= 0 ? AppColors.bull : AppColors.bear,
+                              size: 18,
                             ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'How this P&L is calculated',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildChargeRow(
+                          'Gross P&L on this order',
+                          Money.signedWallet(order.realizedPnl, decimals: 2),
+                        ),
+                        const SizedBox(height: 8),
+                        _buildChargeRow(
+                          'Less: charges on this order',
+                          '-${Money.wallet(order.totalCharges, decimals: 2)}',
+                        ),
+                        const SizedBox(height: 12),
+                        Divider(color: AppColors.birch, height: 1),
+                        const SizedBox(height: 12),
+                        _buildChargeRow(
+                          'Net P&L on this order',
+                          Money.signedWallet(order.netRealizedPnl, decimals: 2),
+                          isTotal: true,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          order.isBuy
+                              ? 'Charges shown are for this order only.'
+                              : 'Charges shown are for this exit order only. The entry order was charged separately when it was placed, so a full round trip costs more than the figure above.',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: AppColors.ink4,
+                            height: 1.4,
                           ),
                         ),
                       ],
@@ -680,7 +859,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (quote == null) return const SizedBox.shrink();
     final isPositive = quote.changePct >= 0;
     return Text(
-      'LTP: ₹${quote.price.toStringAsFixed(2)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
+      'LTP: ${Money.instrument(quote.price, market: quote.market)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
       style: GoogleFonts.inter(
         fontSize: 11,
         fontWeight: FontWeight.w600,
@@ -698,14 +877,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final isPositive = quote.changePct >= 0;
     return _buildGridItem(
       'Current Price (LTP)',
-      '₹${quote.price.toStringAsFixed(2)}',
+      Money.instrument(quote.price, market: quote.market),
       valueColor: isPositive ? AppColors.bull : AppColors.bear,
     );
   }
 
   void _showModifyOrderSheet(BuildContext context, Order order) {
     final qtyController = TextEditingController(text: order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0));
-    final priceController = TextEditingController(text: order.price.toStringAsFixed(2));
+    final priceController = TextEditingController(
+        text: Money.bare(order.displayPrice, from: Money.sourceFor(order.market)));
     bool isSubmitting = false;
 
     showModalBottomSheet(
@@ -811,9 +991,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     price: newPrice,
                                   );
                                   if (mounted) {
-                                    setState(() {
-                                      _ordersFuture = _supabase.getOrders();
-                                    });
+                                    setState(_reload);
                                     navigator.pop();
                                     messenger.showSnackBar(
                                       const SnackBar(

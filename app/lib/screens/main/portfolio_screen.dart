@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/app_constants.dart';
+import '../../core/money.dart';
 import '../../core/option_pricing.dart';
 import '../../models/portfolio.dart';
 import '../../models/position_model.dart';
@@ -302,9 +303,19 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   String _fmt(double v) {
-    if (v.abs() < 1) return '₹${v.toStringAsFixed(2)}';
-    return '₹${v.toStringAsFixed(0)}';
+    if (v.abs() < 1) return Money.wallet(v, decimals: 2);
+    return Money.wallet(v, decimals: 0);
   }
+
+  /// Signed amount, for anything that can be a gain or a loss.
+  ///
+  /// Every P&L call site used to work around [_fmt] being unsigned with
+  /// `'${v >= 0 ? '+' : ''}${_fmt(v.abs())}'`. That ternary emits a plus for a
+  /// gain and *nothing* for a loss, so `.abs()` then stripped the minus and a
+  /// loss rendered as a bare positive number: "₹3654 (-2.27%)" in red, where the
+  /// percentage carried the only clue that it was negative. Owning the sign here
+  /// means no call site can drop it again.
+  String _fmtSigned(double v) => '${v >= 0 ? '+' : '-'}${_fmt(v.abs())}';
 
   @override
   Widget build(BuildContext context) {
@@ -358,13 +369,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                 Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
                                 _summaryCardItem(
                                   'Today P&L',
-                                  '${_totalDayPnl >= 0 ? '+' : ''}${_fmt(_totalDayPnl.abs())}',
+                                  _fmtSigned(_totalDayPnl),
                                   color: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear,
                                 ),
                                 Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
                                 _summaryCardItem(
                                   'Total P&L', 
-                                  '${_totalPnl >= 0 ? '+' : ''}${_fmt(_totalPnl.abs())} (${_totalPnlPct.toStringAsFixed(2)}%)',
+                                  '${_fmtSigned(_totalPnl)} (${_totalPnlPct.toStringAsFixed(2)}%)',
                                   color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear,
                                 ),
                               ],
@@ -490,8 +501,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Widget _buildHoldingCard(Holding h) {
     final isClosed = h.quantity == 0;
-    final isPositive = h.pnl >= 0;
-    final dayIsPositive = h.dayPnl >= 0;
+    // Signs come from the displayed (native) figures so the colour always
+    // matches the number next to it.
+    final isPositive = h.displayPnl >= 0;
+    final dayIsPositive = h.displayDayPnl >= 0;
 
     return GestureDetector(
       onTap: () async {
@@ -591,7 +604,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        'LTP ₹${h.currentPrice.toStringAsFixed(2)}',
+                        'LTP ${Money.instrument(h.displayCurrentPrice, market: h.market)}',
                         style: GoogleFonts.inter(
                           fontWeight: FontWeight.bold,
                           color: AppColors.ink,
@@ -601,8 +614,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       const SizedBox(height: 2),
                       Builder(
                         builder: (context) {
-                          final priceDiff = h.currentPrice - h.previousClose;
-                          final pct = h.previousClose > 0 ? (priceDiff / h.previousClose) * 100 : 0.0;
+                          // Ratio, so the currency does not matter — but taken
+                          // from the native pair to avoid mixing an FX rate in.
+                          final base = h.isNativeCurrency
+                              ? (h.nativePreviousClose ?? h.displayCurrentPrice)
+                              : h.previousClose;
+                          final priceDiff = h.displayCurrentPrice - base;
+                          final pct = base > 0 ? (priceDiff / base) * 100 : 0.0;
                           final isPctPositive = pct >= 0;
                           return Row(
                             mainAxisSize: MainAxisSize.min,
@@ -629,18 +647,36 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
-                  _holdingStat('Avg', '₹${h.avgPrice.toStringAsFixed(2)}'),
-                  _holdingStat('Invested', isClosed ? '₹0' : '₹${h.invested.toStringAsFixed(0)}'),
+                  // A US position is shown entirely in dollars: cost basis, live
+                  // price and P&L are all USD, so no rate enters the card.
+                  _holdingStat('Avg', Money.instrument(h.displayAvgPrice, market: h.market)),
                   _holdingStat(
-                    isClosed ? 'Realized P&L' : 'P&L',
-                    '${isPositive ? '+' : '-'}₹${h.pnl.abs().toStringAsFixed(0)}',
+                    'Invested',
+                    isClosed
+                        ? Money.instrument(0, market: h.market, decimals: 0)
+                        : Money.instrument(h.displayInvested, market: h.market, decimals: 0),
+                  ),
+                  _holdingStat(
+                    // A closed position's realized figure is already net of the
+                    // charges on the trades that closed it, so say so. The open
+                    // case is a mark-to-market number with no charges in it yet.
+                    isClosed ? 'Realized (net)' : 'P&L',
+                    Money.signedInstrument(h.displayPnl, market: h.market, decimals: 0),
                     valueColor: isPositive ? AppColors.bull : AppColors.bear,
                   ),
-                  _holdingStat(
-                    'Day P&L',
-                    '${dayIsPositive ? '+' : '-'}₹${h.dayPnl.abs().toStringAsFixed(0)}',
-                    valueColor: dayIsPositive ? AppColors.bull : AppColors.bear,
-                  ),
+                  // "Day P&L" is only meaningful while a position is still open.
+                  // For a closed one the service sets dayPnl to the very same
+                  // realized figure as P&L above, so the card printed the identical
+                  // number twice under two different labels -- the single biggest
+                  // source of "the portfolio shows different numbers" reports.
+                  if (!isClosed)
+                    _holdingStat(
+                      'Day P&L',
+                      Money.signedInstrument(h.displayDayPnl, market: h.market, decimals: 0),
+                      valueColor: dayIsPositive ? AppColors.bull : AppColors.bear,
+                    )
+                  else
+                    _holdingStat('Qty', '0'),
                 ],
               ),
               if (!isClosed) ...[
@@ -759,7 +795,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    'LTP ₹${estPrice.toStringAsFixed(2)}',
+                    'LTP ${Money.wallet(estPrice, decimals: 2)}',
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.bold,
                       color: AppColors.ink,
@@ -790,16 +826,16 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
-              _holdingStat('Avg', '₹${pos.avgEntryPrice.toStringAsFixed(2)}'),
-              _holdingStat('Invested', '₹${_foCapitalUsed(pos).toStringAsFixed(0)}'),
+              _holdingStat('Avg', Money.wallet(pos.avgEntryPrice, decimals: 2)),
+              _holdingStat('Invested', Money.wallet(_foCapitalUsed(pos), decimals: 0)),
               _holdingStat(
                 'P&L',
-                '${isPositive ? '+' : '-'}₹${pnl.abs().toStringAsFixed(0)}',
+                _fmtSigned(pnl),
                 valueColor: isPositive ? AppColors.bull : AppColors.bear,
               ),
               _holdingStat(
                 'Day P&L',
-                '${dayPnlIsPositive ? '+' : '-'}₹${dayPnl.abs().toStringAsFixed(0)}',
+                _fmtSigned(dayPnl),
                 valueColor: dayPnlIsPositive ? AppColors.bull : AppColors.bear,
               ),
             ],
@@ -822,7 +858,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     symbol: pos.symbol,
                     yfSymbol: pos.symbol,
                     name: pos.instrumentType == 'OPTION'
-                        ? '${pos.symbol} ${pos.optionType} ₹${pos.strikePrice.toStringAsFixed(0)}'
+                        ? '${pos.symbol} ${pos.optionType} ${Money.wallet(pos.strikePrice, decimals: 0)}'
                         : '${pos.symbol} FUT',
                     price: exitPrice,
                     previousClose: exitPrice,
