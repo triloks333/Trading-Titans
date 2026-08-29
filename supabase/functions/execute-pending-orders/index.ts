@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { US_MARKET, getUsdInrRate, isUsMarketOpen } from "../_shared/us_market.ts";
 import { isRestingLimit, resolveFillPrice } from "../_shared/fill_price.ts";
 import { pickLotSize } from "../_shared/lot_size.ts";
+import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
 // Session window lives in _shared so the four functions that gate on it cannot
 // drift apart again; the old inline copy closed at 15:15 instead of 15:30.
 import { isStockOpen } from "../_shared/market_hours.ts";
@@ -134,6 +135,45 @@ serve(async (req) => {
       });
     }
 
+    // A stale or missing cache row used to end an order's life right here: the
+    // engine reported `stale_price` / `no_cached_price` and moved on, so a limit
+    // the real market had already crossed never filled (AEROENTER sell 145.80
+    // sat through a six-hour-old cache row while the print was above it).
+    // `refresh-quotes` is best-effort — one failed upstream pass leaves a symbol
+    // behind until the next tick — so before giving up the engine now asks
+    // `market-quote` directly, which is exactly what the app itself does.
+    //
+    // Hits are memoised into `priceMap` and misses into `liveMisses`, so N
+    // pending orders on one underlying cost at most one live fetch per run.
+    //
+    // ponytail: in-process memo only, with no write-back to `quotes_cache`, so
+    // `refresh-quotes` stays the single writer of that table. The ceiling is one
+    // extra fetch per stale symbol per cron minute; the upgrade path is upserting
+    // the row here too if that ever shows up in this function's egress.
+    const liveMisses = new Set<string>();
+    const liveQuote = async (key: string, symbol: string, market: string) => {
+      if (liveMisses.has(key)) return null;
+      try {
+        const qurl = `${SUPABASE_URL}/functions/v1/market-quote?symbol=${encodeURIComponent(symbol)}&market=${encodeURIComponent(market)}`;
+        const r = await fetch(qurl, {
+          headers: { Authorization: `Bearer ${ANON}`, apikey: ANON },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (r.ok) {
+          const q = await r.json();
+          if (q && typeof q.price === "number" && q.price > 0) {
+            // Tagged `:live` so the executed-order report distinguishes a fill
+            // priced off the cache from one the engine had to go and fetch.
+            const fresh = { price: q.price, updatedAt: Date.now(), source: `${q.source ?? "live"}:live` };
+            priceMap.set(key, fresh);
+            return fresh;
+          }
+        }
+      } catch (_) { /* fall through to the miss below */ }
+      liveMisses.add(key);
+      return null;
+    };
+
     let executed = 0;
     const report: Record<string, unknown>[] = [];
 
@@ -155,8 +195,24 @@ serve(async (req) => {
       if (!(isMarketOpen(market) || force)) { report.push({ id: o.id, skipped: "market_closed" }); continue; }
 
       const isUs = market === US_MARKET;
-      const underlyingKey = (market === "crypto" || isUs) ? String(o.symbol).toUpperCase() : extractUnderlying(o.symbol);
-      const quote = priceMap.get(`${underlyingKey}\u001f${market}`);
+      // A crypto FUTURES order carries a CoinDCX contract symbol (`B-BTC_USDT`)
+      // while the quote feed is keyed by the coin (`BTC`), so the raw symbol
+      // matched nothing and the order was skipped on every run -- one had been
+      // pending for six days. US symbols need no such mapping.
+      const underlyingKey = market === "crypto"
+        ? cryptoUnderlying(String(o.symbol))
+        : isUs
+          ? String(o.symbol).toUpperCase()
+          : extractUnderlying(o.symbol);
+      const quoteKey = `${underlyingKey}\u001f${market}`;
+      let quote = priceMap.get(quoteKey);
+      // Missing or stale: try the live feed before writing this order off. Keep
+      // the cached row on failure so the report below still names the real age.
+      // `force` skips the fetch as well as the freshness test — it already means
+      // "market is closed, price this off the last known quote on purpose".
+      if (!force && (Date.now() - (quote?.updatedAt ?? 0)) > MAX_QUOTE_AGE_MS) {
+        quote = (await liveQuote(quoteKey, underlyingKey, market)) ?? quote;
+      }
       if (quote == null) { report.push({ id: o.id, skipped: "no_cached_price" }); continue; }
 
       // Refuse to price a trade off a stale quote. `quotes_cache` keeps a row per
@@ -166,6 +222,10 @@ serve(async (req) => {
       // indefinitely — production had rows over 1000 hours old. Without this
       // check the engine would happily trigger a limit order against a price from
       // weeks ago, in either direction.
+      //
+      // Reached only when the live fetch above also failed to produce a price, so
+      // this now means "no usable quote from either feed" rather than "the cache
+      // was behind" — the latter no longer costs anybody a fill.
       //
       // `force` deliberately bypasses it: force already means "the market is
       // closed, use the last known price on purpose", so gating it here would

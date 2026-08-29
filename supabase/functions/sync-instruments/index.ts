@@ -66,6 +66,10 @@ serve(async (req) => {
     const foLines = foText.split("\n");
     console.log(`Parsed ${foLines.length} lines from FO CSV.`);
 
+    // Sampled once, not per row, so a sync that straddles midnight cannot flag
+    // one half of the CSV against one date and the other half against the next.
+    const todayIso = new Date().toISOString().split("T")[0];
+
     for (const line of foLines) {
       if (!line.trim()) continue;
       const r = line.split(",");
@@ -133,7 +137,19 @@ serve(async (req) => {
         strike_price: strike,
         option_type: finalOptType,
         lot_size: Number(r[3]) || 1,
-        tradeable: true  // All F&O instruments are tradeable
+        // Was a hard-coded `true` ("All F&O instruments are tradeable"), which is
+        // only true of contracts that have not expired yet. This sync runs at
+        // 03:20 UTC, after the 18:30 UTC `deactivate_expired_instruments()` sweep,
+        // so any expired contract still listed in the CSV would have been handed
+        // its `tradeable` flag straight back every morning and reappeared in
+        // search. Deriving the flag from the expiry makes the two agree by
+        // construction instead of by scheduling luck.
+        //
+        // ISO `YYYY-MM-DD` compares lexicographically the same way it compares
+        // chronologically, so a string compare is the whole test. A row with an
+        // unparseable expiry is treated as not tradeable: an F&O contract with no
+        // expiry cannot be priced or settled.
+        tradeable: expiryDate != null && expiryDate >= todayIso
       });
     }
 
