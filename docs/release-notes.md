@@ -110,7 +110,7 @@ retro-consented, and the column tells you exactly who has and has not accepted.
 • Terms & Conditions and Privacy Policy acceptance added at sign-up, plus a clear notice that all money here is simulated
 ```
 
-(437 characters, limit 500)
+(440 characters, limit 500)
 
 Five bullets, ordered by how many people complained. The consent work is last
 despite being the only thing that strictly needed this build: it is the change
