@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
+import '../../widgets/legal_consent.dart';
 import '../../services/auth_service.dart';
 import '../../services/analytics_service.dart';
 import 'register_screen.dart';
@@ -20,6 +21,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _busy = false;
   String? _error;
   bool _obscurePassword = true;
+
+  /// Consent for the account-CREATING actions on this screen (Google, Guest).
+  bool _acceptedLegal = false;
+  bool _showLegalError = false;
 
   @override
   void initState() {
@@ -55,7 +60,27 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Gate for the two buttons on this screen that can CREATE an account.
+  ///
+  /// Google sign-in creates one on first use and Guest always does, so both need
+  /// consent. Email/password sign-in below is deliberately NOT gated: that user
+  /// accepted at signup and their acceptance is already recorded, so re-asking on
+  /// every login would be friction with no legal value.
+  ///
+  /// Returns false and shows the inline error when consent is missing. The buttons
+  /// stay enabled rather than being greyed out, so the user is told why instead of
+  /// being left tapping a dead control.
+  bool _requireLegalConsent() {
+    if (_acceptedLegal) return true;
+    setState(() {
+      _showLegalError = true;
+      _error = null;
+    });
+    return false;
+  }
+
   Future<void> _signInWithGoogle() async {
+    if (!_requireLegalConsent()) return;
     setState(() {
       _error = null;
       _busy = true;
@@ -77,6 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _continueAsGuest() async {
+    if (!_requireLegalConsent()) return;
     setState(() {
       _error = null;
       _busy = true;
@@ -307,6 +333,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      // Placed directly above the two buttons it gates, so the
+                      // scope reads visually without extra wording. Email/password
+                      // sign-in sits above the OR divider and is not gated.
+                      LegalConsentCheckbox(
+                        value: _acceptedLegal,
+                        showError: _showLegalError,
+                        onChanged: (v) => setState(() {
+                          _acceptedLegal = v;
+                          if (v) _showLegalError = false;
+                        }),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
                       OutlinedButton(
                         onPressed: _busy ? null : _signInWithGoogle,
                         style: OutlinedButton.styleFrom(
@@ -348,7 +386,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           minimumSize: const Size.fromHeight(48),
                         ),
                         child: Text(
-                          'Explore as guest',
+                          // Amount disclosed up front: a guest starts at ₹5,000,
+                          // not the ₹11,000 the store listing advertises for a
+                          // registered account.
+                          'Explore as guest (₹5,000)',
                           style: TextStyle(
                             color: AppColors.ink3,
                             fontWeight: FontWeight.w600,
@@ -371,6 +412,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
+                // Foot of the page, outside the card and separate from the consent
+                // checkbox: the checkbox is something to act on, this is standing
+                // context. Sits inside the same horizontal padding as the card, so
+                // its edges line up with it.
+                const SizedBox(height: AppSpacing.lg),
+                const AuthDisclaimer(),
+                const SizedBox(height: AppSpacing.xl),
               ],
             ),
           ),

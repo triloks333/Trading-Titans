@@ -5,6 +5,50 @@ and user-facing (no internal jargon), per `.kiro/steering/release-process.md`.
 
 ---
 
+## 1.1.8 (versionCode 40)
+
+Consent and disclosure on the auth screens. Entirely user-facing, so unlike 1.1.7
+this one genuinely needs the binary.
+
+Two additions, both on the sign-in AND sign-up screens:
+
+1. A mandatory checkbox — "I accept the Terms & Conditions and Privacy Policy" —
+   with both names tappable, opening the full documents through the sheet Profile
+   already uses. Acceptance is recorded server-side with the policy revision date,
+   so we can say which text a user agreed to and when.
+2. A standing disclaimer at the foot of the page, separate from the checkbox:
+   everything is simulated, we are not a registered broker, and market data may be
+   delayed.
+
+The scope decision worth recording: an account can be created from BOTH screens by
+four routes — email/password and Google on sign-up, Google and Guest on sign-in.
+A checkbox on the sign-up screen alone would have been bypassable in two taps, so
+all four are gated. Email/password SIGN-IN is deliberately not gated: that user
+accepted at signup and it is already recorded, so re-asking every login would be
+friction with no legal value.
+
+Acceptance is written by the `accept_terms` RPC. It has to be an RPC rather than a
+direct write, because 1.1.7's security work revoked client UPDATE on `profiles`.
+Accounts created before this build have `terms_accepted_at` NULL — they are not
+retro-consented, and the column tells you exactly who has and has not accepted.
+
+### Play Store "What's new" (paste this)
+
+```
+• Terms & Conditions and Privacy Policy must now be accepted when creating an account
+• Both documents open right from the sign-in screen — no need to leave the app
+• A clear notice on sign-in and sign-up: every price, balance, profit and reward here is simulated
+• We're not a registered broker, and market data may be delayed — now stated up front
+```
+
+(341 characters, limit 500)
+
+Four bullets. The disclaimer and the checkbox are stated separately on purpose:
+they are two different things a user will see, and collapsing them into one bullet
+reads as though ticking a box is the whole change.
+
+---
+
 ## 1.1.7 (versionCode 39)
 
 A correctness release: six production bugs, all found while investigating one

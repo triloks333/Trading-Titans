@@ -9,13 +9,14 @@ import '../models/order.dart';
 import '../models/quote.dart';
 import '../models/position_model.dart';
 import '../models/price_alert.dart';
+import '../models/challenge.dart';
 import '../core/market_hours.dart';
 import '../core/option_pricing.dart';
 import '../core/app_constants.dart';
 import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
-import 'notification_service.dart';
+import 'diagnostics_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -328,6 +329,29 @@ class SupabaseService {
     return false;
   }
 
+  /// Finalises a guest → permanent conversion server-side: syncs the profile's
+  /// email (and name, if it is still the placeholder) from the identity that
+  /// was just attached, and credits the one-time ₹6,000 top-up.
+  ///
+  /// `converted` is false while the identity is not fully attached yet — an
+  /// email change that has not been confirmed, for instance. That is an
+  /// ordinary state, not an error.
+  ///
+  /// `bonus` is 0 for an account that was already converted, or that belongs to
+  /// the guest cohort from before the ₹5,000 starting balance (they already
+  /// hold ₹11,000). Safe to call repeatedly: the RPC is guarded by
+  /// profiles.converted_at, so the bonus can only ever be paid once.
+  Future<({bool converted, num bonus})> convertGuestAccount() async {
+    DiagnosticsService.noteDbCall('rpc.convert_guest_account');
+    final result = await client.rpc('convert_guest_account');
+    final map = result is Map ? result : const <String, dynamic>{};
+    final bonus = map['bonus'];
+    return (
+      converted: map['converted'] == true,
+      bonus: bonus is num ? bonus : 0,
+    );
+  }
+
   User? get currentUser => client.auth.currentUser;
 
   Future<app_models.User?> getUserProfile() async {
@@ -335,6 +359,7 @@ class SupabaseService {
     if (user == null) return null;
 
     try {
+      DiagnosticsService.noteDbCall('profiles.select');
       var profile = await client
           .from('profiles')
           .select()
@@ -376,6 +401,7 @@ class SupabaseService {
 
   Future<Map<String, String>> getAppVersionConfig() async {
     try {
+      DiagnosticsService.noteDbCall('app_config.select');
       final data = await client.from('app_config').select('key, value');
       final Map<String, String> config = {};
       for (final row in (data as List<dynamic>)) {
@@ -393,16 +419,40 @@ class SupabaseService {
     }
   }
 
-  Future<List<Order>> getOrders({int limit = 50}) async {
+  /// Returns the user's orders, newest first.
+  ///
+  /// With [onIstDate] null this returns the most recent [limit] orders across
+  /// all time — the behaviour the wallet and autopsy screens rely on.
+  ///
+  /// With [onIstDate] set, only orders created on that IST calendar day are
+  /// returned (see [MarketHours.istDayRangeUtc] for why the boundary is IST and
+  /// not the device timezone). When that day is today, orders still `pending`
+  /// from an earlier day are included as well: `expire_pending_stock_orders()`
+  /// excludes crypto, so a crypto limit order stays live indefinitely, and
+  /// date-scoping it out of the current view would hide the only Edit/Cancel
+  /// controls it has.
+  Future<List<Order>> getOrders({int limit = 50, DateTime? onIstDate}) async {
     await executePendingOrders();
     final user = currentUser;
     if (user == null) return [];
 
     try {
-      final data = await client
-          .from('orders')
-          .select()
-          .eq('user_id', user.id)
+      DiagnosticsService.noteDbCall('orders.select');
+      var filter = client.from('orders').select().eq('user_id', user.id);
+      if (onIstDate != null) {
+        final range = MarketHours.istDayRangeUtc(onIstDate);
+        final startIso = range.start.toIso8601String();
+        if (onIstDate == MarketHours.istDate()) {
+          // No upper bound needed for today, so one OR covers "created today"
+          // plus any still-live pending order carried over from a past day.
+          filter = filter.or('created_at.gte.$startIso,status.eq.pending');
+        } else {
+          filter = filter
+              .gte('created_at', startIso)
+              .lt('created_at', range.end.toIso8601String());
+        }
+      }
+      final data = await filter
           .order('created_at', ascending: false)
           .limit(limit);
 
@@ -708,6 +758,7 @@ class SupabaseService {
   }
 
   Future<List<Holding>> getHoldings() async {
+    DiagnosticsService.noteDbCall('holdings+fo_positions.select');
     await Future.wait([
       settleExpiredDerivatives(),
       executePendingOrders(),
@@ -889,6 +940,13 @@ class SupabaseService {
       final avgPrice = (activeRow?['avg_price'] as num?)?.toDouble() ?? 0.0;
       final name = activeRow?['name'] as String? ?? symbolNames[key] ?? symbol;
       final instType = activeRow?['instrument_type'] as String? ?? 'EQUITY';
+      // Cost basis in the instrument's own currency, for US positions. NULL on
+      // INR markets, where avg_price is already native.
+      final double? nativeAvgPrice =
+          (activeRow?['native_avg_price'] as num?)?.toDouble();
+      final String? nativeCurrency = activeRow?['native_currency'] as String?;
+      double? nativeCurrentPrice;
+      double? nativePreviousClose;
 
       double currentPrice;
       double previousClose;
@@ -968,6 +1026,25 @@ class SupabaseService {
               previousClose = avgPrice;
             }
           } catch (_) {}
+        }
+      } else if (market == MarketHours.usStock) {
+        // A US quote is in USD but avg_price came from the engine in INR, so
+        // every figure computed below would mix currencies. Convert the quote to
+        // INR here and keep the USD pair aside for the dollar display.
+        final normKey = '${MarketService.normalizeSymbol(symbol, market)}\x1F$market';
+        final currentQuote = quotesMap[key] ?? quotesMap[normKey];
+        nativeCurrentPrice = currentQuote?.price;
+        nativePreviousClose = currentQuote?.previousClose ?? nativeCurrentPrice;
+        final fx = currentQuote?.fxRate;
+        if (nativeCurrentPrice != null && fx != null && fx > 0) {
+          currentPrice = nativeCurrentPrice * fx;
+          previousClose = (nativePreviousClose ?? nativeCurrentPrice) * fx;
+        } else {
+          // No quote or no rate: show the position flat rather than off by ~88x.
+          currentPrice = avgPrice;
+          previousClose = avgPrice;
+          nativeCurrentPrice ??= nativeAvgPrice;
+          nativePreviousClose ??= nativeAvgPrice;
         }
       } else {
         // For stocks/crypto: use direct quote
@@ -1066,6 +1143,10 @@ class SupabaseService {
           strikePrice: (activeRow?['strike_price'] as num?)?.toDouble(),
           expiryDate: activeRow?['expiry_date'] as String?,
           productType: activeRow?['product_type'] as String? ?? 'CNC',
+          nativeAvgPrice: nativeAvgPrice,
+          nativeCurrentPrice: nativeCurrentPrice,
+          nativePreviousClose: nativePreviousClose,
+          nativeCurrency: nativeCurrency,
         ),
       );
     }
@@ -1093,6 +1174,7 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> getWatchlistRaw() async {
     final user = currentUser;
     if (user == null) return [];
+    DiagnosticsService.noteDbCall('watchlist.select');
     final rows = await client
         .from('watchlist')
         .select()
@@ -1660,6 +1742,7 @@ class SupabaseService {
     final user = currentUser;
     if (user == null) return [];
     try {
+      DiagnosticsService.noteDbCall('price_alerts.select');
       var query = client.from('price_alerts').select().eq('user_id', user.id);
       if (symbol != null) query = query.eq('symbol', symbol);
       if (market != null) query = query.eq('market', market);
@@ -1686,9 +1769,10 @@ class SupabaseService {
   }
 
   /// Evaluates all active price alerts against the latest quotes. When a
-  /// target is crossed, fires a local + in-app notification and marks the
-  /// alert 'triggered'. Safe to call on every refresh cycle: it returns early
-  /// when the user has no active alerts and never throws on network errors.
+  /// target is crossed, writes one `notifications` row — which reaches the phone
+  /// tray via the push trigger — and marks the alert 'triggered'. Safe to call on
+  /// every refresh cycle: it returns early when the user has no active alerts
+  /// and never throws on network errors.
   Future<void> evaluatePriceAlerts() async {
     final user = currentUser;
     if (user == null) return;
@@ -1741,7 +1825,13 @@ class SupabaseService {
             '$displaySymbol is now ₹${price.toStringAsFixed(2)} '
             '(${alert.isAbove ? 'above' : 'below'} your target of ₹${alert.targetPrice.toStringAsFixed(2)}).';
 
-        // In-app notification row so it appears in the notifications screen.
+        // This insert is the ONLY notification needed: the row appears in the
+        // notifications screen, and trg_push_on_notification pushes it to the
+        // tray via FCM on the 'price_alert' channel (so it keeps its dedicated
+        // sound). A local push used to be posted here as well, which delivered
+        // every triggered alert twice — the same duplicate the order path had.
+        // The server-side evaluate-price-alerts cron already relies on this row
+        // alone, so both paths now behave identically.
         try {
           await client.from('notifications').insert({
             'user_id': user.id,
@@ -1751,16 +1841,6 @@ class SupabaseService {
             'action_type': 'price_alert',
             'action_data': {'symbol': alert.symbol, 'market': alert.market},
           });
-        } catch (_) {}
-
-        // Local device notification with the dedicated price-alert sound/channel.
-        try {
-          await NotificationService().showNotification(
-            id: alert.id.hashCode,
-            title: title,
-            body: body,
-            category: NotificationCategory.priceAlert,
-          );
         } catch (_) {}
       }
     } catch (e) {
@@ -3528,6 +3608,39 @@ class SupabaseService {
     await client.rpc('credit_demo_cash', params: {'p_amount': amount});
   }
 
+  /// The user's wallet statement, newest first: every change to their demo cash
+  /// balance, from the append-only `wallet_transactions` ledger.
+  ///
+  /// This is deliberately NOT the orders list. The Wallet tab used to render
+  /// `getOrders()` under a "Transaction History" heading, which duplicated the
+  /// Orders screen and still omitted every non-trade movement (signup bonus,
+  /// referral credit, claimed rewards) because no record of those existed.
+  ///
+  /// Returns an empty list on ANY failure, including the table not existing.
+  /// That is load-bearing: the ledger arrives in a migration, so a build can
+  /// ship before it is applied and the Wallet tab must still work.
+  Future<List<Map<String, dynamic>>> getWalletTransactions({int limit = 50}) async {
+    final user = currentUser;
+    if (user == null) return [];
+    try {
+      DiagnosticsService.noteDbCall('wallet_transactions.select');
+      final rows = await client
+          .from('wallet_transactions')
+          .select(
+              'id, amount, balance_before, balance_after, kind, description, created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return (rows as List<dynamic>)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    } catch (e) {
+      debugPrint(
+          'getWalletTransactions failed (ledger may not be migrated yet): $e');
+      return [];
+    }
+  }
+
   Future<void> purchasePackage(
     String packageName,
     double packagePrice,
@@ -3677,6 +3790,147 @@ class SupabaseService {
     // Reward claim is server-only (Step 3): the validated RPC checks the reward
     // belongs to the caller and is unclaimed, then credits the wallet atomically.
     await client.rpc('claim_reward', params: {'p_reward_id': rewardId});
+  }
+
+  // ── Gamification ──────────────────────────────────────────────────────────
+  // Challenge conditions are evaluated entirely server-side. The client can ask
+  // for a re-evaluation but cannot choose what it earns, and repeat grants are
+  // blocked by a UNIQUE(user_id, challenge_key, cycle) index rather than by
+  // client-side bookkeeping.
+
+  /// Catalogue plus this user's progress, in one round trip.
+  Future<List<Challenge>> getMyChallenges() async {
+    try {
+      final rows = await client.rpc('get_my_challenges');
+      return (rows as List<dynamic>)
+          .map((e) => Challenge.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (e) {
+      debugPrint('getMyChallenges failed: $e');
+      return [];
+    }
+  }
+
+  /// Recomputes every challenge for the signed-in user and grants what is newly
+  /// earned. Returns the number of grants made. Cheap and idempotent, so it is
+  /// safe to call after an order fills or when the Challenges screen opens.
+  Future<int> evaluateChallenges() async {
+    try {
+      final result = await client.rpc('evaluate_challenges');
+      return result is int ? result : int.tryParse('$result') ?? 0;
+    } catch (e) {
+      debugPrint('evaluateChallenges failed: $e');
+      return 0;
+    }
+  }
+
+  /// Advances the daily login streak (no-op if already counted today) and
+  /// evaluates challenges. Returns the current streak length.
+  Future<int> touchLoginStreak() async {
+    try {
+      final result = await client.rpc('touch_login_streak');
+      return result is int ? result : int.tryParse('$result') ?? 0;
+    } catch (e) {
+      debugPrint('touchLoginStreak failed: $e');
+      return 0;
+    }
+  }
+
+  /// Grants the Glossary Graduate challenge. The quiz is marked in the app but
+  /// the reward amount and the one-shot limit stay server-side.
+  Future<bool> awardGlossaryQuiz() async {
+    try {
+      final result = await client.rpc('award_glossary_quiz');
+      return result == true;
+    } catch (e) {
+      debugPrint('awardGlossaryQuiz failed: $e');
+      return false;
+    }
+  }
+
+  // ── User preferences (display currency, preferred markets, onboarding) ─────
+  // Writes go through a validated RPC because `profiles` has no user UPDATE
+  // policy — money columns live on the same row, so the RPC is the only path and
+  // it can only touch the three preference columns.
+
+  Future<Map<String, dynamic>?> getUserPreferences() async {
+    try {
+      final rows = await client.rpc('get_user_preferences');
+      if (rows is List && rows.isNotEmpty) {
+        return Map<String, dynamic>.from(rows.first as Map);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('getUserPreferences failed: $e');
+      return null;
+    }
+  }
+
+  /// Saves any subset of the preferences. Nulls are left untouched server-side.
+  Future<Map<String, dynamic>?> saveUserPreferences({
+    String? displayCurrency,
+    List<String>? preferredMarkets,
+    String? location,
+    bool completeOnboarding = false,
+  }) async {
+    try {
+      final rows = await client.rpc('save_user_preferences', params: {
+        'p_display_currency': displayCurrency,
+        'p_preferred_markets': preferredMarkets,
+        'p_location': location,
+        'p_complete_onboarding': completeOnboarding,
+      });
+      if (rows is List && rows.isNotEmpty) {
+        return Map<String, dynamic>.from(rows.first as Map);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('saveUserPreferences failed: $e');
+      return null;
+    }
+  }
+
+  /// Records that the signed-in user accepted the Terms and Privacy Policy.
+  ///
+  /// Goes through a validated RPC because client UPDATE on `profiles` is revoked
+  /// (see migration 20260827000000 — clients could otherwise set their own
+  /// is_admin / wallet_balance). The RPC derives the user from auth.uid(), so a
+  /// caller cannot record consent for anyone else, and it is idempotent for a
+  /// given version.
+  ///
+  /// Best-effort by design: the checkbox has already gated the UI, so a failure
+  /// here must not strand a user who just created an account. It is logged and
+  /// retried on the next sign-in rather than surfaced as a blocking error.
+  Future<void> acceptTerms(String version) async {
+    try {
+      await client.rpc('accept_terms', params: {'p_version': version});
+    } catch (e) {
+      debugPrint('acceptTerms failed: $e');
+    }
+  }
+
+  /// Streak and XP counters for the Challenges header.
+  Future<Map<String, int>> getGamificationStats() async {
+    final user = currentUser;
+    if (user == null) return const {'total_xp': 0, 'login_streak': 0, 'longest_login_streak': 0};
+    try {
+      final row = await client
+          .from('profiles')
+          .select('total_xp, login_streak, longest_login_streak')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (row == null) return const {'total_xp': 0, 'login_streak': 0, 'longest_login_streak': 0};
+      final map = Map<String, dynamic>.from(row as Map);
+      int asInt(dynamic v) => v is num ? v.toInt() : int.tryParse('$v') ?? 0;
+      return {
+        'total_xp': asInt(map['total_xp']),
+        'login_streak': asInt(map['login_streak']),
+        'longest_login_streak': asInt(map['longest_login_streak']),
+      };
+    } catch (e) {
+      debugPrint('getGamificationStats failed: $e');
+      return const {'total_xp': 0, 'login_streak': 0, 'longest_login_streak': 0};
+    }
   }
 
   Future<void> sendCustomNotification({

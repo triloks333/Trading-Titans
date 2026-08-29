@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'supabase_service.dart';
+import '../core/app_constants.dart';
+import '../core/legal.dart';
 import '../models/user.dart' as app_models;
 import 'dart:async';
 import 'notification_service.dart';
@@ -40,6 +42,48 @@ String mapAuthException(dynamic error) {
     return error.toString().substring(error.toString().indexOf('exception: ') + 11);
   }
   return error.toString();
+}
+
+/// True when this is an anonymous ("guest") session.
+///
+/// Two signals because they clear at different moments. [supabaseIsAnonymous]
+/// is the authoritative JWT claim and flips as soon as the session refreshes,
+/// while [profileEmail] still carries the `@guest.tradingtitans` placeholder
+/// until convert_guest_account() syncs it. Treating either as "still a guest"
+/// keeps the upgrade option visible if the profile sync was missed — and
+/// re-running the upgrade is what repairs it.
+bool isGuestAccount({bool? supabaseIsAnonymous, String? profileEmail}) =>
+    (supabaseIsAnonymous ?? false) ||
+    (profileEmail != null && profileEmail.endsWith(AppConstants.guestEmailDomain));
+
+/// Error text for the guest → permanent upgrade.
+///
+/// [mapAuthException]'s generic "An account with this email address already
+/// exists." is a dead end mid-upgrade. Accounts are never merged (moving
+/// orders, holdings and balances between two user ids is exactly the risk this
+/// feature avoids), so the user is told to sign in to the account they already
+/// have instead.
+String mapConversionException(dynamic error) {
+  final raw = error is AuthException ? error.message : error.toString();
+  final msg = raw.toLowerCase();
+
+  if (msg.contains('already been registered') ||
+      msg.contains('already registered') ||
+      msg.contains('already exists') ||
+      msg.contains('already in use')) {
+    return 'That email already has a Trading Titans account. Sign out and sign in '
+        'to it instead, or upgrade with a different email.';
+  }
+  if (msg.contains('already linked') || msg.contains('identity is already')) {
+    return 'That Google account is already linked to another Trading Titans '
+        'account. Sign out and sign in with it instead, or pick a different one.';
+  }
+  // Operator misconfiguration (manual identity linking is off in the Supabase
+  // dashboard), not something the user can act on.
+  if (msg.contains('manual linking') || msg.contains('manual_linking')) {
+    return 'Account upgrades are temporarily unavailable. Please try again later.';
+  }
+  return mapAuthException(error);
 }
 
 /// Immutable result of evaluating the remote `app_config` map against the
@@ -221,12 +265,24 @@ class AuthService extends ChangeNotifier {
 
   bool get isAuthenticated => _user != null;
 
+  /// The `latest_version` the most recent successful config fetch reported.
+  /// Empty until that first fetch; only used to scope the snooze key.
+  String _latestVersion = '';
+
+  /// Snooze key for the soft-update prompt, scoped to the version on offer.
+  ///
+  /// This used to be a single global key, which meant dismissing one release's
+  /// prompt also silenced the *next* release's for 24h — exactly wrong for a
+  /// hotfix. Keying by version means a newly published `latest_version` starts
+  /// with no snooze and is always announced.
+  String get _snoozeKey => 'soft_update_dismissed_time_$_latestVersion';
+
   Future<void> dismissSoftUpdate() async {
     _needsSoftUpdate = false;
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('soft_update_dismissed_time', DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(_snoozeKey, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {}
   }
 
@@ -268,7 +324,7 @@ class AuthService extends ChangeNotifier {
   Future<int?> _readDismissedTimestamp() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getInt('soft_update_dismissed_time');
+      return prefs.getInt(_snoozeKey);
     } catch (_) {
       return null;
     }
@@ -280,10 +336,12 @@ class AuthService extends ChangeNotifier {
   /// can apply their own fail-open vs. retain-last-known policy.
   Future<EvaluationResult> _fetchAndEvaluate() async {
     final localVersion = await _readLocalVersion();
-    final dismissedTs = await _readDismissedTimestamp();
     final config = await _supabase
         .getAppVersionConfig()
         .timeout(const Duration(seconds: 10));
+    // Must be set before the snooze is read: the key is scoped to this version.
+    _latestVersion = config['latest_version'] ?? '';
+    final dismissedTs = await _readDismissedTimestamp();
     return evaluateConfig(
       config,
       localVersion,
@@ -343,10 +401,18 @@ class AuthService extends ChangeNotifier {
       }
       
       final session = data.session;
+      if (event == AuthChangeEvent.userUpdated) {
+        // Fired when a linked identity or a confirmed email lands on the
+        // account — the moment a guest upgrade becomes finalisable.
+        unawaited(_completePendingConversion());
+      }
+
       if (event == AuthChangeEvent.signedIn && session != null) {
         refreshUser();
         unawaited(_applyPendingReferral());
         unawaited(_logPendingSignupAnalytics());
+        unawaited(_applyPendingTermsAcceptance());
+        unawaited(_completePendingConversion());
         unawaited(NotificationService.instance.setup());
         if (FirebaseService.instance.isInitialized) {
           unawaited(FirebaseAnalytics.instance.setUserId(id: session.user.id));
@@ -402,6 +468,7 @@ class AuthService extends ChangeNotifier {
       }
       // Funnel step 3: account created via email.
       unawaited(AnalyticsService.logSignupCompleted('email'));
+      unawaited(_recordTermsAcceptance());
       if (_user == null) {
         unawaited(DiagnosticsService.logLoginFailure(
           'profile_missing_after_register',
@@ -440,6 +507,7 @@ class AuthService extends ChangeNotifier {
       }
       // Funnel step 3: guest session created.
       unawaited(AnalyticsService.logSignupCompleted('guest'));
+      unawaited(_recordTermsAcceptance());
       if (_user == null) {
         unawaited(DiagnosticsService.logLoginFailure(
           'profile_missing_after_guest',
@@ -477,16 +545,133 @@ class AuthService extends ChangeNotifier {
         // Funnel: remember the method so we can log signup_completed when the
         // OAuth round-trip returns the user signed-in.
         await prefs.setString('pending_signup_method', 'google');
+        // Consent was ticked on the auth screen a moment ago, but OAuth leaves
+        // the app entirely, so it cannot be recorded until we are signed in and
+        // back. Stashed for the same reason the referral code is, and applied by
+        // _applyPendingTermsAcceptance() when the auth listener fires.
+        await prefs.setString('pending_terms_version', LegalDocs.termsVersion);
       } catch (_) {}
 
       await _supabase.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: 'io.supabase.tradingtitans://login-callback/',
+        redirectTo: AppConstants.authRedirectUrl,
       );
     } catch (e, st) {
       unawaited(DiagnosticsService.logLoginFailure('google_oauth', e, st));
       throw Exception(mapAuthException(e));
     }
+  }
+
+  /// True when the signed-in account is still a guest.
+  bool get isGuest => isGuestAccount(
+        supabaseIsAnonymous: _supabase.client.auth.currentUser?.isAnonymous,
+        profileEmail: _user?.email,
+      );
+
+  /// Step 1 of the email upgrade: attach [email] to the guest account.
+  ///
+  /// Supabase emails a confirmation link and will not accept a password until
+  /// it has been followed, so the upgrade cannot be a single call. Nothing is
+  /// copied or migrated — the auth user keeps its id, so every order, holding,
+  /// reward and ledger row stays attached.
+  Future<void> startEmailConversion(String email) async {
+    final trimmed = email.trim();
+    if (trimmed.length < 3 ||
+        !trimmed.contains('@') ||
+        trimmed.endsWith(AppConstants.guestEmailDomain)) {
+      throw Exception('Please enter a valid email address.');
+    }
+    unawaited(DiagnosticsService.logStep('convert_email_attempt', identifier: trimmed));
+    try {
+      await _setConversionPending(true);
+      await _supabase.client.auth.updateUser(UserAttributes(email: trimmed));
+    } catch (e, st) {
+      await _setConversionPending(false);
+      unawaited(DiagnosticsService.logLoginFailure('convert_email_link', e, st, trimmed));
+      throw Exception(mapConversionException(e));
+    }
+  }
+
+  /// Step 2 of the email upgrade, reachable only once the address is verified.
+  /// Returns the demo cash credited, or null if the identity is not attached
+  /// yet.
+  Future<num?> setConversionPassword(String password) async {
+    try {
+      await _supabase.client.auth.updateUser(UserAttributes(password: password));
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('convert_set_password', e, st));
+      throw Exception(mapConversionException(e));
+    }
+    return completeConversion();
+  }
+
+  /// Upgrades by linking a Google identity. Uses the same deep link as
+  /// [signInWithGoogle], so the redirect is already wired; the upgrade is
+  /// finalised when the app comes back and the auth listener fires.
+  Future<void> convertWithGoogle() async {
+    unawaited(DiagnosticsService.logStep('convert_google_attempt'));
+    try {
+      await _setConversionPending(true);
+      await _supabase.client.auth.linkIdentity(
+        OAuthProvider.google,
+        redirectTo: AppConstants.authRedirectUrl,
+      );
+    } catch (e, st) {
+      await _setConversionPending(false);
+      unawaited(DiagnosticsService.logLoginFailure('convert_google_link', e, st));
+      throw Exception(mapConversionException(e));
+    }
+  }
+
+  /// Finalises an upgrade. The session is refreshed first: until it is, the JWT
+  /// still carries `is_anonymous: true`, and credit_demo_cash /
+  /// activate_subscription / apply_referral_code would go on rejecting the user
+  /// for the remainder of the token's life.
+  ///
+  /// Returns the demo cash credited, or null when the identity is not fully
+  /// attached yet (the confirmation link has not been followed).
+  Future<num?> completeConversion() async {
+    try {
+      await _supabase.client.auth.refreshSession();
+    } catch (e) {
+      // A stale token only delays the guest restrictions lifting; the upgrade
+      // itself is decided server-side from auth.users, so carry on.
+      debugPrint('Session refresh before conversion failed: $e');
+    }
+    final result = await _supabase.convertGuestAccount();
+    if (!result.converted) return null;
+    await refreshUser();
+    notifyListeners();
+    return result.bonus;
+  }
+
+  /// Finalises an upgrade that was started before an app round-trip (the Google
+  /// redirect, or reopening the app from the email confirmation link).
+  /// Best-effort: the RPC is idempotent, so a retry on the next auth event is
+  /// harmless.
+  Future<void> _completePendingConversion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('pending_conversion') != true) return;
+      final bonus = await completeConversion();
+      if (bonus != null) {
+        await prefs.remove('pending_conversion');
+        unawaited(AnalyticsService.log('guest_conversion_completed', {'bonus': bonus}));
+      }
+    } catch (e) {
+      debugPrint('Pending conversion completion skipped: $e');
+    }
+  }
+
+  Future<void> _setConversionPending(bool pending) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (pending) {
+        await prefs.setBool('pending_conversion', true);
+      } else {
+        await prefs.remove('pending_conversion');
+      }
+    } catch (_) {}
   }
 
   /// Applies any referral code stashed before a Google sign-in. Best-effort:
@@ -511,6 +696,37 @@ class AuthService extends ChangeNotifier {
   /// Fires the signup_completed funnel event for an OAuth (Google) sign-in that
   /// originated from one of our auth buttons. Best-effort and one-shot (the
   /// pending marker is cleared immediately).
+  /// Records acceptance of the Terms and Privacy Policy for the current user.
+  ///
+  /// Called straight after the email and guest account-creation paths, where the
+  /// consent checkbox was ticked moments earlier in the same session.
+  ///
+  /// Best-effort: the checkbox has already gated the UI, so a network failure
+  /// here must not fail an account that was just created successfully. An
+  /// unrecorded acceptance is repaired on the next sign-in, because the RPC is
+  /// idempotent per version.
+  Future<void> _recordTermsAcceptance() async {
+    await _supabase.acceptTerms(LegalDocs.termsVersion);
+  }
+
+  /// Applies the acceptance stashed before a Google redirect.
+  ///
+  /// The Google path cannot record consent inline: `signInWithGoogle` hands off to
+  /// a browser and returns before the user is authenticated, and the RPC derives
+  /// the user from auth.uid(). So the version is written to local storage before
+  /// the redirect and consumed here, once the auth listener confirms a session.
+  /// One-shot — the marker is cleared whether or not the write succeeds, and the
+  /// RPC being idempotent means a lost marker costs nothing.
+  Future<void> _applyPendingTermsAcceptance() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final version = prefs.getString('pending_terms_version');
+      if (version == null) return;
+      await prefs.remove('pending_terms_version');
+      await _supabase.acceptTerms(version);
+    } catch (_) {}
+  }
+
   Future<void> _logPendingSignupAnalytics() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -525,7 +741,7 @@ class AuthService extends ChangeNotifier {
     try {
       await _supabase.client.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'io.supabase.tradingtitans://login-callback/',
+        redirectTo: AppConstants.authRedirectUrl,
       );
     } catch (e) {
       throw Exception(mapAuthException(e));
@@ -548,8 +764,19 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-reads the profile. Never throws: this is called un-awaited from the
+  /// `onAuthStateChange` listener and from screen loads, so a server hiccup here
+  /// became an unhandled async error reported as a fatal crash. On failure the
+  /// last-known user is kept and listeners are not disturbed.
   Future<void> refreshUser() async {
-    _user = await _supabase.getUserProfile();
+    final app_models.User? fresh;
+    try {
+      fresh = await _supabase.getUserProfile();
+    } catch (e) {
+      debugPrint('refreshUser failed, keeping last-known profile: $e');
+      return;
+    }
+    _user = fresh;
     notifyListeners();
   }
 }

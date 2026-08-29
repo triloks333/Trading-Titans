@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme.dart';
 import '../../widgets/crown_logo.dart';
+import '../../widgets/legal_consent.dart';
+import '../../widgets/web_page.dart';
 import '../../services/auth_service.dart';
 import '../../services/analytics_service.dart';
 
@@ -21,6 +23,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _referralController = TextEditingController();
   bool _hasReferral = false;
   bool _busy = false;
+
+  /// Consent for account creation. Both paths on this screen create an account.
+  bool _acceptedLegal = false;
+  bool _showLegalError = false;
   String? _error;
   bool _obscurePassword = true;
 
@@ -78,8 +84,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  /// Consent gate for both account-creating paths on this screen.
+  ///
+  /// Not folded into [_isValid] on purpose: that disables the Create Account
+  /// button, and a dead button gives the user no reason. Checking here lets the
+  /// tap through to a visible explanation instead.
+  bool _requireLegalConsent() {
+    if (_acceptedLegal) return true;
+    setState(() {
+      _showLegalError = true;
+      _error = null;
+    });
+    return false;
+  }
+
   Future<void> _submit() async {
     if (!_isValid) return;
+    if (!_requireLegalConsent()) return;
 
     setState(() {
       _busy = true;
@@ -109,6 +130,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
+    if (!_requireLegalConsent()) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -139,7 +161,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.parchment,
-      body: SafeArea(
+      // Capped for the browser: this screen is pushed from the login screen, so
+      // it never passes through the gate in main.dart that caps the others.
+      body: webFormPage(SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: SingleChildScrollView(
@@ -210,6 +234,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: AppSpacing.xs),
                         _buildField(_referralController, 'e.g. TT-XXXXXX', false),
                       ],
+                      const SizedBox(height: AppSpacing.md),
+                      // Above the Create Account button and the Google button
+                      // below it: on this screen both create an account, so the
+                      // checkbox governs everything that follows.
+                      LegalConsentCheckbox(
+                        value: _acceptedLegal,
+                        showError: _showLegalError,
+                        onChanged: (v) => setState(() {
+                          _acceptedLegal = v;
+                          if (v) _showLegalError = false;
+                        }),
+                      ),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.sm),
                         Text(_error!, style: const TextStyle(color: AppColors.bear, fontSize: 13)),
@@ -288,11 +324,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                 ),
+                // Foot of the page, outside the card and separate from the consent
+                // checkbox, aligned to the same horizontal padding as the card.
+                const SizedBox(height: AppSpacing.lg),
+                const AuthDisclaimer(),
+                const SizedBox(height: AppSpacing.xl),
               ],
             ),
           ),
         ),
-      ),
+      )),
     );
   }
 
