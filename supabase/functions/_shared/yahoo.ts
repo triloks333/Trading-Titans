@@ -217,9 +217,27 @@ interface HistoryResult {
 export async function fetchHistory(
   symbol: string,
   range: string,
-  interval?: string
+  interval?: string,
+  opts?: {
+    /**
+     * Pre-resolved Yahoo symbol. Supply this for a US listing: `toYfSymbol`
+     * appends ".NS" to anything unsuffixed, so AAPL became AAPL.NS, which does
+     * not exist and made every US chart fail with a 500.
+     */
+    yfSymbol?: string;
+    /**
+     * Honour `range` AND `interval` exactly as given.
+     *
+     * Off by default because the shipped mobile client sends `range=1mo` with a
+     * real `interval` and depends on the interval winning — the map below then
+     * picks the range. Turning that into a silent behaviour change for an app
+     * already on the Play Store is not worth the tidiness, so callers that want
+     * both respected ask for it.
+     */
+    strict?: boolean;
+  }
 ): Promise<HistoryResult> {
-  const yfSym = toYfSymbol(symbol);
+  const yfSym = opts?.yfSymbol ?? toYfSymbol(symbol);
 
   const periodMap: Record<string, string> = {
     "1d": "1d", "5d": "5d", "1mo": "1mo", "3mo": "3mo",
@@ -242,7 +260,13 @@ export async function fetchHistory(
   let period: string;
   let yfInterval: string;
 
-  if (interval && intervalMap[interval]) {
+  if (opts?.strict && interval) {
+    // Both as asked. Without this branch `range` is silently discarded whenever
+    // an interval is present, so range=3mo&interval=1d quietly returned a full
+    // year — which made a "3M" and a "1Y" button produce identical charts.
+    period = periodMap[range] ?? range;
+    yfInterval = interval;
+  } else if (interval && intervalMap[interval]) {
     period = intervalMap[interval].range;
     yfInterval = intervalMap[interval].interval;
   } else {
@@ -308,6 +332,45 @@ export async function searchStocks(query: string): Promise<{ symbol: string; nam
         market: "stock",
       };
     });
+}
+
+/**
+ * Search US-listed equities.
+ *
+ * Mirror image of searchStocks: that one keeps Indian listings, this one keeps
+ * US ones. Yahoo marks US listings with an empty/undefined `exchDisp` suffix, so
+ * the reliable filter is "no dot suffix in the symbol" — AAPL is US, AAPL.NS and
+ * SAP.DE are not.
+ */
+export async function searchUsStocks(
+  query: string,
+): Promise<{ symbol: string; name: string; market: string }[]> {
+  const url = `${YAHOO_SEARCH}?q=${encodeURIComponent(query)}&count=25`;
+  const res = await fetch(url, { headers: { "User-Agent": UA } });
+  if (!res.ok) return [];
+
+  const json = await res.json();
+  const quotes: any[] = json.quotes ?? [];
+  const US_EXCHANGES = new Set(["NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BATS"]);
+
+  return quotes
+    .filter((q: any) => {
+      const sym: string = q.symbol ?? "";
+      if (!sym) return false;
+      // A dot suffix means a non-US listing (.NS, .BO, .DE, .L). Class shares
+      // like BRK-B use a dash on the search endpoint, so they survive this.
+      if (/\.[A-Z]{1,3}$/i.test(sym)) return false;
+      if (sym.startsWith("0P") || sym.startsWith("^")) return false;
+      if (q.quoteType !== "EQUITY") return false;
+      if (q.exchange && !US_EXCHANGES.has(q.exchange)) return false;
+      return true;
+    })
+    .slice(0, 25)
+    .map((q: any) => ({
+      symbol: (q.symbol ?? "").toUpperCase(),
+      name: q.longName ?? q.shortName ?? q.symbol ?? "",
+      market: "us_stock",
+    }));
 }
 
 export async function whatIfYahoo(

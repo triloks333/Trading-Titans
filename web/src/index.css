@@ -1,0 +1,93 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens ported 1:1 from app/lib/core/theme.dart so the web app is
+ * recognisably the same product as the Android app. Both light and dark values
+ * come straight from AppColors.
+ *
+ * Note the legacy names: `imperialGold` in the Flutter code is #1A73E8 — a blue.
+ * The palette was rebranded from gold and the constant names were never renamed
+ * (theme.dart still carries a "Brand blues" comment). Here they are named for
+ * what they actually are.
+ */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Surfaces (light) */
+  --color-parchment: #f4f7fb;
+  --color-warm-white: #f8fafd;
+  --color-pure-white: #ffffff;
+  --color-cream: #eef4fb;
+  --color-sand: #e6eef7;
+  --color-birch: #dde7f2;
+
+  /* Brand */
+  --color-brand-deep: #0b5fbf;
+  --color-brand: #1a73e8;
+  --color-brand-mid: #3b8bf2;
+  --color-brand-light: #bbd7f8;
+  --color-brand-pale: #eaf2fc;
+  --color-brand-border: #a8c6ec;
+
+  /* Ink */
+  --color-ink: #0b1b2b;
+  --color-ink-2: #102a43;
+  --color-ink-3: #334e68;
+  --color-ink-4: #627d98;
+  --color-ink-5: #9fb3c8;
+
+  /* Semantic */
+  --color-bull: #0f9d58;
+  --color-bull-light: #d8f3e2;
+  --color-bear: #d93025;
+  --color-bear-light: #fce4e2;
+  --color-violet: #6d28d9;
+  --color-violet-light: #ede9fe;
+
+  /* Radii, from AppRadius */
+  --radius-tag: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* Dark theme values, also from AppColors.isDark branches. */
+.dark {
+  --color-parchment: #0d1527;
+  --color-warm-white: #111c33;
+  --color-pure-white: #162544;
+  --color-cream: #1e3054;
+  --color-sand: #263c66;
+  --color-birch: #2d4676;
+  --color-brand-pale: #0f1e3d;
+  --color-brand-border: #233a66;
+  --color-ink: #f4f7fb;
+  --color-ink-2: #e2ecf7;
+  --color-ink-3: #c3d2e2;
+  --color-ink-4: #91a3b8;
+  --color-ink-5: #627d98;
+  --color-bull-light: #063a22;
+  --color-bear-light: #4c0e0b;
+  --color-violet-light: #2e1065;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-parchment);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures everywhere money is shown, so digits do not jitter as prices
+   tick. This is the single biggest readability win on a trading screen. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}

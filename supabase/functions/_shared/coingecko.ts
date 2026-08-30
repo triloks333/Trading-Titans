@@ -8,7 +8,7 @@ const SYMBOL_OVERRIDES: Record<string, string> = {
   xrp: "ripple",
   doge: "dogecoin",
   bnb: "binancecoin",
-  matic: "matic-network",
+  pol: "polygon-ecosystem-token", // was matic/matic-network before the Polygon rebrand
   dot: "polkadot",
   ltc: "litecoin",
   avax: "avalanche-2",
@@ -109,8 +109,11 @@ export async function fetchHistory(
   const cgId = resolveCgId(sym);
   if (!cgId) throw new Error(`Unknown crypto: ${sym}`);
 
+  // CoinGecko's public /ohlc accepts only a fixed set of day counts. `5y` mapped
+  // to 1825, which is not one of them, so every 5-year crypto chart failed
+  // outright. 365 is the longest the free tier serves, so that is the honest cap.
   const daysMap: Record<string, number> = {
-    "1d": 1, "5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "5y": 1825,
+    "1d": 1, "5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "5y": 365,
   };
   const days = daysMap[range] ?? 30;
 
@@ -122,14 +125,41 @@ export async function fetchHistory(
   const json = await res.json();
   const ohlc: [number, number, number, number, number][] = json ?? [];
 
-  const step = Math.max(1, Math.floor(ohlc.length / 100));
+  /*
+   * Downsample by AGGREGATING, not by sampling.
+   *
+   * This used to keep every `step`-th candle and discard the rest, which quietly
+   * corrupted the chart: the true high and low of a period lived in the candles
+   * that were thrown away, so wicks were shortened or lost and the visible range
+   * was narrower than the market's. Merging a group into one candle — first open,
+   * highest high, lowest low, last close — is what a longer timeframe actually
+   * means and preserves the extremes.
+   */
+  const target = 120;
+  const step = Math.max(1, Math.ceil(ohlc.length / target));
   const candles: CandleData[] = [];
   const points: { t: number; v: number }[] = [];
 
   for (let i = 0; i < ohlc.length; i += step) {
-    const [ts, o, h, l, c] = ohlc[i];
-    candles.push({ t: ts, o: round(o, 2), h: round(h, 2), l: round(l, 2), c: round(c, 2) });
-    points.push({ t: ts, v: round(c, 2) });
+    const group = ohlc.slice(i, i + step);
+    if (group.length === 0) continue;
+    const ts = group[0][0];
+    const open = group[0][1];
+    let high = group[0][2];
+    let low = group[0][3];
+    for (const [, , h, l] of group) {
+      if (h > high) high = h;
+      if (l < low) low = l;
+    }
+    const close = group[group.length - 1][4];
+    candles.push({
+      t: ts,
+      o: round(open, 2),
+      h: round(high, 2),
+      l: round(low, 2),
+      c: round(close, 2),
+    });
+    points.push({ t: ts, v: round(close, 2) });
   }
   return { symbol: sym.toUpperCase(), points, candles };
 }

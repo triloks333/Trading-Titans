@@ -1,0 +1,13 @@
+node_modules
+dist
+.vercel
+.env
+.env.local
+*.local
+
+.vercel
+.env*
+
+# TypeScript incremental build cache. A stale one reports errors for code that has
+# already been fixed, so it must not be shared between machines.
+tsconfig.tsbuildinfo
