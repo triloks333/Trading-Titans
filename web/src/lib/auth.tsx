@@ -8,7 +8,17 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, GUEST_EMAIL_DOMAIN, authRedirectUrl } from './supabase'
+import { TERMS_VERSION } from './legal'
 import type { Profile } from './types'
+
+/**
+ * Where a consent decision waits out the Google redirect.
+ *
+ * An OAuth sign-in leaves the page entirely and comes back on a fresh load, so
+ * the fact that the user ticked the box before leaving is gone unless it is
+ * persisted. Mirrors `pending_terms_version` in SharedPreferences on mobile.
+ */
+const PENDING_TERMS_KEY = 'tt_pending_terms_version'
 
 interface AuthState {
   session: Session | null
@@ -21,6 +31,8 @@ interface AuthState {
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  /** Records acceptance of the current policy revision. Idempotent per version. */
+  acceptTerms: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -72,20 +84,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile((retry.data as Profile) ?? null)
   }
 
+  /**
+   * Records consent through the `accept_terms` RPC.
+   *
+   * It has to be an RPC: migration 20260827000000 revoked UPDATE on
+   * `public.profiles` from authenticated after finding clients could set their own
+   * `is_admin` and `wallet_balance`, so a direct write here fails with permission
+   * denied. The function derives the user from `auth.uid()` and takes only the
+   * version, so nobody can record consent on another account's behalf.
+   */
+  async function recordTerms() {
+    try {
+      await supabase.rpc('accept_terms', { p_version: TERMS_VERSION })
+    } catch (e) {
+      // Never block sign-in on this. A failure leaves `terms_accepted_at` NULL,
+      // which is recoverable and visible; refusing entry to someone who has just
+      // ticked the box is not.
+      console.warn('Could not record terms acceptance', e)
+    }
+  }
+
+  /** Applies a decision that was made before a Google redirect took the page away. */
+  async function applyPendingTerms() {
+    let pending: string | null = null
+    try {
+      pending = window.localStorage.getItem(PENDING_TERMS_KEY)
+    } catch {
+      return
+    }
+    if (!pending) return
+    try {
+      window.localStorage.removeItem(PENDING_TERMS_KEY)
+    } catch {
+      /* ignore */
+    }
+    await recordTerms()
+  }
+
   useEffect(() => {
     let active = true
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return
       setSession(data.session)
-      if (data.session?.user) await loadProfile(data.session.user.id)
+      if (data.session?.user) {
+        await loadProfile(data.session.user.id)
+        await applyPendingTerms()
+      }
       if (active) setLoading(false)
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next)
-      if (next?.user) void loadProfile(next.user.id)
-      else setProfile(null)
+      if (next?.user) {
+        void loadProfile(next.user.id)
+        void applyPendingTerms()
+      } else setProfile(null)
     })
 
     return () => {
@@ -115,6 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(mapAuthError(error))
       },
 
+      async acceptTerms() {
+        await recordTerms()
+      },
+
       async register(email, password, name) {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
@@ -142,6 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data } = await supabase.auth.getUser()
           if (data.user) {
             await loadProfile(data.user.id)
+            // A guest account is an account, so its consent is recorded too.
+            await recordTerms()
             break
           }
           await new Promise((r) => setTimeout(r, 400))
@@ -149,6 +209,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signInWithGoogle() {
+        // Stash the decision BEFORE leaving: the redirect discards all in-memory
+        // state, and the session comes back on a fresh page load where nothing
+        // remembers that the box was ticked.
+        try {
+          window.localStorage.setItem(PENDING_TERMS_KEY, TERMS_VERSION)
+        } catch {
+          /* private browsing; consent is simply not recorded */
+        }
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo: authRedirectUrl() },

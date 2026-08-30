@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { BarChart3, Lock, Wallet, TrendingUp } from 'lucide-react'
+import { BarChart3, Lock, Wallet, TrendingUp, ShieldAlert } from 'lucide-react'
 import { Button, Input, Label } from '@/components/ui'
 import { useAuth } from '@/lib/auth'
+import { LegalSheet } from '@/components/LegalSheet'
+import { AUTH_DISCLAIMER, PRIVACY, TERMS, type LegalDoc } from '@/lib/legal'
 
 const POINTS = [
   {
@@ -49,6 +51,8 @@ export function AuthPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(() => readHashOutcome())
   const [notice, setNotice] = useState<string | null>(null)
+  const [accepted, setAccepted] = useState(false)
+  const [doc, setDoc] = useState<LegalDoc | null>(null)
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
@@ -60,6 +64,33 @@ export function AuthPage() {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+    }
+  }
+
+  /*
+   * Consent gate.
+   *
+   * Applies to the three routes that CREATE an account — email registration,
+   * Google, and guest — and deliberately not to an email/password sign-in, whose
+   * user accepted at signup and has it recorded. Re-asking on every login would be
+   * friction with no legal value. Same scope decision as the mobile app.
+   *
+   * Google and Guest are reachable from both the sign-in and the register view, so
+   * gating the register form alone would leave the requirement bypassable in two
+   * taps.
+   */
+  const needsConsent = mode === 'register'
+  function guarded(fn: () => Promise<void>): () => void {
+    return () => {
+      if (!accepted) {
+        // The buttons stay enabled and explain themselves. A disabled control with
+        // no reason attached is the more common design and the worse one: the user
+        // clicks, nothing happens, and they have to guess.
+        setNotice(null)
+        setError('Please accept the Terms & Conditions and Privacy Policy first.')
+        return
+      }
+      void run(fn)
     }
   }
 
@@ -117,6 +148,11 @@ export function AuthPage() {
             className="mt-7 space-y-4"
             onSubmit={(e) => {
               e.preventDefault()
+              if (needsConsent && !accepted) {
+                setNotice(null)
+                setError('Please accept the Terms & Conditions and Privacy Policy first.')
+                return
+              }
               void run(async () => {
                 if (mode === 'signin') {
                   await auth.signIn(email, password)
@@ -168,6 +204,39 @@ export function AuthPage() {
               />
             </div>
 
+            {/* Mandatory before an account can be created. Shown above the submit
+                button so it is read before the click, not after the rejection. */}
+            <label className="flex cursor-pointer items-start gap-2.5 pt-1">
+              <input
+                type="checkbox"
+                checked={accepted}
+                onChange={(e) => {
+                  setAccepted(e.target.checked)
+                  if (e.target.checked) setError(null)
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-birch text-brand focus:ring-2 focus:ring-brand"
+              />
+              <span className="text-[11px] leading-relaxed text-ink-3">
+                I accept the{' '}
+                <button
+                  type="button"
+                  onClick={() => setDoc(TERMS)}
+                  className="font-semibold text-brand underline hover:no-underline"
+                >
+                  Terms &amp; Conditions
+                </button>{' '}
+                and{' '}
+                <button
+                  type="button"
+                  onClick={() => setDoc(PRIVACY)}
+                  className="font-semibold text-brand underline hover:no-underline"
+                >
+                  Privacy Policy
+                </button>
+                , and I understand this app uses virtual money only.
+              </span>
+            </label>
+
             {error && (
               <p className="rounded-md bg-bear-light px-3 py-2 text-xs leading-relaxed text-bear">
                 {error}
@@ -190,12 +259,14 @@ export function AuthPage() {
             <span className="h-px flex-1 bg-birch" />
           </div>
 
+          {/* Google and Guest both CREATE an account, so both are gated regardless
+              of which view the user is on. */}
           <Button
             variant="outline"
             size="lg"
             className="w-full"
             disabled={busy}
-            onClick={() => void run(auth.signInWithGoogle)}
+            onClick={guarded(auth.signInWithGoogle)}
           >
             <GoogleMark />
             Continue with Google
@@ -206,7 +277,7 @@ export function AuthPage() {
             size="lg"
             className="mt-2 w-full"
             disabled={busy}
-            onClick={() => void run(auth.continueAsGuest)}
+            onClick={guarded(auth.continueAsGuest)}
           >
             <Lock className="h-3.5 w-3.5" />
             Explore as guest (₹5,000)
@@ -227,12 +298,30 @@ export function AuthPage() {
             </button>
           </p>
 
-          <p className="mt-8 text-center text-[11px] leading-relaxed text-ink-5">
-            Virtual money only. Trading Titans is an educational simulator and
-            does not offer real trading or investment advice.
-          </p>
+          {/* The standing disclaimer, kept SEPARATE from the checkbox on purpose.
+              They are two different things: one is a consent the user gives, the
+              other is a disclosure we owe them. Folding the disclosure into the
+              checkbox label would bury it in text nobody reads before ticking. */}
+          <div className="mt-8 rounded-md border border-birch bg-parchment px-4 py-3.5">
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-ink-4" />
+              <p className="text-[10px] font-extrabold uppercase tracking-wide text-ink-4">
+                Please read
+              </p>
+            </div>
+            {AUTH_DISCLAIMER.split('\n\n').map((para, i) => (
+              <p
+                key={i}
+                className={`text-[11px] leading-relaxed text-ink-4 ${i === 0 ? 'mt-2' : 'mt-2'}`}
+              >
+                {para}
+              </p>
+            ))}
+          </div>
         </div>
       </main>
+
+      <LegalSheet doc={doc} onClose={() => setDoc(null)} />
     </div>
   )
 }

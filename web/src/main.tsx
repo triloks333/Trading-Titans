@@ -11,7 +11,10 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Trade } from '@/pages/Trade'
 import { Portfolio } from '@/pages/Portfolio'
 import { WalletPage } from '@/pages/WalletPage'
-import { Placeholder } from '@/pages/Placeholder'
+import { Leaderboard } from '@/pages/Leaderboard'
+import { Autopsy } from '@/pages/Autopsy'
+import { Notifications } from '@/pages/Notifications'
+import { UpgradeAccount } from '@/pages/UpgradeAccount'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,37 +48,10 @@ function Root() {
         <Route path="/trade" element={<Trade />} />
         <Route path="/portfolio" element={<Portfolio />} />
         <Route path="/wallet" element={<WalletPage />} />
-        <Route
-          path="/leaderboard"
-          element={
-            <Placeholder
-              title="Leaderboard"
-              note="Ranked by percentage return so capital cannot buy rank."
-            />
-          }
-        />
-        <Route
-          path="/autopsy"
-          element={
-            <Placeholder
-              title="Trade Autopsy"
-              note="Post-mortem of a closed trade: entry, exit, charges and what went wrong."
-            />
-          }
-        />
-        <Route
-          path="/notifications"
-          element={<Placeholder title="Notifications" note="Reads public.notifications." />}
-        />
-        <Route
-          path="/upgrade"
-          element={
-            <Placeholder
-              title="Make account permanent"
-              note="Attach Google or an email and password to keep everything and claim ₹6,000."
-            />
-          }
-        />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/autopsy" element={<Autopsy />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/upgrade" element={<UpgradeAccount />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
