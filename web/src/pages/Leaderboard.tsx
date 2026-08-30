@@ -13,6 +13,13 @@ interface Row {
   wallet_balance: number | null
 }
 
+/** True only for a paying plan. Everything free, however it is spelled, is not. */
+function isPaidPlan(plan: string | null): boolean {
+  if (!plan) return false
+  const p = plan.toLowerCase()
+  return p !== 'free' && !p.startsWith('free_')
+}
+
 /**
  * Leaderboard, read from the `leaderboard` VIEW rather than `profiles`.
  *
@@ -126,8 +133,13 @@ export function Leaderboard() {
                             {r.name?.trim() || 'Anonymous Titan'}
                           </span>
                           {isMe && <Badge tone="brand">YOU</Badge>}
-                          {r.plan && r.plan !== 'free' && (
-                            <Badge tone="violet">{r.plan.toUpperCase()}</Badge>
+                          {/* Only a genuinely paid plan is worth a badge. The check
+                              was `!== 'free'`, but every account is on
+                              'free_starter', so all 176 rows carried an identical
+                              FREE_STARTER tag — pure noise that said nothing about
+                              anyone. */}
+                          {isPaidPlan(r.plan) && (
+                            <Badge tone="violet">{r.plan!.toUpperCase()}</Badge>
                           )}
                         </div>
                       </td>
