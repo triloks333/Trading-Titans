@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../screens/main/notifications_screen.dart'
+    show openNotificationCta, parseActionData;
+import 'auth_service.dart' show AuthService;
 import 'firebase_service.dart';
 
 /// Classifies a notification so it can be mapped to a dedicated Android
@@ -133,6 +137,12 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(
       settings: initializationSettings,
+      // Covers the foreground case only. A push that arrives while the app is
+      // open is posted by us as a local notification (see the onMessage handler),
+      // so the OS routes its tap here rather than through FirebaseMessaging.
+      onDidReceiveNotificationResponse: (response) {
+        openPushTarget(response.payload);
+      },
     );
 
     _isLocalInitialized = true;
@@ -300,12 +310,55 @@ class NotificationService {
           title: title.isEmpty ? 'Trading Titans' : title,
           body: body,
           category: categoryFromType(data['type']),
+          // Carried through so the tap can route. Without it, a push that landed
+          // while the app was open would open nothing when tapped.
+          payload: jsonEncode(data),
         );
       });
+
+      // 5. Tap handling. Two separate paths, and both are needed:
+      //   - onMessageOpenedApp fires when the app was in the BACKGROUND and the
+      //     OS-drawn notification is tapped.
+      //   - getInitialMessage covers a TERMINATED app: the tap is what launched
+      //     the process, so there is no stream event to listen for, only this one
+      //     message waiting to be collected.
+      // The foreground case is the local-notification callback in
+      // _initLocalNotifications.
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        openPushTarget(message.data);
+      });
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) openPushTarget(initial.data);
 
     } catch (e) {
       debugPrint('Error setting up Notification Service: $e');
     }
+  }
+
+  /// Opens whatever a tapped notification pointed at.
+  ///
+  /// Takes either an FCM `data` map or a local-notification payload string —
+  /// [parseActionData] already accepts both and returns null on anything
+  /// unusable, which is exactly this job and is already covered by tests.
+  ///
+  /// The FCM `data` map deliberately reuses `action_data`'s key names
+  /// (`cta_route`, `cta_url`, ...), so it can be handed straight to the same
+  /// allow-list the in-app button uses instead of inventing a second routing
+  /// contract. `fallbackToList: true` because a push tap has no notification list
+  /// on screen, so an absent or unrecognised route should open the list rather
+  /// than swallow the tap.
+  ///
+  /// Silently gives up when there is no navigator yet: a tap that launched the
+  /// process can arrive before the first frame, and a dropped deep link is a much
+  /// better outcome than a crash on startup.
+  static void openPushTarget(Object? payloadOrData) {
+    final context = AuthService.navigatorKey.currentContext;
+    if (context == null) {
+      debugPrint('openPushTarget: no navigator yet, ignoring tap');
+      return;
+    }
+    openNotificationCta(context, parseActionData(payloadOrData),
+        fallbackToList: true);
   }
 
   Future<void> _registerToken(String token) async {
@@ -341,11 +394,15 @@ class NotificationService {
   /// through unchanged (R2.4). Absent or wrong-format sound assets never
   /// surface an error to the caller; the platform default sound is used and the
   /// post still completes (R5.3, R5.4).
+  /// [payload] is opaque to this method and handed back by the OS when the
+  /// notification is tapped. Optional, so existing callers that post a purely
+  /// informational notification are unchanged.
   Future<ShowNotificationResult> showNotification({
     required int id,
     required String title,
     required String body,
     NotificationCategory category = NotificationCategory.broadcast,
+    String? payload,
   }) async {
     // Validate required input (R2.6). Reject and post nothing.
     if (title.trim().isEmpty) {
@@ -403,6 +460,7 @@ class NotificationService {
         title: title,
         body: body,
         notificationDetails: platformDetails,
+        payload: payload,
       );
     } catch (e) {
       debugPrint('showNotification: custom-sound post failed ($e); retrying with default sound');
@@ -425,6 +483,7 @@ class NotificationService {
           title: title,
           body: body,
           notificationDetails: NotificationDetails(android: fallbackAndroid, iOS: fallbackIos),
+          payload: payload,
         );
       } catch (e2) {
         debugPrint('showNotification: fallback post also failed: $e2');

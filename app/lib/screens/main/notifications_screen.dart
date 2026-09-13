@@ -554,79 +554,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   String? _ctaLabel(Map<String, dynamic> n) => ctaLabel(_actionData(n));
 
-  /// Follows the notification's call to action.
-  ///
-  /// `cta_route` is preferred: it stays inside the app, so the wallet and plans
-  /// screens open with the user's session already in hand. `cta_url` is the
-  /// fallback for anything that only exists on the web, and is restricted to
-  /// https so a crafted row cannot launch some other scheme.
-  Future<void> _openCta(Map<String, dynamic> n) async {
-    final data = _actionData(n);
-    final route = (data?['cta_route'] as String?)?.trim().toLowerCase();
-
-    switch (route) {
-      case 'plans':
-      case 'topup':
-      case 'subscribe':
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SubscribeScreen()),
-        );
-        return;
-      case 'wallet':
-        NavTabService.goToTab(NavTabService.wallet);
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        return;
-      case 'league':
-      case 'leaderboard':
-        NavTabService.goToTab(NavTabService.league);
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        return;
-      case 'feature':
-        await showRequestFeatureSheet(context);
-        return;
-      case 'wishlist':
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
-        );
-        return;
-      case 'orders':
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const OrdersScreen()),
-        );
-        return;
-      case 'referral':
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
-        );
-        return;
-      case 'portfolio':
-        NavTabService.goToTab(NavTabService.portfolio);
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        return;
-      case 'trade':
-        NavTabService.goToTab(NavTabService.trade);
-        Navigator.of(context).popUntil((r) => r.isFirst);
-        return;
-      case 'notifications':
-        // Deliberately does nothing: the sheet has already closed and this screen
-        // IS the notification list, so there is nowhere left to go. The route is
-        // still accepted rather than dropped, because `ctaLabel` refuses to draw
-        // a button for a route it does not recognise — so without this case a
-        // campaign naming it would show no button at all, and a future push-tap
-        // handler would have no valid target to send people to.
-        return;
-    }
-
-    final raw = (data?['cta_url'] as String?)?.trim() ?? '';
-    if (!raw.startsWith('https://')) return;
-    final uri = Uri.tryParse(raw);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      /* nothing useful to say; the sheet has already closed */
-    }
-  }
+  Future<void> _openCta(Map<String, dynamic> n) =>
+      openNotificationCta(context, _actionData(n));
 
   IconData _iconForTitle(String title) {
     final t = title.toLowerCase();
@@ -639,4 +568,99 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (t.contains('cancel')) return Icons.cancel_outlined;
     return Icons.notifications_outlined;
   }
+}
+
+/// Follows a notification's call to action.
+///
+/// Top-level so a system-tray push tap and the in-app button land in the same
+/// place through the same [kNotificationCtaRoutes] allow-list. Two copies of this
+/// switch would drift, and the drift would read as a button that works inside the
+/// app next to a push that goes nowhere.
+///
+/// `cta_route` is preferred: it stays inside the app, so the wallet and plans
+/// screens open with the user's session already in hand. `cta_url` is the fallback
+/// for anything that only exists on the web, and is restricted to https so a
+/// crafted row cannot launch some other scheme.
+///
+/// [fallbackToList] is for callers that are not already showing the notification
+/// list, which in practice means a push tap. It makes an absent, unrecognised or
+/// 'notifications' route open the list instead of swallowing the tap — tapping a
+/// notification must always do something. The in-app button leaves it false
+/// because it is already on that screen.
+Future<void> openNotificationCta(
+  BuildContext context,
+  Map<String, dynamic>? data, {
+  bool fallbackToList = false,
+}) async {
+  final route = (data?['cta_route'] as String?)?.trim().toLowerCase();
+
+  switch (route) {
+    case 'plans':
+    case 'topup':
+    case 'subscribe':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SubscribeScreen()),
+      );
+      return;
+    case 'wallet':
+      NavTabService.goToTab(NavTabService.wallet);
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    case 'league':
+    case 'leaderboard':
+      NavTabService.goToTab(NavTabService.league);
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    case 'feature':
+      await showRequestFeatureSheet(context);
+      return;
+    case 'wishlist':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
+      );
+      return;
+    case 'orders':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OrdersScreen()),
+      );
+      return;
+    case 'referral':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
+      );
+      return;
+    case 'portfolio':
+      NavTabService.goToTab(NavTabService.portfolio);
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    case 'trade':
+      NavTabService.goToTab(NavTabService.trade);
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    case 'notifications':
+      // No navigation of its own. For the in-app button this screen already IS
+      // the list, and for a push tap the fallback below opens it. The route is
+      // still named here rather than dropped, because `ctaLabel` refuses to draw
+      // a button for a route it does not recognise.
+      break;
+  }
+
+  final raw = (data?['cta_url'] as String?)?.trim() ?? '';
+  if (raw.startsWith('https://')) {
+    final uri = Uri.tryParse(raw);
+    if (uri != null) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      } catch (_) {
+        // Fall through: a launcher that refused is still a tap that deserves
+        // somewhere to land.
+      }
+    }
+  }
+
+  if (!fallbackToList || !context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+  );
 }

@@ -157,6 +157,57 @@ void main() {
     });
   });
 
+  group('push tap payload', () {
+    // The push-notification edge function forwards cta_route / cta_url / symbol /
+    // market into the FCM `data` map under those exact names, so the tap handler
+    // can pass the map straight to the same allow-list the in-app button uses.
+    // Nothing enforces that agreement at compile time across the TS/Dart
+    // boundary, so it is pinned here.
+
+    test('an FCM data map is already a usable action_data map', () {
+      final pushData = parseActionData({
+        'type': 'broadcast',
+        'cta_route': 'trade',
+        'cta_url': 'https://thetradingtitans.com/app',
+      });
+      expect(pushData, isNotNull);
+      expect(kNotificationCtaRoutes, contains(pushData!['cta_route']));
+    });
+
+    test('a local-notification payload string decodes to the same map', () {
+      // The foreground path stores the FCM data as JSON on the local notification
+      // and gets it back as a string when the user taps it.
+      expect(
+        parseActionData('{"type":"broadcast","cta_route":"wallet"}'),
+        {'type': 'broadcast', 'cta_route': 'wallet'},
+      );
+    });
+
+    test('a push carrying no route still yields something to fall back on', () {
+      // Most notifications have no CTA at all. The handler opens the list in that
+      // case, so null here must not be an error — just an absent route.
+      final pushData = parseActionData({'type': 'order_executed'});
+      expect(pushData, isNotNull);
+      expect(pushData!['cta_route'], isNull);
+    });
+
+    test('every admin destination still routes after the push round trip', () {
+      // The in-app button and the tray tap share one allow-list. If they diverge,
+      // the button works and the tap silently falls back to the list instead.
+      for (final dest in kAdminCtaDestinations.keys
+          .where((k) => k.isNotEmpty && !k.startsWith('_'))) {
+        final data = parseActionData('{"cta_route":"$dest"}');
+        expect(kNotificationCtaRoutes, contains(data!['cta_route']),
+            reason: '$dest would not route from a push tap');
+      }
+    });
+
+    test('a forwarded symbol still identifies an instrument', () {
+      expect(instrumentSymbolFor('order', parseActionData({'symbol': 'RELIANCE'})),
+          'RELIANCE');
+    });
+  });
+
   test('every admin destination is a route the app can actually open', () {
     // The guard for the "Trade button opens the top-up page" bug. The admin
     // dropdown and the client allow-list are two separate lists that must agree;

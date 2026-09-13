@@ -5,7 +5,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // (via pg_net) so EVERY in-app notification, from any source (edge functions,
 // SQL crons, manual inserts), also reaches the phone system tray.
 //
-// Body: { user_id, title, body, action_type }
+// Body: { user_id, title, body, action_type, action_data? }
+//
+// `action_data` is forwarded into the FCM `data` payload under the SAME key names
+// the in-app call-to-action already uses (cta_route, cta_url, symbol, market), so
+// the client can hand it straight to its existing route allow-list rather than
+// translate between two routing contracts. Without this the tray push carried only
+// `type` and tapping it could not know where to go.
 
 const FCM_SA = Deno.env.get("FCM_SERVICE_ACCOUNT");
 
@@ -71,13 +77,38 @@ serve(async (req) => {
   catch (e) { console.error("FCM init failed:", e instanceof Error ? e.message : String(e)); return new Response(JSON.stringify({ pushed: 0, fcm: false }), { headers: { "Content-Type": "application/json" } }); }
 
   const { channel, type } = channelFor(actionType);
+
+  // Tolerate both shapes: pg_net nests jsonb as a real object, but a caller that
+  // stringified it should still work. Mirrors parseActionData() in the client.
+  let actionData: Record<string, unknown> | null = null;
+  const rawAction = body.action_data;
+  if (rawAction && typeof rawAction === "object" && !Array.isArray(rawAction)) {
+    actionData = rawAction as Record<string, unknown>;
+  } else if (typeof rawAction === "string" && rawAction.trim() !== "") {
+    try {
+      const parsed = JSON.parse(rawAction);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) actionData = parsed;
+    } catch (_) { /* not JSON; leave null */ }
+  }
+
+  // FCM data values must be strings, and an empty key is worse than an absent one
+  // (the client would read '' as a route and reject it, losing the fallback). Only
+  // these four keys are forwarded — no reason to ship a whole row to the handset.
+  const pushData: Record<string, string> = { type };
+  for (const key of ["cta_route", "cta_url", "symbol", "market"]) {
+    const raw = actionData?.[key];
+    if (raw === null || raw === undefined) continue;
+    const value = String(raw).trim();
+    if (value !== "") pushData[key] = value;
+  }
+
   const { data: tokens } = await supabase.from("push_tokens").select("token").eq("user_id", userId).eq("is_active", true);
   let pushed = 0;
   for (const t of (tokens ?? [])) {
     try {
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
         method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ message: { token: t.token, notification: { title, body: msg }, data: { type }, android: { priority: "HIGH", notification: { channel_id: channel } }, apns: { payload: { aps: { sound: "default" } } } } }),
+        body: JSON.stringify({ message: { token: t.token, notification: { title, body: msg }, data: pushData, android: { priority: "HIGH", notification: { channel_id: channel } }, apns: { payload: { aps: { sound: "default" } } } } }),
       });
       if (res.status === 400 || res.status === 403 || res.status === 404) {
         await supabase.from("push_tokens").update({ is_active: false }).eq("token", t.token);
