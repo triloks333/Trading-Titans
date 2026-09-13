@@ -39,5 +39,17 @@ export const functionHeaders: Record<string, string> = {
  */
 export const GUEST_EMAIL_DOMAIN = '@guest.tradingtitans'
 
-/** Where an OAuth round-trip should return to. Works on localhost and in prod. */
-export const authRedirectUrl = () => window.location.origin
+/**
+ * Where an OAuth round-trip should return to. Works on localhost and in prod.
+ *
+ * Includes the base path, because the app lives at /app in production. Returning
+ * the bare origin would send a user finishing Google sign-in to the marketing
+ * site's home page, with the auth token stranded in a URL fragment that nothing
+ * there reads — so they would land signed out with no error to explain it.
+ *
+ * BASE_URL is '/app/' in a production build and '/' under `vite dev`, so this is
+ * correct in both without a branch. The trailing slash is trimmed because
+ * Supabase matches redirect URLs against its allow-list exactly.
+ */
+export const authRedirectUrl = () =>
+  `${window.location.origin}${import.meta.env.BASE_URL}`.replace(/\/$/, '')

@@ -462,3 +462,144 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
     );
   }
 }
+
+/// Asks the user to rate the app on the Play Store.
+///
+/// Deliberately shaped like [SoftUpdateDialog]: two choices, the store launch
+/// can fail without losing the dialog, and the "later" branch hands the snooze
+/// back to the caller rather than persisting it here.
+///
+/// Dismissing without choosing (back gesture) records nothing, so the ask
+/// simply returns on a later launch instead of burning the snooze window.
+class RateAppDialog extends StatefulWidget {
+  final String storeUrl;
+
+  /// Called when the store opened successfully. Suppresses all future asks.
+  final VoidCallback onRateNow;
+
+  /// Called when the user defers. Starts a fresh snooze window.
+  final VoidCallback onRemindLater;
+
+  const RateAppDialog({
+    super.key,
+    required this.storeUrl,
+    required this.onRateNow,
+    required this.onRemindLater,
+  });
+
+  @override
+  State<RateAppDialog> createState() => _RateAppDialogState();
+}
+
+class _RateAppDialogState extends State<RateAppDialog> {
+  /// Opens the store listing. Returns `true` only on a successful launch; an
+  /// unparseable url, `launchUrl` returning false, or a thrown error all yield
+  /// `false` so the caller keeps the dialog open.
+  Future<bool> _launchStore() async {
+    final uri = Uri.tryParse(widget.storeUrl);
+    if (uri == null) return false;
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// On success marks the prompt done and closes. On failure the dialog stays
+  /// open with an error, and nothing is recorded — the user has not been given
+  /// a chance to rate yet, so they should still be asked later.
+  Future<void> _onRateNowPressed() async {
+    final launched = await _launchStore();
+    if (!mounted) return;
+    if (launched) {
+      widget.onRateNow();
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn\'t open the store. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
+    final bodyColor =
+        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.star_rounded,
+                    color: AppColors.imperialGold, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Enjoying Trading Titans?',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: inkColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'A rating on the Play Store helps other traders find the app. '
+              'It only takes a moment.',
+              style: TextStyle(fontSize: 14, color: bodyColor, height: 1.4),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    widget.onRemindLater();
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(
+                    'Remind me later',
+                    style: TextStyle(
+                      color: bodyColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _onRateNowPressed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.imperialGold,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Rate now',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

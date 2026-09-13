@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Complete your payment · Trading Titans</title>
+<!--
+  The Android app's checkout page.
+
+  WHY THIS FILE EXISTS
+  Tapping a plan in the app used to open the web app's plans page, which meant
+  signing in a second time before you could pay — a login wall between someone
+  deciding to buy and buying. This page removes it: the app asks
+  create-payment-order to open a checkout, and gets sent here with the ids the
+  Razorpay SDK needs. No session, no cookie, no token of ours travels anywhere.
+
+  WHY NOT A RAZORPAY PAYMENT LINK
+  That was the first attempt, and Razorpay rejected it: this account has customer
+  contact set as a required field on payment links, and we hold no phone numbers
+  for anyone (`profiles` has no phone column and `auth.users.phone` is empty for
+  all 206 accounts). Using links would have meant asking every buyer for a mobile
+  number we have no other use for. This page needs nothing from the user.
+
+  WHY THE QUERY STRING IS SAFE
+  Everything here is an opaque provider id plus a price the provider already
+  holds. Specifically:
+    - the order/subscription is bound to a user_id server-side, in
+      `payment_orders` and in the Razorpay entity's own notes. This page cannot
+      say who is paying and does not try to.
+    - the grant is made ONLY by the razorpay-webhook edge function after it
+      verifies an HMAC signature from Razorpay. Nothing this page does, and
+      nothing a visitor can make it do, credits a wallet or a tier.
+    - amount and currency are validated by Razorpay against the order it already
+      has, so editing them in the URL produces a rejected payment, not a
+      discounted one.
+    - the key id is Razorpay's publishable key, already shipped in the web app's
+      bundle. Swapping it for another merchant's key would send that person's own
+      money to that other merchant; it grants nothing here.
+  The one real risk in a page like this is reflected XSS, so every value is
+  validated against a strict pattern before use and written with textContent.
+  There is no innerHTML in this file, and no value from the URL is ever
+  interpolated into markup.
+-->
+<style>
+  :root {
+    --ink: #1c1917; --ink-4: #78716c; --ink-5: #a8a29e;
+    --parchment: #faf8f4; --white: #fff; --birch: #e7e2d9; --gold: #b8860b;
+    --bull: #15803d; --bear: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--parchment); color: var(--ink);
+    font: 400 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .card {
+    width: 100%; max-width: 380px; background: var(--white);
+    border: 1px solid var(--birch); border-radius: 16px; padding: 24px;
+  }
+  .brand {
+    font-size: 11px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--gold); margin: 0 0 18px;
+  }
+  h1 { font-size: 17px; font-weight: 800; margin: 0 0 2px; }
+  .amount { font-size: 34px; font-weight: 800; letter-spacing: -.02em; margin: 14px 0 2px; }
+  .note { font-size: 12px; color: var(--ink-4); margin: 0; }
+  button {
+    width: 100%; margin-top: 22px; padding: 14px; border: 0; border-radius: 10px;
+    background: var(--gold); color: var(--white);
+    font: 700 15px/1 inherit; cursor: pointer;
+  }
+  button[disabled] { background: var(--birch); color: var(--ink-5); cursor: default; }
+  .msg { margin-top: 18px; font-size: 13px; padding: 12px 14px; border-radius: 10px; }
+  .msg.ok { background: #f0fdf4; color: var(--bull); }
+  .msg.bad { background: #fef2f2; color: var(--bear); }
+  .fine { margin: 18px 0 0; font-size: 11px; color: var(--ink-5); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <p class="brand">Trading Titans</p>
+    <h1 id="title">Complete your payment</h1>
+    <p class="note" id="kind"></p>
+    <p class="amount" id="amount"></p>
+    <p class="note" id="taxes"></p>
+
+    <button id="pay" hidden>Pay now</button>
+    <div class="msg" id="msg" hidden></div>
+
+    <p class="fine">
+      Payment is processed by Razorpay. Trading Titans never sees your card
+      details. Demo cash has no monetary value and cannot be withdrawn.
+    </p>
+  </main>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(el, text) { el.textContent = text; el.hidden = false; }
+  function say(kind, text) {
+    var m = $('msg');
+    m.className = 'msg ' + kind;
+    show(m, text);
+  }
+
+  // ── Read and validate the query string ────────────────────────────────────
+  // Anything that does not match is treated as absent. Handing an unvalidated
+  // string to the SDK, or to the DOM, is the only way this page could be turned
+  // against a visitor.
+  var q = new URLSearchParams(window.location.search);
+  function pick(name, pattern) {
+    var v = q.get(name);
+    return v && pattern.test(v) ? v : null;
+  }
+
+  var keyId    = pick('key', /^rzp_(live|test)_[A-Za-z0-9]+$/);
+  var orderId  = pick('order', /^order_[A-Za-z0-9]+$/);
+  var subId    = pick('sub', /^sub_[A-Za-z0-9]+$/);
+  var currency = pick('currency', /^(INR|USD)$/);
+  var amountRaw = pick('amount', /^[1-9][0-9]{0,9}$/);
+  // Free text, so it is length-capped and only ever written with textContent.
+  var title = (q.get('title') || '').slice(0, 60);
+
+  if (!keyId || (!orderId && !subId)) {
+    say('bad',
+      'This payment link is incomplete. Please go back to the app and tap the '
+      + 'plan again.');
+    return;
+  }
+
+  // ── Render what is being bought ───────────────────────────────────────────
+  if (title) $('title').textContent = title;
+  $('kind').textContent = subId
+    ? 'Subscription — renews until you cancel'
+    : 'One-time purchase';
+
+  if (amountRaw && currency) {
+    // Minor units: paise for INR, cents for USD. Shown with decimals only when
+    // there are any, matching the app and the web app.
+    var major = parseInt(amountRaw, 10) / 100;
+    var symbol = currency === 'USD' ? '$' : '\u20b9';
+    var locale = currency === 'USD' ? 'en-US' : 'en-IN';
+    var whole = major === Math.round(major);
+    $('amount').textContent = symbol + major.toLocaleString(locale, {
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 2
+    });
+    $('taxes').textContent = currency === 'USD'
+      ? 'Taxes included' : 'GST included';
+  }
+
+  // ── Checkout ──────────────────────────────────────────────────────────────
+  var payBtn = $('pay');
+  var done = false;
+
+  function open() {
+    if (done || !window.Razorpay) {
+      if (!window.Razorpay) {
+        say('bad',
+          'The payment window could not load. Check your connection, or try '
+          + 'again from a different browser.');
+      }
+      return;
+    }
+
+    var options = {
+      key: keyId,
+      name: 'Trading Titans',
+      description: title || undefined,
+      theme: { color: '#B8860B' },
+      handler: function () {
+        // Deliberately not a success claim. This callback is a UI event that any
+        // visitor could fire from a console; the grant is the webhook's job. All
+        // we can honestly say is that the payment went through.
+        done = true;
+        payBtn.hidden = true;
+        say('ok',
+          'Payment received. You can close this tab and return to the app — '
+          + 'your balance updates within a minute.');
+      },
+      modal: {
+        ondismiss: function () {
+          if (done) return;
+          payBtn.disabled = false;
+          payBtn.hidden = false;
+          say('bad', 'Payment cancelled. You have not been charged.');
+        }
+      }
+    };
+
+    if (subId) {
+      options.subscription_id = subId;
+    } else {
+      options.order_id = orderId;
+      // Razorpay checks both against the order it already holds, so these are a
+      // display convenience rather than an instruction.
+      if (amountRaw) options.amount = parseInt(amountRaw, 10);
+      if (currency) options.currency = currency;
+    }
+
+    var rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', function (resp) {
+      if (done) return;
+      var desc = (resp && resp.error && resp.error.description)
+        || 'The payment did not go through. You have not been charged.';
+      payBtn.disabled = false;
+      payBtn.hidden = false;
+      say('bad', desc);
+    });
+    payBtn.disabled = true;
+    rzp.open();
+  }
+
+  payBtn.hidden = false;
+  payBtn.addEventListener('click', open);
+  // Opened straight away so the common case is one tap in the app and nothing
+  // here. The button stays as the fallback for browsers that block it, and
+  // reappears if the sheet is dismissed.
+  open();
+})();
+</script>
+</body>
+</html>

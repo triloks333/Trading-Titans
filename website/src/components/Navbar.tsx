@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X } from 'lucide-react';
-import { PLAY_STORE_URL, isPlayStoreLive } from '../lib/config';
+import { PLAY_STORE_URL } from '../lib/config';
 
 const LINKS = [
   { label: 'Features', id: 'features' },
@@ -17,14 +17,23 @@ const scrollTo = (id: string) => {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 };
 
-/** Go to Google Play pre-registration if the link is set, else scroll to CTA. */
-const goPreRegister = () => {
-  if (isPlayStoreLive()) {
-    window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
-  } else {
-    scrollTo('prereg');
-  }
+/** Open the Google Play listing. The app is live, so there is no fallback. */
+const goDownload = () => {
+  window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
 };
+
+/**
+ * The web app, proxied in at /app (see vercel.json).
+ *
+ * One link covers log in, sign up and dashboard: /app shows the auth screen when
+ * there is no session and the dashboard when there is, and its auth screen has
+ * both sign-in and registration on it. Three separate buttons would be three
+ * routes to the same page.
+ *
+ * Same tab on purpose — this is our own app, not an outbound link, and a new tab
+ * would orphan the back button.
+ */
+const WEB_APP_URL = '/app';
 
 export const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -56,13 +65,22 @@ export const Navbar: React.FC = () => {
         ))}
       </div>
 
-      {/* Right: Pre-register */}
+      {/* Right: web app + download */}
       <div className="flex items-center gap-3">
+        {/* Two actions, not three. "Log in" and "Trade on web" both pointed at
+            /app, so the second was a louder duplicate of the first and made the
+            bar read as a row of competing buttons. */}
+        <a
+          href={WEB_APP_URL}
+          className="hidden md:block text-white/85 text-sm font-medium px-4 py-2.5 rounded-full hover:bg-white/15 hover:text-white transition-colors"
+        >
+          Log in
+        </a>
         <button
-          onClick={goPreRegister}
+          onClick={goDownload}
           className="hidden md:block bg-white text-gray-900 text-sm font-semibold px-6 py-2.5 rounded-full hover:bg-gray-100 transition-colors"
         >
-          Pre-register
+          Download free
         </button>
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -92,11 +110,18 @@ export const Navbar: React.FC = () => {
                   {l.label}
                 </button>
               ))}
+              <a
+                href={WEB_APP_URL}
+                onClick={() => setIsOpen(false)}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white/85 hover:bg-white/10"
+              >
+                Log in
+              </a>
               <button
-                onClick={() => { goPreRegister(); setIsOpen(false); }}
+                onClick={() => { goDownload(); setIsOpen(false); }}
                 className="mt-1 bg-white text-gray-900 text-sm font-semibold px-4 py-2.5 rounded-xl hover:bg-gray-100"
               >
-                Pre-register
+                Download free
               </button>
             </div>
           </motion.div>

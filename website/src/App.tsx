@@ -4,16 +4,17 @@ import { SpotlightHero } from './components/SpotlightHero';
 import { ValueProps } from './components/ValueProps';
 import { HowItWorks } from './components/HowItWorks';
 import { Showcase } from './components/Showcase';
-import { PreRegSection } from './components/PreRegSection';
+import { DownloadSection } from './components/DownloadSection';
 import { SiteFooter } from './components/SiteFooter';
 import { TopupPage } from './components/TopupPage';
 import { ConfirmPage } from './components/ConfirmPage';
 import { TermsPage } from './components/TermsPage';
 import { PreregTermsPage } from './components/PreregTermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
+import { RefundPage } from './components/RefundPage';
 import { DeleteAccountPage } from './components/DeleteAccountPage';
 
-type Route = 'home' | 'topup' | 'confirm' | 'terms' | 'prereg-terms' | 'privacy' | 'delete-account';
+type Route = 'home' | 'topup' | 'confirm' | 'terms' | 'prereg-terms' | 'privacy' | 'refund' | 'delete-account';
 
 function resolveRoute(path: string): Route {
   const p = path.replace(/\/+$/, '') || '/';
@@ -23,6 +24,9 @@ function resolveRoute(path: string): Route {
     case '/terms': return 'terms';
     case '/prereg-terms': return 'prereg-terms';
     case '/privacy': return 'privacy';
+    case '/refund': return 'refund';
+    case '/refund-policy': return 'refund';
+    case '/refunds': return 'refund';
     case '/delete-account': return 'delete-account';
     default: return 'home';
   }
@@ -40,6 +44,7 @@ function App() {
   if (route === 'terms') return <TermsPage />;
   if (route === 'prereg-terms') return <PreregTermsPage />;
   if (route === 'privacy') return <PrivacyPage />;
+  if (route === 'refund') return <RefundPage />;
   if (route === 'delete-account') return <DeleteAccountPage />;
 
   return (
@@ -50,7 +55,7 @@ function App() {
         <ValueProps />
         <HowItWorks />
         <Showcase />
-        <PreRegSection />
+        <DownloadSection />
       </main>
       <SiteFooter />
     </div>

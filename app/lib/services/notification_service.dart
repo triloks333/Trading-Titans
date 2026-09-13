@@ -227,6 +227,24 @@ class NotificationService {
       _categoryConfig.length == NotificationCategory.values.length,
       '_categoryConfig must have exactly one entry per NotificationCategory',
     );
+
+    // Web has no flutter_local_notifications implementation, and browser push
+    // would additionally need a service worker plus a VAPID key. Everything
+    // below this line is therefore mobile-only.
+    //
+    // Nothing is lost in-app: the notifications *list* is read from the
+    // public.notifications table, so a web user still sees every alert. Only the
+    // OS-level tray push is absent.
+    //
+    // The Firebase guard below would already stop the FCM half of this method on
+    // web (Firebase.initializeApp() has no options for web, so it self-disables
+    // and isInitialized stays false), but _initLocalNotifications() runs ahead
+    // of it and would throw MissingPluginException.
+    if (kIsWeb) {
+      debugPrint('Skipping Notification Service setup: not supported on web.');
+      return;
+    }
+
     await _initLocalNotifications();
 
     if (!FirebaseService.instance.isInitialized) {
@@ -281,7 +299,7 @@ class NotificationService {
           id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
           title: title.isEmpty ? 'Trading Titans' : title,
           body: body,
-          category: _categoryFromType(data['type']),
+          category: categoryFromType(data['type']),
         );
       });
 
@@ -421,9 +439,24 @@ class NotificationService {
     );
   }
 
+  /// The Android channel id mapped to [category].
+  ///
+  /// Must stay identical to the ids `channelFor()` in the `push-notification`
+  /// edge function writes into `android.notification.channel_id`. If they drift,
+  /// a background push lands on a channel the app never created and silently
+  /// loses its custom sound.
+  static String channelIdFor(NotificationCategory category) =>
+      (_categoryConfig[category] ?? _categoryConfig[_defaultCategory]!)
+          .androidChannelId;
+
   /// Maps a push `data.type` value to a notification category for channel/sound
   /// selection. Unknown/absent types fall back to the default (broadcast).
-  NotificationCategory _categoryFromType(String? type) {
+  ///
+  /// Load-bearing: now that the app no longer posts its own order and price-alert
+  /// notifications, the sound is decided entirely by the chain
+  /// `notifications.action_type` -> `channelFor()` in the push-notification edge
+  /// function -> `data.type` -> here.
+  static NotificationCategory categoryFromType(String? type) {
     switch (type) {
       case 'price_alert':
         return NotificationCategory.priceAlert;

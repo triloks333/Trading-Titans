@@ -46,6 +46,28 @@ bool limitFillReached({required String side, required double execPrice, required
   return execPrice >= limit;
 }
 
+/// Mirrors how BOTH executors resolve an order's trigger:
+/// `limit_price ?? price` (execute-pending-orders/index.ts and the on-device
+/// fallback). `limit_price` is the source of truth; `price` is only a fallback
+/// for rows written before that column existed, because `price` is overwritten
+/// with the FILL price the moment an order executes.
+double resolveTrigger({double? limitPrice, double? price}) => limitPrice ?? price ?? 0.0;
+
+/// Mirrors modifyOrder's update payload. Both price columns must move together,
+/// or the engine keeps matching the pre-modification trigger.
+Map<String, dynamic> modifyOrderPayload({
+  required double quantity,
+  required double price,
+  required bool isLimit,
+}) {
+  return {
+    'quantity': quantity,
+    'price': price,
+    'limit_price': isLimit ? price : null,
+    'total': quantity * price,
+  };
+}
+
 /// Mirrors price-alert evaluation.
 bool priceAlertCrossed({required String direction, required double price, required double target}) {
   return direction == 'above' ? price >= target : price <= target;
@@ -121,6 +143,79 @@ void main() {
       expect(limitFillReached(side: 'sell', execPrice: 100, limit: 100), true);
       expect(limitFillReached(side: 'sell', execPrice: 101, limit: 100), true);
       expect(limitFillReached(side: 'sell', execPrice: 99, limit: 100), false);
+    });
+  });
+
+  // The trigger COMPARISON above was never wrong. What broke was which value
+  // got fed into it: modifyOrder updated `price` and left `limit_price` alone,
+  // so the engine went on matching the original limit while the order card
+  // showed the new one. These pin the field precedence and the write invariant.
+  group('trigger resolution and modification', () {
+    test('limit_price wins over price', () {
+      expect(resolveTrigger(limitPrice: 149, price: 145.80), 149);
+    });
+
+    test('falls back to price only when limit_price is absent', () {
+      expect(resolveTrigger(limitPrice: null, price: 145.80), 145.80);
+    });
+
+    test('modifying a limit order moves both price columns', () {
+      final payload = modifyOrderPayload(quantity: 500, price: 145.80, isLimit: true);
+      expect(payload['price'], 145.80);
+      expect(payload['limit_price'], 145.80);
+      expect(resolveTrigger(
+        limitPrice: payload['limit_price'] as double?,
+        price: payload['price'] as double?,
+      ), 145.80);
+    });
+
+    test('modifying a market order leaves no trigger behind', () {
+      final payload = modifyOrderPayload(quantity: 10, price: 250, isLimit: false);
+      expect(payload['limit_price'], isNull);
+    });
+
+    test('AEROENTER regression: placed at 149, modified to 145.80, LTP 146.03 fills', () {
+      // Before the fix the modify wrote `price` only, so the engine still saw 149.
+      expect(
+        limitFillReached(
+          side: 'sell',
+          execPrice: 146.03,
+          limit: resolveTrigger(limitPrice: 149, price: 145.80),
+        ),
+        false,
+        reason: 'the shape of the bug: engine matched the stale 149',
+      );
+
+      // After the fix both columns carry 145.80, so the same tick fills.
+      final modified = modifyOrderPayload(quantity: 500, price: 145.80, isLimit: true);
+      expect(
+        limitFillReached(
+          side: 'sell',
+          execPrice: 146.03,
+          limit: resolveTrigger(
+            limitPrice: modified['limit_price'] as double?,
+            price: modified['price'] as double?,
+          ),
+        ),
+        true,
+      );
+    });
+
+    test('DOGE case: correcting the trigger does not force an unwanted fill', () {
+      // Repaired by migration to 22.90; the market is well below it, so a SELL
+      // still correctly rests. Fixing the data must not invent a fill.
+      final modified = modifyOrderPayload(quantity: 35, price: 22.90, isLimit: true);
+      expect(
+        limitFillReached(
+          side: 'sell',
+          execPrice: 8.31,
+          limit: resolveTrigger(
+            limitPrice: modified['limit_price'] as double?,
+            price: modified['price'] as double?,
+          ),
+        ),
+        false,
+      );
     });
   });
 

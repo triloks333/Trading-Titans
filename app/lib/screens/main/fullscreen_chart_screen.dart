@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../models/quote.dart';
-import '../../widgets/tradingview_chart.dart';
+import '../../widgets/instrument_chart.dart';
 import 'order_entry_screen.dart';
 
 class FullscreenChartScreen extends StatefulWidget {
@@ -159,11 +159,10 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
           ),
         ),
       ),
-      body: TradingViewChart(
+      body: InstrumentChart(
         key: _chartKey,
         symbol: widget.symbol,
         market: widget.market,
-        isFullscreen: true,
         theme: 'light',
       ),
       bottomNavigationBar: Container(

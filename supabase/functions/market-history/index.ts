@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchHistory as yfHistory } from "../_shared/yahoo.ts";
 import { fetchHistory as cgHistory } from "../_shared/coingecko.ts";
+import { fetchHistory as dcxHistory } from "../_shared/coindcx.ts";
 import { US_MARKET, toUsYahooSymbol } from "../_shared/us_market.ts";
 
 serve(async (req) => {
@@ -39,7 +40,21 @@ async function handleRequest(req: Request): Promise<Response> {
 
     let data;
     if (market === "crypto") {
-      data = await cgHistory(symbol, range, interval || undefined);
+      // CoinDCX first: it serves real OHLC at the interval asked for, and it is the
+      // venue the live price already comes from. CoinGecko ignores `interval`
+      // entirely and picks granularity from the day count, which is why a 1m crypto
+      // chart used to draw 30-minute bars.
+      //
+      // It stays as the fallback rather than being deleted: CoinDCX lists fewer
+      // coins than CoinGecko, so a long-tail symbol with no INR market would
+      // otherwise lose its chart altogether. A coarse chart beats no chart.
+      try {
+        data = await dcxHistory(symbol, range, interval || undefined);
+        if (!data.candles.length) throw new Error("CoinDCX returned no candles");
+      } catch (dcxErr) {
+        console.log(`[market-history] CoinDCX failed for ${symbol}, falling back to CG: ${dcxErr.message}`);
+        data = await cgHistory(symbol, range, interval || undefined);
+      }
     } else if (market === US_MARKET) {
       // US charts were failing for EVERY symbol and every timeframe with a 500.
       // `toYfSymbol` appends ".NS" to anything without a suffix, so the request

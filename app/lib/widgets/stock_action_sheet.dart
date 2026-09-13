@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../core/app_constants.dart';
+import '../core/money.dart';
 import '../models/quote.dart';
 import '../services/market_service.dart';
 import '../screens/main/stock_detail_screen.dart';
@@ -46,6 +49,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
   Quote? _quote;
   bool _loading = true;
   bool _isWatched = false;
+  Timer? _pollTimer;
 
   /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM)
   static String _cleanSymbol(String sym) {
@@ -60,6 +64,28 @@ class _StockActionSheetState extends State<StockActionSheet> {
   void initState() {
     super.initState();
     _load();
+    // The sheet used to fetch once and freeze for as long as it stayed open.
+    _pollTimer = Timer.periodic(
+      AppConstants.dashboardPricePoll,
+      (_) => _refreshQuote(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Quote-only background refresh: no spinner, and it leaves the watchlist state
+  /// alone so a poll cannot fight a tap on the star.
+  Future<void> _refreshQuote() async {
+    try {
+      final q = await MarketService.quote(widget.symbol, widget.market);
+      if (q != null && mounted) setState(() => _quote = q);
+    } catch (_) {
+      // Keep showing the last good price.
+    }
   }
 
   Future<void> _load() async {
@@ -77,6 +103,11 @@ class _StockActionSheetState extends State<StockActionSheet> {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  /// Formats an optional quote figure in the user's display currency, converting
+  /// from the instrument's own currency.
+  String _fmt(double? value) =>
+      value == null ? '-' : Money.instrument(value, market: widget.market);
 
   Future<void> _toggleWatch() async {
     setState(() => _isWatched = !_isWatched);
@@ -205,7 +236,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                             )
                           else if (_quote != null) ...[
                             Text(
-                              _quote!.price.toStringAsFixed(2),
+                              Money.instrument(_quote!.price, market: widget.market),
                               style: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -216,7 +247,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                             ),
                             const SizedBox(width: AppSpacing.xs),
                             Text(
-                              '${_quote!.change >= 0 ? '+' : ''}${_quote!.change.toStringAsFixed(2)} (${_quote!.changePct.toStringAsFixed(2)}%)',
+                              '${_quote!.change >= 0 ? '+' : ''}${Money.instrument(_quote!.change, market: widget.market)} (${_quote!.changePct.toStringAsFixed(2)}%)',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 color: _quote!.change >= 0
@@ -363,16 +394,16 @@ class _StockActionSheetState extends State<StockActionSheet> {
   }
 
   Widget _buildMarketStats() {
-    final low = _quote?.dayLow?.toStringAsFixed(2) ?? '0.00';
-    final high = _quote?.dayHigh?.toStringAsFixed(2) ?? '0.00';
-    final open = _quote?.open?.toStringAsFixed(2) ?? '0.00';
-    final prevClose = _quote?.previousClose.toStringAsFixed(2) ?? '0.00';
+    final low = _fmt(_quote?.dayLow);
+    final high = _fmt(_quote?.dayHigh);
+    final open = _fmt(_quote?.open);
+    final prevClose = _fmt(_quote?.previousClose);
     final volume = _quote?.volume?.toString() ?? '0';
-    final avgPrice = _quote?.avgTradePrice?.toStringAsFixed(2) ?? '0.00';
+    final avgPrice = _fmt(_quote?.avgTradePrice);
     final lastQty = _quote?.lastTradedQuantity?.toString() ?? '0';
     final lastTime = _quote?.lastTradedTime ?? '--';
-    final lowerCircuit = _quote?.lowerCircuit?.toStringAsFixed(2) ?? '0.00';
-    final upperCircuit = _quote?.upperCircuit?.toStringAsFixed(2) ?? '0.00';
+    final lowerCircuit = _fmt(_quote?.lowerCircuit);
+    final upperCircuit = _fmt(_quote?.upperCircuit);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

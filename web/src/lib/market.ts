@@ -1,7 +1,7 @@
 import { supabase, functionsBase, functionHeaders } from './supabase'
 import { DEFAULT_CHARGE_RATES, type ChargeConfig } from './charges'
 import { activityKey, type TodayActivity } from './positions'
-import type { Candle, HistoryResponse, Quote } from './types'
+import type { Quote } from './types'
 
 /*
  * Market data. Two sources, deliberately:
@@ -52,70 +52,15 @@ export async function fetchAllQuotes(): Promise<Quote[]> {
   return (data ?? []) as unknown as Quote[]
 }
 
-/**
- * Chart timeframes, each pairing a candle interval with the range it should span.
- *
- * The range used to be hard-coded to `1mo` for every interval, which produced
- * charts that were not wrong so much as useless: a weekly candle over one month is
- * four bars, and a daily candle over one month is twenty-two. Each entry below is
- * chosen so the chart holds a readable number of candles — roughly 60 to 400 — and
- * so the pair is one Yahoo actually serves. Yahoo caps intraday history (about 60
- * days at 5m and 15m, ~730 days at 1h), so the ranges here stay inside those
- * limits; asking for more returns an empty series rather than an error, which is
- * exactly the silent-empty-chart failure this replaces.
- */
-export interface Timeframe {
-  id: string
-  label: string
-  interval: string
-  range: string
-}
-
-const YAHOO_TIMEFRAMES: Timeframe[] = [
-  { id: '1D', label: '1D', interval: '5m', range: '1d' },
-  { id: '1W', label: '1W', interval: '15m', range: '5d' },
-  { id: '1M', label: '1M', interval: '1h', range: '1mo' },
-  { id: '3M', label: '3M', interval: '1d', range: '3mo' },
-  { id: '1Y', label: '1Y', interval: '1d', range: '1y' },
-  { id: '5Y', label: '5Y', interval: '1wk', range: '5y' },
-]
-
 /*
- * Crypto stops at one year, and that is a real provider limit rather than a
- * choice: CoinGecko's public OHLC endpoint serves a fixed set of day counts of
- * which 365 is the largest, so a 5-year button could only ever have shown an
- * error. Offering it and failing is worse than not offering it.
+ * Chart timeframes and candle fetching used to live here.
+ *
+ * They now live in `chart/src/core/periods.ts` and `chart/src/data/history.ts`,
+ * because the Flutter client needs the identical mapping and a second copy of it
+ * is exactly how "3M" and "1Y" came to draw the same picture in the first place.
+ * The reasoning moved with the code: each period pairs a bar size with a span that
+ * holds roughly 60 to 400 bars and stays inside Yahoo's intraday history caps.
  */
-const CRYPTO_TIMEFRAMES: Timeframe[] = YAHOO_TIMEFRAMES.filter((t) => t.id !== '5Y')
-
-export function timeframesFor(market: string): Timeframe[] {
-  return market === 'crypto' ? CRYPTO_TIMEFRAMES : YAHOO_TIMEFRAMES
-}
-
-export const DEFAULT_TIMEFRAME = '3M'
-
-export async function fetchCandles(
-  symbol: string,
-  market: string,
-  timeframeId: string,
-): Promise<Candle[]> {
-  const available = timeframesFor(market)
-  const tf = available.find((t) => t.id === timeframeId) ?? available[available.length - 2]
-  const url =
-    `${functionsBase}/market-history` +
-    `?symbol=${encodeURIComponent(symbol)}` +
-    `&market=${encodeURIComponent(market)}` +
-    `&range=${encodeURIComponent(tf.range)}` +
-    `&interval=${encodeURIComponent(tf.interval)}` +
-    // Without this the function discards `range` whenever an interval is present,
-    // so 3M and 1Y both returned a year of daily candles — two buttons, one chart.
-    `&strict=1`
-
-  const res = await fetch(url, { headers: functionHeaders })
-  if (!res.ok) throw new Error(`History unavailable (${res.status})`)
-  const body = (await res.json()) as HistoryResponse
-  return body.candles ?? []
-}
 
 // ── Instrument search ────────────────────────────────────────────────────────
 

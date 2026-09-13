@@ -4,8 +4,67 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../widgets/empty_state.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/app_network_image.dart';
+import '../../services/nav_tab_service.dart';
 import 'stock_detail_screen.dart';
+import 'subscribe_screen.dart';
+import 'community_wishlist_screen.dart';
+import 'orders_screen.dart';
+import 'refer_earn_screen.dart';
+import '../../widgets/request_feature_sheet.dart';
+
+/// Decodes a notification's `action_data`.
+///
+/// PostgREST returns jsonb, which the Supabase client hands over already decoded
+/// most of the time and as a raw string some of the time (older cached rows, and
+/// anything that round-tripped through a text column). Both shapes are tolerated
+/// because getting it wrong does not throw — it silently drops the button.
+Map<String, dynamic>? parseActionData(Object? raw) {
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  if (raw is String && raw.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+  }
+  return null;
+}
+
+/// In-app routes a notification is allowed to name.
+///
+/// An allow-list rather than free navigation on purpose: these values arrive from
+/// a database row, so anything not named here must be inert. Adding a route means
+/// adding a case to [_NotificationsScreenState._openCta] as well — a route listed
+/// here with no case would render a button that silently does nothing.
+///
+/// Keep in step with `kAdminCtaDestinations` in admin_reward_screen.dart, which is
+/// what an admin actually picks from.
+const Set<String> kNotificationCtaRoutes = {
+  'plans', 'topup', 'subscribe', 'wallet', 'league', 'leaderboard',
+  'feature', 'wishlist', 'portfolio', 'orders', 'referral',
+};
+
+/// The call-to-action button's text, or null when there should be no button.
+///
+/// Returns null unless there is BOTH a label and somewhere real to send the user:
+/// a route this build understands, or an https URL. A label on its own would
+/// render a button that does nothing, and an unrecognised route is exactly what a
+/// notification written for a newer app version looks like on an older one.
+///
+/// The https check is a trust boundary, not tidiness. These rows are written
+/// server-side, so a bad or malicious `cta_url` must not be able to hand an
+/// arbitrary scheme (tel:, intent:, javascript:) to the platform launcher.
+String? ctaLabel(Map<String, dynamic>? data) {
+  final label = (data?['cta_label'] as String?)?.trim();
+  if (label == null || label.isEmpty) return null;
+
+  final route = (data?['cta_route'] as String?)?.trim().toLowerCase() ?? '';
+  if (kNotificationCtaRoutes.contains(route)) return label;
+
+  final url = (data?['cta_url'] as String?)?.trim() ?? '';
+  return url.startsWith('https://') ? label : null;
+}
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -260,7 +319,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           if (!isRead) _markAsRead(id);
           final actionType = n['action_type'] as String?;
           final actionData = n['action_data'];
-          if (actionType == 'order' && actionData != null) {
+          // 'order_pending' is the pending-order alert (it carries its own
+          // channel/sound); it must stay tappable like an executed 'order' one,
+          // otherwise changing the type would silently drop the tap-through to
+          // the stock screen.
+          if ((actionType == 'order' || actionType == 'order_pending') &&
+              actionData != null) {
             Map<String, dynamic>? data;
             if (actionData is Map) {
               data = Map<String, dynamic>.from(actionData);
@@ -399,7 +463,38 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: AppSpacing.xl),
+                        // Optional call to action, carried by the notification
+                        // itself rather than hardcoded per campaign: any row with
+                        // action_data.cta_label plus a cta_route or cta_url gets a
+                        // button here. Without this a broadcast could only ever
+                        // *describe* where to go and leave the user to find it.
+                        if (_ctaLabel(n) != null) ...[
+                          const SizedBox(height: AppSpacing.xl),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                _openCta(n);
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.imperialGold,
+                                foregroundColor: AppColors.pureWhite,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppRadius.md),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: Text(
+                                _ctaLabel(n)!,
+                                style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                        ] else
+                          const SizedBox(height: AppSpacing.xl),
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton(
@@ -430,6 +525,73 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         },
       ),
     );
+  }
+
+  Map<String, dynamic>? _actionData(Map<String, dynamic> n) =>
+      parseActionData(n['action_data']);
+
+  String? _ctaLabel(Map<String, dynamic> n) => ctaLabel(_actionData(n));
+
+  /// Follows the notification's call to action.
+  ///
+  /// `cta_route` is preferred: it stays inside the app, so the wallet and plans
+  /// screens open with the user's session already in hand. `cta_url` is the
+  /// fallback for anything that only exists on the web, and is restricted to
+  /// https so a crafted row cannot launch some other scheme.
+  Future<void> _openCta(Map<String, dynamic> n) async {
+    final data = _actionData(n);
+    final route = (data?['cta_route'] as String?)?.trim().toLowerCase();
+
+    switch (route) {
+      case 'plans':
+      case 'topup':
+      case 'subscribe':
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SubscribeScreen()),
+        );
+        return;
+      case 'wallet':
+        NavTabService.goToTab(NavTabService.wallet);
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      case 'league':
+      case 'leaderboard':
+        NavTabService.goToTab(NavTabService.league);
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      case 'feature':
+        await showRequestFeatureSheet(context);
+        return;
+      case 'wishlist':
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
+        );
+        return;
+      case 'orders':
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const OrdersScreen()),
+        );
+        return;
+      case 'referral':
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ReferEarnScreen()),
+        );
+        return;
+      case 'portfolio':
+        NavTabService.goToTab(NavTabService.portfolio);
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+    }
+
+    final raw = (data?['cta_url'] as String?)?.trim() ?? '';
+    if (!raw.startsWith('https://')) return;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      /* nothing useful to say; the sheet has already closed */
+    }
   }
 
   IconData _iconForTitle(String title) {

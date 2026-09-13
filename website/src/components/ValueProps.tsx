@@ -1,37 +1,45 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ShieldCheck, LineChart, Layers, Trophy, GraduationCap, Bell } from 'lucide-react';
+import { Target, Flame, Trophy, GraduationCap, Layers, Coins } from 'lucide-react';
 
+/**
+ * Positioning: a gamified way to learn the market, not a plain simulator.
+ *
+ * Every number here is real, taken from the seeded challenge catalogue in
+ * `supabase/migrations/20260805000000_gamification_and_app_flags.sql` — 16
+ * challenges across performance, habit, breadth, learning and social, with the
+ * reward and XP values quoted below.
+ */
 const ITEMS = [
   {
-    icon: ShieldCheck,
-    title: '0% real risk',
-    body: 'Trade with virtual money on live markets. Build skill and confidence without ever risking real capital.',
+    icon: Target,
+    title: '16 challenges to clear',
+    body: 'First Blood for your first order. Diversifier for holding five symbols. Globetrotter for Indian, US and crypto at once. Each one pays demo cash and XP.',
   },
   {
-    icon: LineChart,
-    title: 'Real NSE market data',
-    body: 'Live stock prices, real option chains with actual strikes and lot sizes, and authentic candlestick charts.',
+    icon: Coins,
+    title: 'Tasks pay your practice balance',
+    body: 'Rewards run from ₹500 for a green day up to ₹25,000 for the Century Club. Earn a bigger balance instead of buying one — there is nothing to buy.',
   },
   {
-    icon: Layers,
-    title: 'Stocks, F&O & crypto',
-    body: 'Practice equity delivery, intraday, futures, options and crypto — all in one disciplined simulator.',
+    icon: Flame,
+    title: 'Streaks build the habit',
+    body: 'Open the app three days running, then fourteen, then thirty. Trading well is a habit before it is a skill, so the streaks reward showing up.',
   },
   {
     icon: Trophy,
-    title: 'Compete & climb',
-    body: 'Track your P&L, measure your edge and rise up the leaderboard against other traders.',
+    title: 'XP, Titan levels & leaderboard',
+    body: 'Every challenge adds XP, XP builds your Titan level, and the weekly league ranks you against other traders. Progress you can actually see.',
   },
   {
     icon: GraduationCap,
-    title: 'Learn by doing',
-    body: 'Guided flows and instant feedback turn every trade into a lesson — the fastest way to actually learn.',
+    title: 'Learning is a challenge too',
+    body: 'Pass the glossary quiz, run an autopsy on five losing trades, set alerts and watch them trigger. The app pays you to understand what went wrong.',
   },
   {
-    icon: Bell,
-    title: 'Smart alerts',
-    body: 'Pending-order reminders, fills and market events keep you in the loop, just like a real trading desk.',
+    icon: Layers,
+    title: 'Real markets underneath',
+    body: 'Live Indian stocks, US stocks, F&O with real strikes and lot sizes, and crypto. The game is the wrapper; the market data is genuine.',
   },
 ];
 
@@ -40,12 +48,13 @@ export const ValueProps: React.FC = () => {
     <section id="features" className="relative bg-black py-24 px-6 md:px-12">
       <div className="max-w-6xl mx-auto">
         <div className="max-w-2xl">
-          <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#e8702a]">Why Trading Titans</span>
+          <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#e8702a]">Learn by playing</span>
           <h2 className="mt-3 text-4xl md:text-5xl font-playfair italic text-white leading-[1.05]" style={{ letterSpacing: '-0.03em' }}>
-            Everything you need to trade like a pro
+            Turn learning the market into a game you want to finish
           </h2>
           <p className="mt-4 text-white/70 text-base leading-relaxed">
-            A full-fledged trading floor in your pocket — real data, real mechanics, zero financial risk.
+            Most people quit learning to trade because it is dry and expensive. Here you complete
+            tasks, earn virtual money, and spend it practising on real market data.
           </p>
         </div>
 

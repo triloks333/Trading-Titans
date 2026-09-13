@@ -2,10 +2,17 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "redirects": [
+    { "source": "/", "destination": "/app", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/app/pay", "destination": "/app/pay.html" },
+    { "source": "/app/(.*)", "destination": "/app/index.html" },
+    { "source": "/app", "destination": "/app/index.html" }
+  ],
   "headers": [
     {
-      "source": "/assets/(.*)",
+      "source": "/app/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

@@ -17,6 +17,7 @@ import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
 import 'diagnostics_service.dart';
+import 'plan_service.dart' show PlanOption;
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -309,8 +310,19 @@ class SupabaseService {
     );
   }
 
+  /// Signs out of THIS device only.
+  ///
+  /// [SignOutScope.local] matters: the SDK default is `global`, which revokes
+  /// every refresh token the account has. That made signing out of the app also
+  /// sign the user out of the web app, and the web app sign them out of the
+  /// phone. Nobody expects logging out on one device to end their session on
+  /// another.
+  ///
+  /// `global` is still the right tool for "sign out everywhere" after a password
+  /// change or a suspected compromise — a separate, deliberate action, not this.
+  /// Kept in step with `signOut()` in web/src/lib/auth.tsx.
   Future<void> signOut() async {
-    await client.auth.signOut();
+    await client.auth.signOut(scope: SignOutScope.local);
   }
 
   /// Applies a referral code to the currently signed-in user via the
@@ -1515,23 +1527,107 @@ class SupabaseService {
     // since profiles is now restricted to owner/admin reads.
     final data = await client
         .from('leaderboard')
-        .select('id, name, wallet_balance, plan, total_realized_pnl')
+        .select('id, name, wallet_balance, total_realized_pnl')
         .order('total_realized_pnl', ascending: false)
         .limit(20);
-    return (data as List<dynamic>)
+    final rows = (data as List<dynamic>)
         .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    // Plan badges come from `user_tiers`, in one follow-up query for the whole
+    // page. The view's `plan` column is not used: it is `profiles.plan`, which
+    // nothing has ever written, so it labelled every account "free_starter".
+    final tiers = await _tiersFor(
+      rows.map((r) => r['id'] as String?).whereType<String>().toList(),
+    );
+
+    return rows
         .map((row) {
           return {
             'user_id': row['id'],
             'name': row['name'],
             'wallet_balance':
                 (row['wallet_balance'] as num?)?.toDouble() ?? 0.0,
-            'plan': row['plan'] as String? ?? 'free_starter',
+            'tier': tiers[row['id']] ?? 'free',
             'realized_pnl':
                 (row['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,
           };
         })
         .toList();
+  }
+
+  /// Tier per user id, for a set of users.
+  ///
+  /// Never throws: a leaderboard that fails to load because a decorative badge
+  /// could not be fetched would be a bad trade. On failure everyone reads as
+  /// free, which shows no badge at all.
+  Future<Map<String, String>> _tiersFor(List<String> userIds) async {
+    if (userIds.isEmpty) return {};
+    try {
+      DiagnosticsService.noteDbCall('user_tiers.select');
+      final data = await client
+          .from('user_tiers')
+          .select('user_id, tier')
+          .inFilter('user_id', userIds);
+      final map = <String, String>{};
+      for (final row in data as List<dynamic>) {
+        final r = Map<String, dynamic>.from(row as Map);
+        final id = r['user_id'] as String?;
+        final tier = r['tier'] as String?;
+        if (id != null && tier != null) map[id] = tier;
+      }
+      return map;
+    } catch (e) {
+      debugPrint('getLeaderboard: tier lookup failed, showing no badges: $e');
+      return {};
+    }
+  }
+
+  /// Everything currently on sale, cheapest first. The database is the only
+  /// place prices are written down.
+  Future<List<PlanOption>> getPlanCatalogue() async {
+    DiagnosticsService.noteDbCall('plan_catalogue.select');
+    final data = await client
+        .from('plan_catalogue')
+        .select()
+        .eq('is_active', true)
+        .order('sort_order');
+    return (data as List<dynamic>)
+        .map((e) => PlanOption.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Opens a checkout for [sku] and returns the Razorpay-hosted page to send the
+  /// user to.
+  ///
+  /// `mode: 'hosted'` is what removes the second sign-in. The app used to deep
+  /// link to the web app's plans page, where the user had to authenticate all over
+  /// again before they could pay. Now the server creates the Razorpay order or
+  /// subscription and returns a URL for the standalone checkout page at
+  /// `/app/pay`, which runs Razorpay in the browser with no login. The URL carries
+  /// only opaque provider ids — no session, token or user id ever goes into it.
+  ///
+  /// Currency and price are decided server-side from `profiles.location` and
+  /// `plan_catalogue`. Nothing here can influence either — the SKU is the whole
+  /// request.
+  ///
+  /// Throws with the server's own message for the cases a user needs to read:
+  /// already subscribed, checkout already in progress, plan withdrawn, too many
+  /// attempts.
+  Future<String> startHostedCheckout(String sku) async {
+    DiagnosticsService.noteDbCall('create-payment-order');
+    final data = await _invokeOrderFunction(
+      'create-payment-order',
+      {'sku': sku, 'mode': 'hosted'},
+      fallbackError: 'We could not start the payment. Please try again.',
+    );
+    final url = (data['url'] as String?)?.trim();
+    // https only. A payment handoff is exactly the wrong place to follow whatever
+    // scheme a response happens to contain.
+    if (url == null || !url.startsWith('https://')) {
+      throw Exception('We could not start the payment. Please try again.');
+    }
+    return url;
   }
 
   Future<Map<String, dynamic>> getAnalytics() async {
@@ -2127,6 +2223,10 @@ class SupabaseService {
             'side': side,
             'quantity': quantity,
             'price': targetPrice,
+            // Mirrors place-order: `price` is overwritten with the fill price at
+            // execution, so the requested trigger only survives here. Required
+            // by orders_pending_limit_has_trigger for a resting limit order.
+            'limit_price': isMarket ? null : limitPrice,
             'total': total,
             'realized_pnl': 0.0,
             'status': 'pending',
@@ -2860,7 +2960,13 @@ class SupabaseService {
       final optionType = row['option_type'] as String?;
       final expiryDate = row['expiry_date'] as String?;
       final orderType = row['order_type'] as String? ?? 'market';
-      final limitPrice = (row['price'] as num?)?.toDouble() ?? 0.0;
+      // Same precedence as the server executor: `limit_price` is the trigger and
+      // `price` is only a fallback for rows written before that column existed.
+      // Reading `price` first is what let this path disagree with the server
+      // about the same order after a modification.
+      final limitPrice = (row['limit_price'] as num?)?.toDouble() ??
+          (row['price'] as num?)?.toDouble() ??
+          0.0;
       final bool isExit = row['is_exit'] as bool? ?? false;
 
       if (!MarketHours.isOpen(market)) continue;
@@ -3519,23 +3625,79 @@ class SupabaseService {
     return executedOrders;
   }
 
-  Future<void> cancelOrder(String orderId) async {
-    await client
-        .from('orders')
-        .update({'status': 'cancelled'})
-        .eq('id', orderId);
+  /// Calls a server-side order endpoint and surfaces its message verbatim.
+  ///
+  /// Cancel and modify used to be direct table PATCHes. They could not stay that
+  /// way: the RLS policy that permitted them (`USING (auth_uid() = user_id)`,
+  /// no WITH CHECK, no column restriction) made "edit my order" and "rewrite my
+  /// realized_pnl" the same privilege. The server is now the only writer.
+  Future<Map<String, dynamic>> _invokeOrderFunction(
+    String name,
+    Map<String, dynamic> body, {
+    // Only used when the server gave us nothing readable, which for a payment
+    // must not say "order".
+    String fallbackError = 'Could not update that order. Please try again.',
+  }) async {
+    Map<String, dynamic> data;
+    try {
+      final response = await client.functions.invoke(name, body: body);
+      final raw = response.data;
+      if (raw is Map) {
+        data = Map<String, dynamic>.from(raw);
+      } else if (raw is String && raw.isNotEmpty) {
+        data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      } else {
+        throw Exception('The order service returned an empty response');
+      }
+    } on FunctionException catch (e) {
+      // The server's own wording ("That order has already been filled.") is more
+      // use to a user than a generic failure, so pass it through unchanged.
+      final details = e.details;
+      String msg = fallbackError;
+      if (details is Map && details['error'] != null) {
+        msg = details['error'].toString();
+      } else if (details is String && details.isNotEmpty) {
+        try {
+          final parsed = jsonDecode(details);
+          msg = (parsed is Map && parsed['error'] != null)
+              ? parsed['error'].toString()
+              : details;
+        } catch (_) {
+          msg = details;
+        }
+      }
+      throw Exception(msg);
+    }
+
+    if (data['error'] != null) throw Exception(data['error'].toString());
+    return data;
   }
 
+  Future<void> cancelOrder(String orderId) async {
+    await _invokeOrderFunction('cancel-order', {'orderId': orderId});
+  }
+
+  /// Edits a resting order's quantity and limit.
+  ///
+  /// Keeping `price` and `limit_price` in step is now the server's job, and it is
+  /// not optional: the executor reads the trigger as `limit_price ?? price` while
+  /// the app displays `price`, so letting them drift is what made a correct engine
+  /// look broken. AEROENTER sell 500 was placed at 149 and modified to 145.80,
+  /// but only `price` moved, so it went on being tested against 149 while the
+  /// card read 145.80 — an LTP of 146.03 looked like a missed fill and was not.
   Future<void> modifyOrder({
     required String orderId,
     required double quantity,
     required double price,
+    required bool isLimit,
   }) async {
-    final total = quantity * price;
-    await client
-        .from('orders')
-        .update({'quantity': quantity, 'price': price, 'total': total})
-        .eq('id', orderId);
+    await _invokeOrderFunction('modify-order', {
+      'orderId': orderId,
+      'quantity': quantity,
+      // Omitted for a market order: it has no trigger, and the server rejects a
+      // price change on one rather than storing a limit it should not have.
+      if (isLimit) 'price': price,
+    });
   }
 
   Future<Map<String, dynamic>> createSubscriptionOrder(String planId) async {
@@ -3938,6 +4100,9 @@ class SupabaseService {
     required String title,
     required String body,
     String? imageUrl,
+    String? ctaLabel,
+    String? ctaRoute,
+    String? ctaUrl,
   }) async {
     final profile = await client
         .from('profiles')
@@ -3957,18 +4122,55 @@ class SupabaseService {
       'body': body,
       'is_read': false,
       'action_type': 'custom',
-      if (imageUrl != null) 'action_data': {'image_url': imageUrl},
+      'action_data': ?_notificationActionData(imageUrl, ctaLabel, ctaRoute, ctaUrl),
     });
+  }
+
+  /// Builds `action_data`, or null when there is nothing to attach.
+  ///
+  /// Returns null rather than `{}` so a plain notification stores a NULL column
+  /// exactly as before — an empty object would read as "has an action" to anything
+  /// checking for presence rather than contents.
+  ///
+  /// The label is dropped unless a destination came with it: `ctaLabel()` in
+  /// notifications_screen.dart already refuses to draw a button without one, so
+  /// storing a lone label would just be a row that promises something it cannot do.
+  static Map<String, dynamic>? _notificationActionData(
+    String? imageUrl,
+    String? ctaLabel,
+    String? ctaRoute,
+    String? ctaUrl,
+  ) {
+    final label = ctaLabel?.trim();
+    final route = ctaRoute?.trim();
+    final url = ctaUrl?.trim();
+    final hasDestination =
+        (route != null && route.isNotEmpty) || (url != null && url.isNotEmpty);
+    final data = <String, dynamic>{
+      if (imageUrl != null && imageUrl.isNotEmpty) 'image_url': imageUrl,
+      if (label != null && label.isNotEmpty && hasDestination) ...{
+        'cta_label': label,
+        if (route != null && route.isNotEmpty) 'cta_route': route,
+        if (url != null && url.isNotEmpty) 'cta_url': url,
+      },
+    };
+    return data.isEmpty ? null : data;
   }
 
   Future<void> sendBroadcastNotification({
     required String title,
     required String body,
     String? imageUrl,
+    String? ctaLabel,
+    String? ctaRoute,
+    String? ctaUrl,
   }) async {
     final profiles = await client.from('profiles').select('id');
     final list = profiles as List<dynamic>;
     if (list.isEmpty) return;
+
+    final actionData =
+        _notificationActionData(imageUrl, ctaLabel, ctaRoute, ctaUrl);
 
     final inserts = list.map((profile) {
       final userId = profile['id'] as String;
@@ -3978,7 +4180,7 @@ class SupabaseService {
         'body': body,
         'is_read': false,
         'action_type': 'broadcast',
-        if (imageUrl != null) 'action_data': {'image_url': imageUrl},
+        'action_data': ?actionData,
       };
     }).toList();
 

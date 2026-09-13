@@ -1,0 +1,85 @@
+-- Let a signed-in client read app_config
+-- ============================================================================
+-- NOT APPLIED. Written for review, per the standing rule that permission changes
+-- are shown before they run.
+--
+-- WHAT WAS FOUND
+-- `public.app_config` has row level security ENABLED and **zero policies**. RLS
+-- denies by default, so every client reads zero rows. Verified against production
+-- as the `authenticated` role with a real user's JWT claims:
+--
+--     select relrowsecurity ... app_config          -> true
+--     select value from app_config
+--       where key='web_checkout_url'               -> no row visible
+--     select count(*) from app_config              -> 0
+--
+-- WHAT IS SILENTLY BROKEN BECAUSE OF IT
+-- `app_config` is the table the app reads on every launch via
+-- SupabaseService.getAppVersionConfig(). With no rows readable, AuthService's
+-- evaluateConfig() falls back to defaults, which means:
+--
+--   * min_supported_version   — the hard update gate never triggers
+--   * latest_version          — the soft update prompt never appears, no matter
+--                               what scripts/set_update_prompt.py writes
+--   * latest_version_notes    — never shown
+--   * maintenance_mode        — cannot be switched on; flipping it does nothing
+--   * update_url              — falls back to empty
+--   * web_checkout_url        — the app keeps its built-in default
+--   * fo_seller_margin_pct / fo_future_margin_pct — read server-side by the
+--     edge functions under service_role, so those are unaffected
+--
+-- None of this fails loudly. The reads succeed and return an empty set, so the
+-- app behaves as though every value were unset. That is why it went unnoticed:
+-- the only symptom was the checkout opening a stale URL.
+--
+-- WHY A READ POLICY IS SAFE HERE
+-- Every row is non-sensitive operational config that the client is supposed to
+-- act on: a minimum supported version, a store URL, a maintenance flag, the two
+-- F&O margin percentages the order ticket already displays, and the web checkout
+-- URL. Nothing here is a secret.
+--
+-- WHY `true` AND NOT `auth.uid() is not null`
+-- The obvious move is to mirror `app_flags` ("Anyone signed in can read flags").
+-- That would be wrong here. AuthService.initialize() calls _fetchAndEvaluate()
+-- BEFORE it loads the user profile and before any auth check — it runs on every
+-- launch, signed in or not. Restricting to signed-in users would leave
+-- `min_supported_version` and `maintenance_mode` unreadable on the login screen,
+-- which is precisely where they have to work: a hard-update block on an ancient
+-- build, and a maintenance notice, both need to reach a user who has not signed in
+-- yet. `app_flags` can be signed-in-only because the surfaces it gates all sit
+-- behind auth; this table cannot.
+--
+-- Writes stay revoked either way — this adds SELECT and nothing else, so no client
+-- can change a margin percentage or the minimum supported version.
+--
+-- Writes are NOT granted. The financial write lockdown removed
+-- INSERT/UPDATE/DELETE from anon and authenticated, and this adds a SELECT policy
+-- only, so a client still cannot change a margin percentage or the minimum
+-- supported version.
+--
+-- EXPECTED AFFECTED OBJECTS
+--   - one new SELECT policy on public.app_config
+--   - no grant, no column privilege, no function, no other table
+--
+-- CLIENT COMPATIBILITY IMPACT
+-- Strictly restorative. The Flutter app already reads this table and handles an
+-- empty result; after this it gets the real values, which is what every version
+-- of the app has expected. Nothing needs rebuilding.
+--
+-- ROLLBACK
+--   drop policy "Anyone signed in can read config" on public.app_config;
+--
+-- VERIFY AFTER APPLYING
+--   set local role authenticated;   -- and again as anon, which must also read it
+--   select set_config('request.jwt.claims',
+--     json_build_object('sub', (select id from profiles limit 1),
+--                       'role','authenticated')::text, true);
+--   select count(*) from public.app_config;   -- expect 7, not 0
+--   reset role;
+--
+-- Then re-run supabase/tests/financial_integrity_probe.sql; it must stay all-PASS.
+
+create policy "Config is readable by everyone"
+  on public.app_config
+  for select
+  using (true);

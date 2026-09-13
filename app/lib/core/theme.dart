@@ -1,3 +1,4 @@
+import 'money.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/theme_service.dart';
@@ -256,8 +257,11 @@ class AppTheme {
 }
 
 class AppFormat {
-  static String formatINR(double amount) {
-    String numStr = amount.toStringAsFixed(2);
-    return '₹$numStr';
-  }
+  /// Formats a stored (INR) money amount in the user's display currency.
+  ///
+  /// Named for history: it used to hardcode a rupee sign. It now delegates to
+  /// [Money] so the currency preference reaches the screens that still call it.
+  /// For an *instrument* price use `Money.instrument(value, market:)` instead —
+  /// this helper assumes an INR source.
+  static String formatINR(num amount) => Money.wallet(amount, decimals: 2);
 }

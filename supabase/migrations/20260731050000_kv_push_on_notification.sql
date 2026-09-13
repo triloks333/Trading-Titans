@@ -1,0 +1,37 @@
+-- Tray push for the KASHIVWEALTH VAULT: every row inserted into
+-- public.kv_notifications also fires a phone notification, so members are told
+-- even when the app is closed.
+--
+-- Mechanism: AFTER INSERT trigger -> pg_net async POST -> `kv-push` edge
+-- function -> FCM HTTP v1 -> the recipient's kv_devices.fcm_token rows.
+--
+-- The vault Android app (com.kashivwealth.vault) is registered in the same
+-- Firebase project as Trading Titans (trading-titans-8375f), so the existing
+-- FCM_SERVICE_ACCOUNT secret signs both apps' pushes.
+--
+-- NOTE: like public.push_on_notification_insert(), the live trigger function
+-- embeds the service_role key in its Authorization header, so it is created
+-- OPERATIONALLY and is intentionally NOT committed here (secrets stay out of the
+-- repo). This file documents it for reproducibility; recreate the body with a
+-- valid service-role bearer when provisioning a new environment.
+--
+--   create or replace function public.kv_push_on_notification()
+--   returns trigger language plpgsql security definer
+--   set search_path = public, extensions, net as $$
+--   begin
+--     perform net.http_post(
+--       url := 'https://<project>.supabase.co/functions/v1/kv-push',
+--       headers := jsonb_build_object('Authorization','Bearer <SERVICE_ROLE_KEY>',
+--                                     'Content-Type','application/json'),
+--       body := jsonb_build_object('user_id', NEW.user_id, 'title', NEW.title,
+--                                  'body', NEW.body, 'kind', NEW.kind),
+--       timeout_milliseconds := 20000);
+--     return NEW;
+--   end $$;
+--
+--   revoke all on function public.kv_push_on_notification()
+--     from public, anon, authenticated;
+--
+--   create trigger kv_notifications_push
+--     after insert on public.kv_notifications
+--     for each row execute function public.kv_push_on_notification();

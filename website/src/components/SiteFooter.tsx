@@ -11,8 +11,8 @@ export const SiteFooter: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <a href="/terms" className="text-white/70 hover:text-white font-medium">Terms &amp; Conditions</a>
-            <a href="/prereg-terms" className="text-white/70 hover:text-white font-medium">Pre-registration Terms</a>
             <a href="/privacy" className="text-white/70 hover:text-white font-medium">Privacy Policy</a>
+            <a href="/refund" className="text-white/70 hover:text-white font-medium">Refund Policy</a>
             <a href="mailto:support@thetradingtitans.com" className="text-white/70 hover:text-white font-medium">Support</a>
           </div>
         </div>

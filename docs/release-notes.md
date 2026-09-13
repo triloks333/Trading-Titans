@@ -3,6 +3,304 @@
 Play Store "What's new" copy, newest first. Keep each entry under 500 characters
 and user-facing (no internal jargon), per `.kiro/steering/release-process.md`.
 
+This file is also read by `scripts/set_update_prompt.py`, which takes the copy from
+the **first** `### Play Store` block below and writes it to
+`app_config.latest_version_notes`. So a release whose notes live only in some other
+file will arm the update prompt with the *previous* release's changelog. Add the
+entry here, at the top, before arming.
+
+---
+
+## 1.2.3 (versionCode 47)
+
+Derivatives for everyone, timeframes that mean what they say, and drawing on the
+chart.
+
+**Futures and options are free.** The plan check in `place-order` is deleted, not
+made conditional. It only fired when `app_flags.monetization_enabled` was on, so a
+dormant gate would have surprised the next person to flip a flag — which is exactly
+how it surprised us. Removing the check needed no app release and is already live;
+`monetization_enabled` still governs the wallet top-up card, the Subscribe screen
+and the plan badges, so top-ups and plans keep selling. Note what this costs:
+`docs/monetisation-pricing.md` sells index F&O as the headline Pro feature, so Pro
+now stands on monthly demo cash, US stocks, unlimited autopsies with advice,
+unlimited price alerts and the badge.
+
+**The timeframe row was the bug users reported.** The bar sizes were right; the row
+was not. It mixed two ideas — `1m 5m 10m 1h` named bar sizes while
+`1D 1W 1M 3M 1Y 5Y` named spans:
+
+    `1D` drew 5-minute bars over one day.  `5m` drew 5-minute bars over five days.
+    `1M` drew hourly bars over one month.  `1h` drew hourly bars over three.
+
+Tap between either pair and the candles are the same size, only the span moves. In
+a row opening `1m 5m`, every chip reads as a bar size, so the ones that silently
+changed something else looked broken. The "no two buttons draw the same picture"
+check passed throughout, because it compared interval *and* range — it was
+measuring the wrong thing. The row is now seven bar sizes and nothing else, and the
+check compares intervals alone.
+
+**Crypto charts were drawing whatever CoinGecko felt like.** `coingecko.ts`'s
+`fetchHistory` takes an `interval` argument and never reads it: it maps the range to
+a day count, calls `/ohlc`, then downsamples to a fixed 120 candles. Measured — a
+`1m` request came back in 30-minute bars, `5m` in 4-hourly. Crypto history now comes
+from CoinDCX, which serves a named interval and is the venue `market-quote` already
+reads the live price from. That closes a second seam: the chart body was CoinGecko
+while its right-hand edge was CoinDCX, two venues about 12% apart on Indian crypto.
+Verified at the time of writing — `I-BTC_INR` closed at ₹7,895,150 against
+`quotes_cache`'s ₹7,895,446, 0.004% apart.
+
+CoinDCX serves only `1m`, `15m`, `1h` and `1d`; `5m`, `30m` and `1w` are rolled up
+from those server-side, first open, last close, extremes of all. The rollup lives in
+the edge function rather than the chart because which interval you must fetch to
+build a 5-minute bar is knowledge about a venue, and a chart should not carry a
+table of what each provider can serve.
+
+| change | needs binary |
+|---|---|
+| Futures and options free for every account | no — already live |
+| Read notifications deleted 7 days after reading | no — already live |
+| Crypto intraday candles from the right venue | no — already live |
+| Timeframe row rebuilt as seven bar sizes (1m…1W) | yes |
+| 15m and 30m added | yes |
+| Horizontal levels and trendlines, drawn on the chart | yes |
+| Admin can attach a button to a notification | yes |
+| Request a Feature reachable from a notification | yes |
+
+**Drawings** are anchored in time and price, never pixels, so a level drawn on the
+1h chart is the same level on the 5m one and survives pan, zoom and rotation.
+Stored per symbol in localStorage, same store and reasoning as saved indicator
+templates. Two tools rather than Zerodha's six: rectangle and Fibonacci are new
+maths on the same foundation, but support and resistance is what people draw, and
+two that feel right beat six that are fiddly under a thumb.
+
+Three bugs the browser caught that the type checker could not: a tool stayed armed
+after drawing, so the overlay kept swallowing gestures and the chart silently
+stopped panning; the overlay spanned study panes, so a gesture in the RSI area was
+handed to `coordinateToPrice` on the price series and the drawing silently failed to
+record; and `setPointerCapture` throws when the pointer id is not active, which was
+abandoning the whole gesture.
+
+**Notifications** gained `read_at`, stamped by a trigger on the false→true
+transition only, so re-reading does not restart the clock and unreading clears it.
+The trigger is why every already-shipped build gets the sweep without updating —
+they only set `is_read`. The 10,052 existing read rows were backfilled to `now()`
+rather than `created_at`: back-dating would have deleted 9,869 of them the instant
+the migration landed, inventing a fact in order to destroy data. They age out over
+the following week instead. The sweep is capped at 5,000 rows a run so it cannot
+hold a long transaction over a table the app reads on every launch.
+
+Still open: `Money._fmt` prints `$` when the display is USD and no FX rate is
+available, so the header can read `$1322` for rupee values while the chart honestly
+reads `₹1322`. Fixing it changes formatting on every screen, so it is not bundled
+into a chart release.
+
+### Play Store "What's new" (paste this)
+
+```
+• Futures and options are now free for everyone — no plan needed
+• Chart timeframes rebuilt: 1m, 5m, 15m, 30m, 1h, 1D and 1W each now draw the bar size you pick
+• Crypto charts finally have real intraday candles, priced from the same feed your trades fill at
+• Draw support and resistance levels and trendlines on any chart — they stay saved per instrument
+• Notifications you have read now clear themselves after 7 days
+```
+
+---
+
+## 1.2.2 (versionCode 46)
+
+Our own charts, on our own prices.
+
+Every chart in the app was a WebView pointed at `tradingview.com/chart`. That meant
+downloading a third-party web app on every open — no chart at all on a weak
+connection — and when it did load it drew somebody else's feed, so the candles
+could disagree with the price we fill orders at and nothing on screen explained the
+gap. It also needed an ~80-entry hand-maintained table mapping our symbols onto
+TradingView venues, a spoofed user agent, and injected CSS to hide the parts of
+their site we did not want.
+
+The replacement is `app/assets/chart.html`: one self-contained file built from the
+new `chart/` package, holding the charting library, nineteen indicators, the
+saved-strategy sheet and the period selector, with no external request. History
+comes from our `market-history` function; the live right-hand bar comes from
+`quotes_cache`, which is the table `execute-pending-orders` prices fills from.
+
+The web app renders from the same package, so there is now one chart in this
+product instead of three that disagreed.
+
+| change | needs binary |
+|---|---|
+| Charts drawn from our own data, bundled in the app, no third-party site fetched | yes |
+| Nineteen indicators, with editable parameters | yes |
+| Indicator sets saveable under a name, one starrable to open charts with | yes |
+| 1m, 5m, 10m and 1h timeframes added to the existing 1D–5Y spans | yes |
+| Chart follows the display-currency preference, at the rate the header uses | yes |
+| Option charts draw their underlying instead of failing (Yahoo has no contract listing) | yes |
+| Live bar comes from the same table order fills are priced from | yes |
+| Same chart on the web app | no |
+| ~80-entry TradingView venue table, user-agent spoof and CSS injection deleted | yes |
+
+**Currency.** Prices are converted once at the data boundary, so the axis, the
+crosshair, the legend, the last-price badge and every price-pane indicator land in
+the same units. The rate comes from `CurrencyService` — the same pair `Money`
+formats the header with — rather than being fetched by the chart, because a header
+and a chart disagreeing about one instrument reads as a pricing bug. With no rate
+available the chart draws the instrument's own currency and labels it honestly;
+the axis label is derived from the conversion factor, not from the preference, so
+it cannot claim dollars over rupee values.
+
+Known, untouched: `Money._fmt` still prints `$` when the display is USD and no
+rate is available, so the header can read `$1322` for rupees while the chart reads
+`₹1322`. The chart is the honest one. Fixing `Money` changes formatting on every
+screen, so it is not bundled into a chart release.
+
+**Timeframes.** `10m` is not a Yahoo interval — it answers 400 — so that view
+fetches 5m and rolls pairs up, taking the first open, the last close and the
+extremes of both. Crypto gets no intraday buttons: CoinGecko ignores the interval
+and picks granularity from the day count, returning 30-minute bars for a `1m`
+request and 4-hour bars for `5m`, so a bar-size button there would be mislabelled.
+That also means crypto's existing 1D/1W/1M spans are mislabelled today; it predates
+this release and is recorded in `chart/src/core/periods.ts` with its upgrade path.
+
+Saved strategies are per device: one saved on the phone will not appear on the web
+app. That is deliberate for now — it works for guests, offline, with no production
+table or migration. The upgrade path is a `chart_templates` table, confined to one
+file.
+
+Quote polling inside the chart runs once a minute, not every four seconds like the
+screen header: `refresh-quotes` rewrites `quotes_cache` on a one-minute cron, so a
+faster poll re-reads the same number and costs an edge function invocation for any
+symbol outside the ~74-symbol refresh universe.
+
+### Play Store "What's new" (paste this)
+
+The copy below covers **1.2.1 as well as 1.2.2**. versionCode 45 was built but
+never uploaded, so the live build is still 1.2.0 (versionCode 44) and everyone
+updating lands on 1.2.2 carrying both sets of changes. Shipping the chart notes
+alone would hand users dollar billing and single-sign-in checkout with nothing on
+the listing about either.
+
+```
+• Brand-new charts built by us — they open instantly, even on a weak connection
+• 1m, 5m, 10m and 1h timeframes alongside 1D to 5Y
+• 19 indicators — RSI, MACD, Bollinger Bands, Supertrend — and save your own sets by name
+• Charts follow your chosen currency, and price off the same feed your orders fill at
+• Members outside India are billed in US dollars, with dollar pricing on every plan
+• Buying a plan or top-up no longer needs a second sign-in
+```
+
+---
+
+## 1.2.1 (versionCode 45)
+
+Dollar pricing for members outside India, and buying without a second sign-in.
+
+Why this is 1.2.1 and not another 1.2.0: `app_config.latest_version` was already
+armed to `1.2.0`. The soft-update window is
+`min_supported_version <= installed < latest_version`, so a second binary carrying
+the same version name leaves that window empty for everyone already on 1.2.0 and
+**no user is ever prompted to take it**. A new build needs a new version name, not
+just a new version code.
+
+| change | needs binary |
+|---|---|
+| Members outside India are billed in US dollars, at dollar price points | yes |
+| Plan prices show the exact amount charged, not an FX conversion of the rupee price | yes |
+| Prices carry an `≈` equivalent in the member's chosen display currency | yes |
+| Buying no longer opens a login wall in the browser | yes |
+| Login-free checkout page at /app/pay | no |
+| Web plans page priced in the member's own currency | no |
+| Webhook rejects a payment whose currency differs from its order | no |
+
+Billing currency follows residency (`profiles.location`), not the display
+preference. Nine accounts are in India while reading the app in dollars; for them
+the price tag leads with the rupee charge and shows the dollar equivalent beside
+it, because the dollar price points are separate price points rather than
+conversions, and charging an Indian resident in dollars would cost them more and
+complicate GST.
+
+### Play Store "What's new" (paste this)
+
+```
+• Members outside India are now billed in US dollars, with dollar pricing on every plan
+• Buying a plan or top-up no longer sends you through a second sign-in — payment opens directly
+• Plan prices now show the exact amount charged, with the equivalent in your chosen currency beside it
+• Taxes included in every price, as before, with no charge added at checkout
+```
+
+---
+
+## 1.2.0 (versionCode 44)
+
+The League tab, a rebuilt plans screen, and a sign-out bug that reached across
+devices. Full engineering detail in `docs/release-notes-1.2.0.md`; this entry is
+the user-facing copy.
+
+| change | needs binary |
+|---|---|
+| League tab — the leaderboard, previously unreachable in every shipped build | yes |
+| Plans and top-ups rebuilt; monthly in the app, annual on the website | yes |
+| PRO / TITAN badges beside your name on the profile and the League | yes |
+| Bottom navigation rebuilt so six tabs fit legibly | yes |
+| Terms and Privacy updated for optional paid plans, renewals and refunds | yes |
+| Web sign-out no longer ends your session on the phone | yes |
+| Leaderboard returning only your own row | no |
+| Web app made usable on a phone | no |
+
+### Play Store "What's new" (paste this)
+
+```
+• New League tab — a proper leaderboard showing your rank, the top three and everyone else
+• Signing out on the web no longer signs you out on your phone
+• Plans and top-ups redesigned, with live pricing and GST included
+• PRO and TITAN badges now show beside your name on your profile and the League
+• Cleaner bottom navigation with labels on every tab
+• Updated Terms and Privacy Policy to cover optional paid plans, renewals and refunds
+```
+
+(439 characters, limit 500)
+
+The League tab leads because it is the only genuinely new place to go. The
+cross-device sign-out is second: it is the one thing users could have hit and been
+annoyed by. Terms last, because it needs no action but should not be silent.
+
+---
+
+## 1.1.9 (versionCode 42)
+
+One user-visible bug and one wording fix, on top of a large server-side security
+change that is already live for everyone including older builds.
+
+The bug: editing a pending limit order changed the price on screen but not the
+price the engine matched against, so a modified order went on waiting at its
+original limit. Reported as "the order didn't fill even though the price crossed" —
+and the engine was right every time; the screen was wrong.
+
+| change | needs binary |
+|---|---|
+| Editing a pending order now moves the trigger the engine actually uses | yes |
+| Pending orders labelled "Limit Price" rather than "Price" | yes |
+| Modify and cancel routed through server-side endpoints | yes |
+| Money, holdings, positions and order records made server-authoritative | no |
+| Existing mis-set limit orders repaired in place | no |
+
+### Play Store "What's new" (paste this)
+
+```
+• Editing a pending order now updates the price it actually triggers at — a changed limit used to be ignored, leaving the order waiting at its original price
+• Pending orders show "Limit Price" instead of "Price", so a resting order is no longer mistaken for a filled one
+• Order changes and cancellations are handled on our servers for better reliability
+• Security hardening across wallet, holdings and order records
+```
+
+(418 characters, limit 500)
+
+Four bullets. The first one leads because it is the only thing a user actually
+noticed and complained about. The label change is second because it is what made
+the bug look like a bug — a resting order and a filled one showed the same word.
+The security bullet is deliberately last and deliberately vague: it is real work,
+but it landed server-side and needs no action from anyone.
+
 ---
 
 ## 1.1.8 (versionCode 41)

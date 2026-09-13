@@ -22,7 +22,7 @@
  * `accept_terms` RPC, so a mismatch would make it impossible to tell whether two
  * users accepted the same text.
  */
-export const TERMS_VERSION = 'August 17, 2026'
+export const TERMS_VERSION = 'September 2, 2026'
 
 export const LEGAL_LAST_UPDATED = TERMS_VERSION
 export const SUPPORT_EMAIL = 'support@thetradingtitans.com'
@@ -60,22 +60,28 @@ export interface LegalDoc {
 }
 
 /*
- * Written for the product as it actually behaves: free, with no paid plans, no
- * top-ups and no payment gateway. It deliberately does NOT reuse
- * website/src/components/TermsPage.tsx, which still describes Razorpay purchases
- * and non-refundable credits — stating a payment term for something a user cannot
- * buy is worse than saying nothing. Same decision the Dart copy records.
+ * Written for the product as it actually behaves. As of the September 2026
+ * revision that includes optional paid plans and one-time top-ups, sold through
+ * Razorpay on the web, so the payment, renewal and refund sections below are load
+ * bearing rather than boilerplate.
+ *
+ * The previous revision said "there is nothing to buy, so there is nothing to
+ * refund". Leaving that in place while a checkout was live would have been the
+ * worst of both worlds: a user could be charged under terms that told them they
+ * could not be. Keep this text and `app/lib/core/legal.dart` saying the same
+ * thing, and keep both matching what the code actually does.
  */
 export const TERMS: LegalDoc = {
   title: 'Terms & Conditions',
   lastUpdated: LEGAL_LAST_UPDATED,
   noticeTitle: 'IMPORTANT NOTICE',
   notice:
-    'Trading Titans is a free virtual paper-trading simulation for educational ' +
-    'purposes only.\n\n' +
+    'Trading Titans is a virtual paper-trading simulation for educational ' +
+    'purposes only. It is free to use; some optional features are paid.\n\n' +
     'We do not facilitate real-world trading, broker connectivity, real financial ' +
     'transactions or payouts, and we do not provide professional financial advice. ' +
-    'Every portfolio, balance and profit figure in the app is fictional.',
+    'Every portfolio, balance and profit figure in the app is fictional, including ' +
+    'any balance added by a paid top-up.',
   intro:
     'By creating an account or using Trading Titans you agree to these terms. ' +
     'Please read them; they describe what this product is and, more importantly, ' +
@@ -89,9 +95,64 @@ export const TERMS: LegalDoc = {
       ],
       bullets: [
         'Simulated only: no order ever reaches an exchange.',
-        'No real money: balances, profits, rewards and prizes have no cash value.',
+        'No real money: balances, profits, rewards and prizes have no cash value ' +
+          'and cannot be withdrawn, transferred or redeemed — this is true of ' +
+          'purchased balances too.',
         'Not a broker: we are not a registered broker, exchange, or adviser.',
-        'Free: there is nothing to buy, so there is nothing to refund.',
+        'Free to use: an account, stock and crypto trading, challenges and the ' +
+          'leaderboard cost nothing. Paid plans add optional features.',
+      ],
+    },
+    {
+      heading: 'Paid plans and top-ups',
+      paragraphs: [
+        'We offer optional paid plans (currently Pro and Titan) and optional ' +
+          'one-time demo-cash top-ups. Buying is never required to use Trading ' +
+          'Titans, and we show no advertisements on any plan, paid or free.',
+        'What you are paying for is access to features of a simulator, and ' +
+          'simulated balances inside it. You are not buying money, securities, ' +
+          'any financial product, or investment advice.',
+      ],
+      bullets: [
+        'Prices are shown in Indian Rupees and include GST. The price displayed ' +
+          'at checkout is the amount you pay.',
+        'Payments are processed by Razorpay. We do not receive or store your ' +
+          'card, UPI or bank details.',
+        'Plans renew automatically at the end of each billing period, at the same ' +
+          'price, until you cancel. Monthly plans renew monthly; annual plans ' +
+          'renew annually.',
+        'You may cancel at any time, from the link in your Razorpay receipt or by ' +
+          'emailing us. Cancelling stops future renewals; access continues until ' +
+          'the end of the period you have already paid for.',
+        'If a renewal payment fails we may retry it. If it keeps failing, paid ' +
+          'features stop and the account returns to the free plan. Nothing you ' +
+          'have already been given is taken back.',
+        'We may change prices or what a plan includes. A price change never ' +
+          'applies to a period you have already paid for, and we will tell you ' +
+          'before it applies to a renewal.',
+      ],
+    },
+    {
+      heading: 'Cancellations and refunds',
+      paragraphs: [
+        'Paid features and purchased demo cash are delivered immediately and in ' +
+          'full, so purchases are generally non-refundable once delivered. That ' +
+          'said, we would rather fix a genuine problem than keep money we have not ' +
+          'earned.',
+      ],
+      bullets: [
+        'Charged but nothing delivered: we refund in full. If your payment ' +
+          'succeeded and your plan or demo cash did not appear, contact us.',
+        'Charged twice for the same thing: we refund the duplicate in full.',
+        'Cancelled a renewal you did not intend: contact us within 7 days of the ' +
+          'charge and, if the period is substantially unused, we will refund it.',
+        'Change of mind after use, or dissatisfaction with simulated results, is ' +
+          'not refundable. Nor is demo cash that has been spent in the simulator.',
+        `To request a refund, email ${SUPPORT_EMAIL} from your account address ` +
+          'with the payment reference. We aim to respond within 3 business days ' +
+          'and to return an approved refund to the original payment method within ' +
+          '5 to 7 business days.',
+        'Accounts terminated for abuse of the service are not refunded.',
       ],
     },
     {
@@ -142,7 +203,8 @@ export const PRIVACY: LegalDoc = {
   lastUpdated: LEGAL_LAST_UPDATED,
   intro:
     'This policy explains what we collect and why. We collect what the product ' +
-    'needs to work, and not more.',
+    'needs to work, and not more. We do not sell your data, and we never see ' +
+    'your card details.',
   sections: [
     {
       heading: 'What we collect',
@@ -156,10 +218,22 @@ export const PRIVACY: LegalDoc = {
     {
       heading: 'What we do not collect',
       bullets: [
-        'No payment details, because there is nothing to pay for.',
+        'No card numbers, UPI IDs or bank details. Payments are handled by ' +
+          'Razorpay on their own pages; we receive only a payment reference, the ' +
+          'amount, and whether it succeeded.',
         'No bank, demat or broker credentials. We never ask for them, and you ' +
           'should never give them to us.',
         'No PAN, Aadhaar or KYC documents.',
+      ],
+    },
+    {
+      heading: 'Payments',
+      paragraphs: [
+        'If you buy a plan or a top-up, our payment processor Razorpay collects ' +
+          'the payment details needed to take it, under their own privacy policy. ' +
+          'We store what we need to honour the purchase and to answer a billing ' +
+          'question: which plan you bought, the amount, the Razorpay order or ' +
+          'subscription reference, and the times it was paid and applied.',
       ],
     },
     {

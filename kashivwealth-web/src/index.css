@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  /* Company palette: near-black canvas with two product accents, so each
+     product is recognisable without the page turning into a rainbow.
+     gold = Trading Titans, teal = Kashiv Vault. */
+  --color-kw-void: #050708;
+  --color-kw-panel: #0b1012;
+  --color-kw-line: #1b2427;
+  --color-kw-gold: #e3b341;
+  --color-kw-teal: #2dd4bf;
+}
+
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+.font-display {
+  font-family: 'Outfit', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-[#050708] text-zinc-300 font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-[#e3b341] text-black;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Hero reveal in CSS, so first paint is never blank while JS hydrates. */
+@keyframes kwReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+    filter: blur(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.reveal {
+  animation: kwReveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Faint blueprint grid, masked so the fade reads optically rather than linearly. */
+.grid-veil {
+  background-image:
+    linear-gradient(to right, rgba(227, 179, 65, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(227, 179, 65, 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+}
+
+@keyframes tickerUp {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.tick {
+  animation: tickerUp 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .tick {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

@@ -37,6 +37,15 @@ class Order {
   /// reconciled against its dollar price after the rate has moved.
   final double? fxRate;
 
+  /// The trigger price the engine matches this order against. Null for a market
+  /// order, which has no trigger.
+  ///
+  /// This exists because [price] is overloaded: it holds the limit while the
+  /// order rests, then the engine overwrites it with the FILL price on
+  /// execution. Only this column survives that overwrite, which makes it the
+  /// single source of truth for "what did the user ask for".
+  final double? limitPrice;
+
   Order({
     required this.id,
     required this.symbol,
@@ -63,6 +72,7 @@ class Order {
     this.nativePrice,
     this.nativeCurrency,
     this.fxRate,
+    this.limitPrice,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -96,6 +106,7 @@ class Order {
       nativePrice: (json['native_price'] as num?)?.toDouble(),
       nativeCurrency: json['native_currency'] as String?,
       fxRate: (json['fx_rate'] as num?)?.toDouble(),
+      limitPrice: (json['limit_price'] as num?)?.toDouble(),
     );
   }
 
@@ -113,6 +124,22 @@ class Order {
   /// still USD because the conversion only happens at fill; once executed,
   /// [price] holds the INR figure and [nativePrice] holds the USD one.
   double get displayPrice => nativePrice ?? price;
+
+  /// The trigger to show on a limit order, in the instrument's own currency.
+  /// Null for a market order.
+  ///
+  /// Reads [limitPrice] and only falls back to [price] when the column is null
+  /// (rows placed before it existed, or by the legacy on-device path). Showing
+  /// [price] in preference to this is what made a correct engine look broken:
+  /// after a modification the two disagreed, and the card showed the value the
+  /// engine was NOT matching.
+  ///
+  /// A pending US row carries USD in both columns, so no conversion is needed
+  /// here — same reasoning as [displayPrice].
+  double? get displayLimitPrice {
+    if (orderType != 'limit') return null;
+    return limitPrice ?? price;
+  }
 
   /// Order value in the instrument's own currency.
   ///

@@ -1,0 +1,32 @@
+-- Central FCM push: every row inserted into public.notifications also fires a
+-- phone push, so users are notified even when the app is closed — regardless of
+-- which code path (edge function, SQL cron, manual insert) created the row.
+--
+-- Mechanism: AFTER INSERT trigger -> pg_net async POST -> `push-notification`
+-- edge function -> FCM HTTP v1 to the user's active push_tokens.
+--
+-- The inline pushes previously in settle-expired-positions and
+-- evaluate-price-alerts were REMOVED so notifications push exactly once.
+--
+-- NOTE: the live trigger function embeds the service_role key in the
+-- Authorization header, so it is created OPERATIONALLY via execute_sql and is
+-- intentionally NOT committed here (secrets stay out of the repo). This file
+-- documents the trigger for reproducibility; recreate the function body with a
+-- valid service-role bearer when provisioning a new environment.
+--
+--   create or replace function public.push_on_notification_insert()
+--   returns trigger language plpgsql security definer
+--   set search_path = public, extensions, net as $$
+--   begin
+--     perform net.http_post(
+--       url := '<project>/functions/v1/push-notification',
+--       headers := jsonb_build_object('Authorization','Bearer <SERVICE_ROLE_KEY>','Content-Type','application/json'),
+--       body := jsonb_build_object('user_id', NEW.user_id, 'title', NEW.title,
+--                                  'body', NEW.body, 'action_type', NEW.action_type),
+--       timeout_milliseconds := 20000);
+--     return NEW;
+--   end $$;
+--
+--   create trigger trg_push_on_notification
+--     after insert on public.notifications
+--     for each row execute function public.push_on_notification_insert();

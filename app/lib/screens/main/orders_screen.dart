@@ -561,7 +561,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
               const SizedBox(height: 24),
               _buildDetailGrid([
                 _buildGridItem('Quantity', order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)),
-                _buildGridItem('Price', Money.instrument(order.displayPrice, market: order.market)),
+                // A resting order's number is a trigger, not a traded price.
+                // Labelling both "Price" is what let an unfilled limit order
+                // read as a missed fill when the LTP sat the wrong side of it.
+                _buildGridItem(
+                  order.isPending && order.displayLimitPrice != null ? 'Limit Price' : 'Price',
+                  Money.instrument(
+                    order.isPending ? (order.displayLimitPrice ?? order.displayPrice) : order.displayPrice,
+                    market: order.market,
+                  ),
+                ),
                 _buildLtpGridItem(order),
                 _buildGridItem('Total Value', Money.instrument(order.displayTotal, market: order.market)),
                 _buildGridItem('Instrument', (order.instrumentType ?? 'EQUITY').toUpperCase()),
@@ -989,6 +998,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     orderId: order.id,
                                     quantity: newQty,
                                     price: newPrice,
+                                    isLimit: (order.orderType ?? 'limit') == 'limit',
                                   );
                                   if (mounted) {
                                     setState(_reload);

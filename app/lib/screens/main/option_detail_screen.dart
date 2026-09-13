@@ -10,7 +10,7 @@ import '../../services/supabase_service.dart';
 import 'fullscreen_chart_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'order_entry_screen.dart';
-import '../../widgets/tradingview_chart.dart';
+import '../../widgets/instrument_chart.dart';
 
 class OptionDetailScreen extends StatefulWidget {
   final Map<String, dynamic> optionData; // The CE or PE option object from option chain response
@@ -500,7 +500,9 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
     return Container(
       height: 350,
       decoration: BoxDecoration(
-        color: const Color(0xFF131722),
+        // The chart page's own dark surface, so the frame and the chart do not
+        // meet in two different shades at the rounded corners.
+        color: const Color(0xFF162544),
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
@@ -508,7 +510,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         borderRadius: BorderRadius.circular(AppRadius.xl - 1),
         child: Stack(
           children: [
-            TradingViewChart(
+            InstrumentChart(
               symbol: q.symbol,
               market: widget.market,
             ),

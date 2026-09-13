@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Absolute on purpose: Vite leaves public-root URLs alone, and under
+         /app this resolves to the marketing site's logo, which is served from the
+         same domain. There is no web/public directory, so /favicon.png was simply
+         a 404 before. -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trading Titans — Trade Bold. Lose Nothing.</title>
     <meta

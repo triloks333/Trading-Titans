@@ -15,6 +15,7 @@ import { Leaderboard } from '@/pages/Leaderboard'
 import { Autopsy } from '@/pages/Autopsy'
 import { Notifications } from '@/pages/Notifications'
 import { UpgradeAccount } from '@/pages/UpgradeAccount'
+import { Plans } from '@/pages/Plans'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,7 @@ function Root() {
         <Route path="/autopsy" element={<Autopsy />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/upgrade" element={<UpgradeAccount />} />
+        <Route path="/plans" element={<Plans />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -61,7 +63,16 @@ function Root() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      {/* Served under /app (see vite.config.ts). Without the basename every
+          <NavLink to="/trade"> would point at thetradingtitans.com/trade, which
+          is the marketing site, not this app.
+
+          The trailing slash MUST be stripped. Vite's BASE_URL is "/app/", and
+          React Router refuses to match the URL "/app" against a basename of
+          "/app/" — it renders nothing at all and only says so in a console
+          warning. Every request still returns 200, so this looks healthy from
+          the outside and shows the user a blank page. */}
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <AuthProvider>
           <Root />
         </AuthProvider>

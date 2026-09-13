@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/error_state.dart';
 
@@ -65,7 +66,7 @@ class AnalyticsScreen extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          isProfit ? '+₹${pnl.toStringAsFixed(2)}' : '-₹${pnl.abs().toStringAsFixed(2)}',
+                          isProfit ? '+${Money.wallet(pnl, decimals: 2)}' : '-${Money.wallet(pnl.abs(), decimals: 2)}',
                           style: GoogleFonts.inter(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
@@ -140,13 +141,13 @@ class AnalyticsScreen extends StatelessWidget {
                   ),
                   _metricTile(
                     'Avg. Win', 
-                    '₹${(data['avg_win'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                    Money.wallet((data['avg_win'] as num?) ?? 0, decimals: 2),
                     subtitle: 'Profit per win trade',
                     valueColor: AppColors.bull,
                   ),
                   _metricTile(
                     'Avg. Loss', 
-                    '₹${(data['avg_loss'] as num?)?.abs().toStringAsFixed(2) ?? '0.00'}',
+                    Money.wallet(((data['avg_loss'] as num?) ?? 0).abs(), decimals: 2),
                     subtitle: 'Loss per lost trade',
                     valueColor: AppColors.bear,
                   ),
@@ -270,7 +271,7 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             trade != null
-                ? '${isWin ? "+" : ""}₹${pnlVal.toStringAsFixed(2)}'
+                ? '${isWin ? "+" : ""}${Money.wallet(pnlVal, decimals: 2)}'
                 : '--',
             style: GoogleFonts.inter(
               fontSize: 14,

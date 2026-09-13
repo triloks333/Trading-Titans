@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../services/market_service.dart';
 import '../../widgets/empty_state.dart';
 import 'package:intl/intl.dart';
@@ -156,7 +157,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                   ),
                   
                   const SizedBox(height: AppSpacing.md),
-                  _inputField('Amount (₹)', _amountController, TextInputType.number),
+                  _inputField('Amount (${Money.symbol})', _amountController, TextInputType.number),
                   const SizedBox(height: AppSpacing.md),
                   _inputField('Years Ago', _yearsController, TextInputType.number),
                   const SizedBox(height: AppSpacing.lg),
@@ -200,17 +201,17 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Invested ₹${(_result!['amount_invested'] as num).toStringAsFixed(0)}',
+                      'Invested ${Money.wallet((_result!['amount_invested'] as num), decimals: 0)}',
                       style: GoogleFonts.inter(color: AppColors.ink4),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Current value ₹${(_result!['current_value'] as num).toStringAsFixed(0)}',
+                      'Current value ${Money.wallet((_result!['current_value'] as num), decimals: 0)}',
                       style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}₹${(_result!['pnl'] as num).toStringAsFixed(0)}',
+                      'P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}${Money.wallet((_result!['pnl'] as num), decimals: 0)}',
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -225,8 +226,8 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       purchaseDate != null
-                          ? 'Simulated purchase price on ${DateFormat('dd MMM yyyy').format(purchaseDate)}: ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}'
-                          : 'Simulated purchase price: ₹${(_result!['purchase_price'] as num).toStringAsFixed(2)}',
+                          ? 'Simulated purchase price on ${DateFormat('dd MMM yyyy').format(purchaseDate)}: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}'
+                          : 'Simulated purchase price: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}',
                       style: GoogleFonts.inter(color: AppColors.ink4),
                     ),
                     if (_market == 'crypto') ...[
@@ -350,7 +351,7 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
     {'symbol': 'XRP', 'name': 'Ripple'},
     {'symbol': 'ADA', 'name': 'Cardano'},
     {'symbol': 'DOGE', 'name': 'Dogecoin'},
-    {'symbol': 'MATIC', 'name': 'Polygon'},
+    {'symbol': 'POL', 'name': 'Polygon'},
   ];
 
   @override

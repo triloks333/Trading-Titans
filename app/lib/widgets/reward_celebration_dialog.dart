@@ -2,14 +2,21 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../core/money.dart';
 
 class RewardCelebrationDialog extends StatefulWidget {
   final double amount;
   final String message;
   final VoidCallback onClose;
 
+  /// Small caption above the amount. Defaults to the bug-bounty wording this
+  /// dialog was originally built for; challenge rewards pass their own, so a
+  /// completed challenge no longer announces itself as a bug bounty.
+  final String subtitle;
+
   const RewardCelebrationDialog({
     super.key,
+    this.subtitle = 'Reward Claimed',
     required this.amount,
     required this.message,
     required this.onClose,
@@ -127,7 +134,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Bug Bounty Reward Claimed',
+                  widget.subtitle,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -147,7 +154,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '+ ₹${widget.amount.toStringAsFixed(0)}',
+                        '+ ${Money.wallet(widget.amount, decimals: 0)}',
                         style: GoogleFonts.inter(
                           fontSize: 26,
                           fontWeight: FontWeight.w900,

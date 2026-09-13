@@ -1,11 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
+import '../../core/app_constants.dart';
 import '../../services/market_service.dart';
 import '../../models/quote.dart';
 
 import '../../widgets/stock_action_sheet.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/market_nav_bar.dart';
+import '../../services/app_flags_service.dart';
+import '../../services/currency_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TradeScreen extends StatefulWidget {
@@ -16,11 +22,31 @@ class TradeScreen extends StatefulWidget {
 }
 
 class _TradeScreenState extends State<TradeScreen> {
-  String _market = 'stock';
+  /// Opens on the user's favourite market. Falls back to Indian stocks, which is
+  /// also the default for an account that never answered onboarding.
+  String _market = CurrencyService.instance.defaultMarket;
   String _searchQuery = '';
   List<Map<String, dynamic>> _results = [];
   bool _loading = false;
   Timer? _debounce;
+
+  /// Live prices for whatever the list is currently showing, keyed
+  /// `symbol\x1Fmarket` to match [MarketService.quotes].
+  ///
+  /// Held here rather than in each row because one batched call per tick costs a
+  /// single `quotes_cache` query for the whole list, where per-row polling cost
+  /// one query *plus* a live fetch per row per tick. With nine popular rows on a
+  /// 4s poll that was roughly 4.5 requests a second from one phone.
+  Map<String, Quote> _quotes = const {};
+  Timer? _priceTimer;
+
+  /// Consecutive failed polls. Rows show a stale marker past
+  /// [_staleAfterFailures] so a wedged feed is visible instead of looking like a
+  /// price that simply is not moving.
+  int _failedPolls = 0;
+  static const int _staleAfterFailures = 2;
+
+  bool get _pricesAreStale => _failedPolls >= _staleAfterFailures;
 
   final List<Map<String, String>> _popularStocks = [
     {'symbol': 'RELIANCE', 'name': 'Reliance Industries'},
@@ -42,8 +68,89 @@ class _TradeScreenState extends State<TradeScreen> {
     {'symbol': 'XRP', 'name': 'Ripple'},
     {'symbol': 'ADA', 'name': 'Cardano'},
     {'symbol': 'DOGE', 'name': 'Dogecoin'},
-    {'symbol': 'MATIC', 'name': 'Polygon'},
+    {'symbol': 'POL', 'name': 'Polygon'},
   ];
+
+  final List<Map<String, String>> _popularUsStocks = [
+    {'symbol': 'AAPL', 'name': 'Apple'},
+    {'symbol': 'MSFT', 'name': 'Microsoft'},
+    {'symbol': 'NVDA', 'name': 'NVIDIA'},
+    {'symbol': 'AMZN', 'name': 'Amazon'},
+    {'symbol': 'GOOGL', 'name': 'Alphabet'},
+    {'symbol': 'META', 'name': 'Meta Platforms'},
+    {'symbol': 'TSLA', 'name': 'Tesla'},
+    {'symbol': 'NFLX', 'name': 'Netflix'},
+  ];
+
+  /// Markets that are visible in the bar but not wired to live quotes yet.
+  /// Driven by the `us_stocks_enabled` flag in the `app_flags` table, so US
+  /// stocks can be switched on from the backend without a release.
+  Set<String> get _comingSoonMarkets =>
+      AppFlagsService.instance.usStocksEnabled ? const {} : const {'us_stock'};
+
+  bool get _isComingSoon => _comingSoonMarkets.contains(_market);
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshPrices();
+    _priceTimer = Timer.periodic(
+      AppConstants.dashboardPricePoll,
+      (_) => _refreshPrices(),
+    );
+  }
+
+  /// Fetches every visible row's price in one call.
+  ///
+  /// Deliberately keeps the previous prices on failure — a row that was working a
+  /// moment ago should not blank — but counts the failure so the UI can say so.
+  Future<void> _refreshPrices() async {
+    final pairs = _visiblePairs();
+    if (pairs.isEmpty) return;
+    try {
+      final fetched = await MarketService.quotes(pairs);
+      if (!mounted) return;
+      setState(() {
+        // Merge rather than replace: a symbol missing from this tick keeps its
+        // last known price instead of flickering back to a spinner.
+        _quotes = {..._quotes, ...fetched};
+        _failedPolls = fetched.isEmpty ? _failedPolls + 1 : 0;
+      });
+    } catch (e) {
+      debugPrint('TradeScreen price poll failed: $e');
+      if (mounted) setState(() => _failedPolls++);
+    }
+  }
+
+  /// The symbol/market pairs currently on screen.
+  List<({String symbol, String market})> _visiblePairs() {
+    if (_isComingSoon) return const [];
+    final source = _searchQuery.trim().isEmpty ? _popularFor(_market) : _results;
+    return source
+        .map((e) => (symbol: '${e['symbol'] ?? ''}', market: _market))
+        .where((p) => p.symbol.isNotEmpty)
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _popularFor(String market) => switch (market) {
+        'crypto' => _popularCrypto,
+        'us_stock' => _popularUsStocks,
+        _ => _popularStocks,
+      };
+
+  void _selectMarket(String key) {
+    if (key == _market) return;
+    setState(() {
+      _market = key;
+      _searchQuery = '';
+      _results = [];
+      _loading = false;
+    });
+    _debounce?.cancel();
+    // The new market's symbols have no prices yet, so fetch without waiting for
+    // the next tick.
+    _refreshPrices();
+  }
 
   void _onSearchChanged(String val) {
     setState(() => _searchQuery = val);
@@ -64,6 +171,9 @@ class _TradeScreenState extends State<TradeScreen> {
         _results = results;
         _loading = false;
       });
+      // Search results are a different symbol set, so price them immediately
+      // rather than showing spinners until the next tick.
+      _refreshPrices();
     } catch (_) {
       if (query != _searchQuery.trim() || !mounted) return;
       setState(() {
@@ -81,13 +191,19 @@ class _TradeScreenState extends State<TradeScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    _priceTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final popularList = _market == 'stock' ? _popularStocks : _popularCrypto;
-    final displayList = _searchQuery.trim().isEmpty ? popularList.map((e) => e).toList() : _results;
+    // Watched so the US tab flips out of "coming soon" as soon as the flag
+    // lands, without needing a screen change.
+    context.watch<AppFlagsService>();
+    final tab = MarketTab.byKey(_market);
+    final displayList = _searchQuery.trim().isEmpty
+        ? _popularFor(_market)
+        : _results;
 
     return Scaffold(
       body: SafeArea(
@@ -107,84 +223,59 @@ class _TradeScreenState extends State<TradeScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: AppCard.cream,
+              child: MarketNavBar(
+                selectedKey: _market,
+                comingSoonKeys: _comingSoonMarkets,
+                // Preferred markets come first, but every market stays visible:
+                // hiding one would strand any position the user already holds.
+                preferredKeys: context.watch<CurrencyService>().preferredMarkets,
+                onSelected: _selectMarket,
+              ),
+            ),
+            if (!_isComingSoon) ...[
+              Container(
+                margin: const EdgeInsets.all(AppSpacing.lg),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                decoration: AppCard.primary,
                 child: Row(
                   children: [
+                    Icon(Icons.search, size: 18, color: AppColors.ink4),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() { _market = 'stock'; _searchQuery = ''; _results = []; }),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _market == 'stock' ? AppColors.pureWhite : Colors.transparent,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                            boxShadow: _market == 'stock' ? AppShadows.sm : null,
-                          ),
-                          child: Text(
-                            'Indian Stocks',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: _market == 'stock' ? AppColors.ink : AppColors.ink4),
-                          ),
+                      child: TextField(
+                        onChanged: _onSearchChanged,
+                        decoration: InputDecoration(
+                          hintText: tab.searchHint,
+                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          border: InputBorder.none,
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() { _market = 'crypto'; _searchQuery = ''; _results = []; }),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _market == 'crypto' ? AppColors.pureWhite : Colors.transparent,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                            boxShadow: _market == 'crypto' ? AppShadows.sm : null,
-                          ),
-                          child: Text(
-                            'Crypto',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500, color: _market == 'crypto' ? AppColors.ink : AppColors.ink4),
-                          ),
-                        ),
+                        style: GoogleFonts.inter(fontSize: 15, color: AppColors.ink),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            Container(
-              margin: const EdgeInsets.all(AppSpacing.lg),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              decoration: AppCard.primary,
-              child: Row(
-                children: [
-                        Icon(Icons.search, size: 18, color: AppColors.ink4),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: TextField(
-                      onChanged: _onSearchChanged,
-                      decoration: InputDecoration(
-                        hintText: _market == 'stock' ? 'Search NSE stocks...' : 'Search crypto...',
-                        hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                        border: InputBorder.none,
-                      ),
-                      style: GoogleFonts.inter(fontSize: 15, color: AppColors.ink),
-                    ),
+              if (_searchQuery.trim().isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                  child: Text(
+                    tab.popularHeading,
+                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5),
                   ),
-                ],
-              ),
-            ),
-            if (_searchQuery.trim().isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: Text(
-                  _market == 'stock' ? 'POPULAR STOCKS' : 'TOP CRYPTO',
-                  style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5),
                 ),
-              ),
+            ],
             const SizedBox(height: AppSpacing.sm),
+            if (_isComingSoon)
+              Expanded(
+                child: EmptyState(
+                  icon: Icons.public_rounded,
+                  title: '${tab.label} — coming soon',
+                  message:
+                      'US market trading is on the way. The tab is here so you can '
+                      'see it land; quotes and orders switch on shortly.',
+                ),
+              )
+            else
             Expanded(
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
@@ -242,7 +333,11 @@ class _TradeScreenState extends State<TradeScreen> {
                                     ],
                                   ),
                                 ),
-                                  _LivePriceWidget(symbol: symbol, market: _market),
+                                  _LivePrice(
+                                    quote: _quotes['$symbol\x1F$_market'],
+                                    market: _market,
+                                    isStale: _pricesAreStale,
+                                  ),
                                 ],
                               ),
                           ),
@@ -257,69 +352,66 @@ class _TradeScreenState extends State<TradeScreen> {
   }
 }
 
-class _LivePriceWidget extends StatefulWidget {
-  final String symbol;
+/// Renders one row's price. Stateless: the screen owns fetching, so there is no
+/// per-row timer to leak and every row on screen shows the same tick.
+class _LivePrice extends StatelessWidget {
+  final Quote? quote;
   final String market;
-  const _LivePriceWidget({required this.symbol, required this.market});
 
-  @override
-  State<_LivePriceWidget> createState() => _LivePriceWidgetState();
-}
+  /// True when the last few polls failed. Dims the figure and shows a dot, so a
+  /// wedged feed is distinguishable from a price that is genuinely flat.
+  final bool isStale;
 
-class _LivePriceWidgetState extends State<_LivePriceWidget> {
-  Quote? _quote;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  @override
-  void didUpdateWidget(covariant _LivePriceWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.symbol != widget.symbol || oldWidget.market != widget.market) {
-      _fetch();
-    }
-  }
-
-  Future<void> _fetch() async {
-    setState(() => _loading = true);
-    try {
-      final q = await MarketService.quote(widget.symbol, widget.market);
-      if (mounted) {
-        setState(() {
-          _quote = q;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  const _LivePrice({
+    required this.quote,
+    required this.market,
+    required this.isStale,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
+    final q = quote;
+    if (q == null) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
     }
-    if (_quote == null) {
-      return       Icon(Icons.chevron_right, size: 18, color: AppColors.ink4);
-    }
-    final isPositive = _quote!.change >= 0;
+    final isPositive = q.change >= 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          '₹${_quote!.price.toStringAsFixed(2)}',
-          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isStale) ...[
+              Tooltip(
+                message: 'Price is not updating — check your connection',
+                child: Icon(Icons.cloud_off_rounded,
+                    size: 11, color: AppColors.ink5),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              Money.instrument(q.price, market: market),
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: isStale ? AppColors.ink4 : AppColors.ink,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 2),
         Text(
-          '${isPositive ? '+' : ''}${_quote!.changePct.toStringAsFixed(2)}%',
-          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+          '${isPositive ? '+' : ''}${q.changePct.toStringAsFixed(2)}%',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isPositive ? AppColors.bull : AppColors.bear,
+          ),
         ),
       ],
     );

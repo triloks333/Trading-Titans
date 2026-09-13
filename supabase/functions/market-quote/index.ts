@@ -1,4 +1,10 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import {
+  US_MARKET,
+  fromUsYahooSymbol,
+  getUsdInrRate,
+  toUsYahooSymbol,
+} from "../_shared/us_market.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +44,6 @@ const CRYPTO_IDS: Record<string, string> = {
   BNB: "binancecoin",
   DOT: "polkadot",
   AVAX: "avalanche-2",
-  MATIC: "matic-network",
   POL: "polygon-ecosystem-token",
   LTC: "litecoin",
   LINK: "chainlink",
@@ -66,6 +71,9 @@ type Quote = {
   day_high?: number;
   open?: number;
   volume?: number;
+  /// USD -> INR rate, present only on non-INR quotes. Lets the order screen show
+  /// the rupee amount that will actually leave the wallet.
+  fx_rate?: number;
 };
 
 serve(async (req) => {
@@ -92,6 +100,25 @@ async function handleRequest(req: Request): Promise<Response> {
     const rawSymbol = url.searchParams.get("symbol") ?? "";
     const market = (url.searchParams.get("market") ?? "stock").toLowerCase();
 
+    // FX needs no symbol — there is only one pair — so answer before the
+    // symbol guard below.
+    if (market === "fx") {
+      const rate = await getUsdInrRate();
+      return json({
+        symbol: "USDINR",
+        yf_symbol: "USDINR=X",
+        name: "US Dollar / Indian Rupee",
+        price: round(rate, 4),
+        previous_close: round(rate, 4),
+        change: 0,
+        change_pct: 0,
+        currency: "INR",
+        market: "fx",
+        source: "yahoo",
+        fx_rate: round(rate, 4),
+      });
+    }
+
     if (!rawSymbol.trim()) {
       return json({ error: "symbol required" }, 400);
     }
@@ -104,6 +131,8 @@ async function handleRequest(req: Request): Promise<Response> {
       quote = await attempt(() => fetchCoinDcxQuote(symbol), errors, "coindcx");
       quote ??= await attempt(() => fetchBinanceQuote(symbol), errors, "binance");
       quote ??= await attempt(() => fetchCoinGeckoQuote(symbol), errors, "coingecko");
+    } else if (market === US_MARKET) {
+      quote = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
     } else {
       quote = await attempt(() => fetchYahooStockQuote(symbol), errors, "yahoo");
     }
@@ -136,8 +165,57 @@ async function attempt<T>(
   }
 }
 
+/**
+ * US equity quote, priced natively in USD.
+ *
+ * Deliberately does NOT convert to INR: the app shows US prices in dollars, and
+ * the order engine does the single USD -> INR conversion at fill time so the
+ * stored FX rate belongs to the trade rather than to a quote refresh.
+ */
+async function fetchUsStockQuote(symbol: string): Promise<Quote> {
+  const yfSymbol = toUsYahooSymbol(symbol);
+  const chartUrl = `${YAHOO_CHART}/${encodeURIComponent(yfSymbol)}?range=2d&interval=1d`;
+  const chartRes = await fetch(chartUrl, { headers: { "User-Agent": USER_AGENT } });
+  if (!chartRes.ok) throw new Error(`Yahoo chart ${chartRes.status} for ${yfSymbol}`);
+  const chart = await chartRes.json();
+  const result = chart?.chart?.result?.[0];
+  const meta = result?.meta;
+  if (!meta) throw new Error(`No chart meta for ${yfSymbol}`);
+
+  const price = Number(meta.regularMarketPrice ?? 0);
+  if (!(price > 0)) throw new Error(`No price for ${yfSymbol}`);
+  const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? price);
+  const change = price - previousClose;
+
+  const summary = await fetchYahooSummary(yfSymbol);
+  const storedSymbol = fromUsYahooSymbol(yfSymbol);
+
+  return {
+    symbol: storedSymbol,
+    yf_symbol: yfSymbol,
+    name: (summary.name as string | undefined) ?? meta.shortName ?? storedSymbol,
+    price: round(price, 2),
+    previous_close: round(previousClose, 2),
+    change: round(change, 2),
+    change_pct: round(previousClose ? (change / previousClose) * 100 : 0, 2),
+    // Native currency. The app formats us_stock with "$" on the strength of this.
+    currency: "USD",
+    market: US_MARKET,
+    source: "yahoo",
+    day_low: optionalRound(summary.dayLow ?? meta.regularMarketDayLow, 2),
+    day_high: optionalRound(summary.dayHigh ?? meta.regularMarketDayHigh, 2),
+    open: optionalRound(summary.open ?? meta.regularMarketOpen, 2),
+    volume: optionalInt(summary.volume ?? meta.regularMarketVolume),
+    // Indicative only. The binding rate is the one the engine records at fill.
+    fx_rate: round(await getUsdInrRate(), 4),
+  };
+}
+
 function normalizeSymbol(symbol: string, market: string): string {
   let s = symbol.toUpperCase().trim();
+  if (market === US_MARKET) {
+    return fromUsYahooSymbol(s);
+  }
   if (market === "stock") {
     const colonIndex = s.indexOf(":");
     if (colonIndex !== -1) s = s.substring(colonIndex + 1);
@@ -152,6 +230,11 @@ function normalizeSymbol(symbol: string, market: string): string {
     if (s === "ZOMATO") s = "ETERNAL";
   } else {
     s = s.replace(/(USDT|INR)$/i, "");
+    // Polygon rebranded MATIC -> POL. CoinDCX dropped MATICINR entirely, so a
+    // MATIC lookup used to fall through to Binance's stale MATICUSDT and serve a
+    // price ~5x the real token (₹36 against POL's ₹7.46). Alias here so all three
+    // providers see POL, the same way ZOMATO -> ETERNAL is handled above.
+    if (s === "MATIC") s = "POL";
   }
   return s;
 }
@@ -357,7 +440,6 @@ function cryptoName(symbol: string, fallbackId = ""): string {
     BNB: "BNB",
     DOT: "Polkadot",
     AVAX: "Avalanche",
-    MATIC: "Polygon",
     POL: "Polygon",
     LTC: "Litecoin",
     LINK: "Chainlink",

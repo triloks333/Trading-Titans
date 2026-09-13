@@ -410,7 +410,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     children: [
                                       Text('Need more demo capital?', style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
                                       const SizedBox(height: 2),
-                                      Text('Top-up plans from ₹199 · Up to ₹10,00,000', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBBD7F8))),
+                                      Text('See plans and one-time top-ups', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBBD7F8))),
                                     ],
                                   ),
                                 ),

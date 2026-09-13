@@ -21,6 +21,34 @@ class DiagnosticsService {
 
   static String? _appVersion;
 
+  static String? _lastDbCall;
+  static DateTime? _lastDbCallAt;
+
+  /// Records which database call is in flight, e.g. `orders.select`.
+  ///
+  /// A [PostgrestException] carries no table or URL, and its stack trace is
+  /// entirely postgrest internals — so when a query times out there is
+  /// otherwise no way to tell which one it was. This is the missing name.
+  ///
+  /// Deliberately pure Dart: two field writes, no platform channel, no
+  /// allocation beyond the timestamp. It sits on paths that run every four
+  /// seconds, so nothing is sent anywhere until an error is actually reported.
+  static void noteDbCall(String operation) {
+    _lastDbCall = operation;
+    _lastDbCallAt = DateTime.now();
+  }
+
+  /// Describes the last database call, for attaching to an error report.
+  /// Synchronous so it can be passed straight to `recordError(reason:)` without
+  /// racing the report being written.
+  static String dbContext() {
+    final op = _lastDbCall;
+    if (op == null) return 'db: none recorded';
+    final at = _lastDbCallAt;
+    if (at == null) return 'db: $op';
+    return 'db: $op (${DateTime.now().difference(at).inMilliseconds}ms earlier)';
+  }
+
   static Future<String> _version() async {
     if (_appVersion != null) return _appVersion!;
     try {

@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Unreleased work on a public URL. Keep it out of search results. -->
+<meta name="robots" content="noindex, nofollow" />
+<title>Trading Titans · chart harness</title>
+<!--
+  The Surya Yantra mark, inline. Same silhouette as core/brand.ts, reduced again
+  to what survives 16px: the amber tile, the ring, and the bindu. Inline rather
+  than a file so there is no second asset to keep in step and no 404 on the tab.
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='114' fill='%23BA7517'/%3E%3Crect x='40' y='40' width='432' height='432' rx='86' fill='%236B3A08'/%3E%3Ccircle cx='256' cy='256' r='168' fill='none' stroke='%23EF9F27' stroke-width='14'/%3E%3Ccircle cx='256' cy='256' r='96' fill='%23EF9F27'/%3E%3C/svg%3E" />
+<!--
+  Dev harness. Not shipped anywhere.
+
+  It exists so the chart can be driven against live data before either client
+  depends on it. Resize to phone width to check the mobile case — that is the
+  surface being replaced.
+
+  DESIGN NOTE
+  The direction is "precision instrument": dense, calm, monospaced numerals,
+  hairline rules, and the price treated as a readout rather than a heading. It has
+  to sit inside an existing app, so the palette is lifted from
+  app/lib/core/theme.dart rather than invented — the character comes from type and
+  structure instead.
+
+  NO WEB FONTS, deliberately. The Flutter build has to be one self-contained asset
+  that works offline, so the stacks below name faces already present on the
+  machine and fall back to the platform monospace (SF Mono, Consolas, Roboto
+  Mono). Tabular figures matter here: proportional digits make the price column
+  shimmer every time the last bar updates.
+-->
+<style>
+  :root {
+    --surface: #eef2f7; --panel: #fff; --panel-2: #f7f9fc;
+    --ink: #0b1b2b; --ink3: #334e68; --ink4: #627d98; --ink5: #9fb3c8;
+    --hair: #dde7f2; --hair-soft: #e9eff6;
+    --accent: #1a73e8; --accent-soft: #eaf2fc;
+    --up: #0f9d58; --down: #d93025;
+    --lift: 0 1px 1px rgba(11,27,43,.04), 0 6px 18px -6px rgba(11,27,43,.12);
+    --font-ui: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-num: "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+    --font-brand: "Playfair Display", Georgia, "Times New Roman", serif;
+  }
+  body.dark {
+    --surface: #091120; --panel: #162544; --panel-2: #1b2c4f;
+    --ink: #f4f7fb; --ink3: #c3d2e2; --ink4: #91a3b8; --ink5: #627d98;
+    --hair: #2d4676; --hair-soft: #24395f;
+    --accent: #3b8bf2; --accent-soft: #132c52;
+    --up: #26b36c; --down: #ef4a3f;
+    --lift: 0 1px 1px rgba(0,0,0,.25), 0 8px 22px -8px rgba(0,0,0,.5);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 400 13.5px/1.5 var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column; gap: 10px; padding: 14px;
+    /* A faint wash rather than a flat fill, so the card has something to sit on. */
+    background-image: radial-gradient(120% 80% at 50% -20%, rgba(26,115,232,.06), transparent 60%);
+  }
+  .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+
+  /* ── Toolbar ─────────────────────────────────────────────────────────── */
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+  .brand { display: flex; align-items: baseline; gap: 7px; margin-right: 6px; }
+  .brand img { width: 21px; height: 21px; border-radius: 6px; display: block; align-self: center; }
+  .brand b { font: italic 600 16.5px/1 var(--font-brand); letter-spacing: .005em; }
+  .brand small {
+    font: 500 8.5px/1 var(--font-ui); letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ink5);
+  }
+
+  input, select, button {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--hair); border-radius: 9px; padding: 6px 10px;
+    transition: border-color .13s ease, background .13s ease, color .13s ease;
+  }
+  input {
+    width: 116px; font-family: var(--font-num); font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  input::placeholder { color: var(--ink5); letter-spacing: 0; }
+  input:focus, select:focus, button:focus-visible {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.on:hover { color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .seg {
+    display: flex; gap: 1px; padding: 2px; background: var(--panel-2);
+    border: 1px solid var(--hair); border-radius: 10px;
+  }
+  .seg button {
+    border: 0; background: transparent; padding: 5px 9px; border-radius: 7px;
+    font: 600 12px/1.2 var(--font-num); color: var(--ink4); letter-spacing: .02em;
+  }
+  .seg button:hover { color: var(--accent); }
+  .seg button.on {
+    background: var(--panel); color: var(--accent); box-shadow: var(--lift);
+  }
+  body.dark .seg button.on { background: var(--accent); color: #fff; }
+  .spacer { flex: 1 1 auto; }
+
+  /* ── Chart card ──────────────────────────────────────────────────────── */
+  .card {
+    background: var(--panel); border: 1px solid var(--hair);
+    border-radius: 16px; box-shadow: var(--lift); overflow: hidden;
+    display: flex; flex-direction: column; flex: 1 1 auto; min-height: 340px;
+  }
+
+  /* The readout. Price is the loudest thing on the page, on purpose. */
+  .quote {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+    padding: 13px 16px 12px;
+  }
+  .ident { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .sym {
+    font: 700 14px/1.2 var(--font-num); letter-spacing: .06em;
+  }
+  .name {
+    font-size: 11.5px; color: var(--ink4); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 30ch;
+  }
+  .price { display: flex; align-items: baseline; gap: 9px; }
+  .last {
+    font: 600 27px/1 var(--font-num); letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .chg {
+    font: 600 12px/1 var(--font-num); padding: 4px 7px; border-radius: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .chg.up { color: var(--up); background: color-mix(in srgb, var(--up) 11%, transparent); }
+  .chg.down { color: var(--down); background: color-mix(in srgb, var(--down) 11%, transparent); }
+  .chg:empty { display: none; }
+
+  /* OHLC of the hovered bar, right-aligned against the price. */
+  .ohlc { display: flex; gap: 13px; font: 400 11.5px/1 var(--font-num); color: var(--ink5); }
+  .ohlc b { color: var(--ink3); font-weight: 600; }
+
+  /* Indicator readout: one chip per indicator, values inside it. */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 5px 6px; padding: 0 16px 11px;
+  }
+  .legend:empty { display: none; }
+  .chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 9px 4px 7px; border-radius: 7px;
+    background: var(--panel-2); border: 1px solid var(--hair-soft);
+  }
+  .chip .title {
+    font: 600 10.5px/1 var(--font-ui); letter-spacing: .03em;
+    text-transform: uppercase; color: var(--ink4);
+  }
+  .chip .vals { display: flex; gap: 8px; }
+  .chip .v { display: flex; align-items: center; gap: 4px; }
+  .chip .swatch { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+  .chip .n { font: 600 11.5px/1 var(--font-num); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  #chart { flex: 1 1 auto; min-height: 0; border-top: 1px solid var(--hair-soft); }
+
+  /* ── Indicator tray ──────────────────────────────────────────────────── */
+  .tray {
+    background: var(--panel); border: 1px solid var(--hair); border-radius: 14px;
+    padding: 12px 14px; display: none; gap: 8px 26px; flex-wrap: wrap;
+    box-shadow: var(--lift);
+    animation: drop .16s ease both;
+  }
+  @keyframes drop { from { opacity: 0; transform: translateY(-5px); } }
+  .tray.open { display: flex; }
+  .tray { align-items: flex-start; }
+  .picker { display: flex; flex-wrap: wrap; gap: 8px 26px; flex: 1 1 auto; }
+  .grp { display: flex; flex-direction: column; gap: 3px; }
+  .grp h4, .strategies h4 {
+    margin: 0 0 3px; font: 600 8.5px/1 var(--font-ui); letter-spacing: .15em;
+    text-transform: uppercase; color: var(--ink5);
+  }
+  .grp .row { display: flex; align-items: center; gap: 7px; min-height: 24px; }
+  .grp label {
+    display: flex; align-items: center; gap: 7px; font-size: 12.5px;
+    cursor: pointer; color: var(--ink3);
+  }
+  .grp label:hover { color: var(--accent); }
+  .grp input[type=checkbox] {
+    width: auto; accent-color: var(--accent); cursor: pointer; margin: 0;
+  }
+  /* Parameter boxes appear only for what is switched on. */
+  .params { display: flex; gap: 3px; }
+  input.p {
+    width: 48px; padding: 2px 4px; border-radius: 5px;
+    font: 500 11px/1.3 var(--font-num); text-align: center;
+    text-transform: none; letter-spacing: 0;
+    background: var(--panel-2); border-color: var(--hair-soft);
+  }
+  input.p::-webkit-outer-spin-button, input.p::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  input.p { appearance: textfield; }
+
+  /* ── Saved strategies ────────────────────────────────────────────────── */
+  .strategies {
+    flex: 0 0 250px; display: flex; flex-direction: column; gap: 6px;
+    padding-left: 16px; border-left: 1px solid var(--hair-soft);
+  }
+  .saveRow { display: flex; gap: 5px; }
+  .saveRow input {
+    flex: 1 1 auto; width: auto; padding: 5px 8px; font-size: 12.5px;
+    font-family: var(--font-ui); text-transform: none; letter-spacing: 0;
+    font-weight: 400;
+  }
+  .saveRow button { padding: 5px 11px; font-size: 12.5px; }
+  .msg { font-size: 11px; color: var(--ink5); min-height: 14px; line-height: 1.3; }
+  .msg.ok { color: var(--up); }
+  .msg.bad { color: var(--down); }
+  .tplList { display: flex; flex-direction: column; gap: 3px; }
+  .tpl {
+    display: flex; align-items: center; gap: 3px;
+    border: 1px solid var(--hair-soft); border-radius: 8px;
+    background: var(--panel-2); padding: 2px 3px 2px 2px;
+  }
+  .tpl:hover { border-color: var(--accent); }
+  .tpl .name {
+    flex: 1 1 auto; text-align: left; border: 0; background: transparent;
+    padding: 4px 6px; font-size: 12.5px; font-weight: 600; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tpl .name:hover { color: var(--accent); }
+  .tpl .count {
+    font: 600 10px/1 var(--font-num); color: var(--ink5);
+    background: var(--panel); border: 1px solid var(--hair-soft);
+    border-radius: 999px; padding: 3px 6px; flex: none;
+  }
+  .tpl .icon {
+    border: 0; background: transparent; padding: 3px 4px; font-size: 12px;
+    color: var(--ink5); line-height: 1; flex: none; border-radius: 5px;
+  }
+  .tpl .icon:hover { background: var(--panel); color: var(--accent); }
+  .tpl .icon.starred { color: #e0a800; }
+  .tpl .icon.danger:hover { color: var(--down); }
+  .empty { margin: 0; font-size: 11.5px; color: var(--ink5); line-height: 1.45; }
+  .foot {
+    margin: 2px 0 0; font-size: 10.5px; color: var(--ink5); line-height: 1.4;
+  }
+
+  footer {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    font: 400 11px/1 var(--font-ui); color: var(--ink5);
+  }
+  .pill {
+    border: 1px solid var(--hair); border-radius: 999px; padding: 4px 10px;
+    background: var(--panel);
+  }
+  .pill:empty { display: none; }
+  .pill.num { letter-spacing: .02em; }
+  .err { color: var(--down); font-weight: 600; }
+
+  /* One orchestrated reveal rather than scattered micro-animations. */
+  header, .card, footer { animation: rise .34s cubic-bezier(.2,.7,.3,1) both; }
+  .card { animation-delay: .04s; }
+  footer { animation-delay: .09s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 9px; gap: 7px; }
+    input { width: 100%; }
+    .brand small { display: none; }
+    .last { font-size: 23px; }
+    .ohlc { width: 100%; gap: 11px; }
+    .quote { gap: 6px 12px; }
+    /* The strategies panel stacks under the picker rather than beside it. */
+    .strategies {
+      flex: 1 1 100%; padding-left: 0; padding-top: 12px;
+      border-left: 0; border-top: 1px solid var(--hair-soft);
+    }
+    .saveRow input { width: auto; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img id="brandMark" alt="" />
+      <b>Trading Titans</b>
+      <small>charts</small>
+    </div>
+    <input id="symbol" value="RELIANCE" spellcheck="false" aria-label="Symbol" />
+    <select id="market" aria-label="Market">
+      <option value="stock">India</option>
+      <option value="us_stock">US</option>
+      <option value="crypto">Crypto</option>
+    </select>
+    <button id="load">Load</button>
+    <div class="seg" id="timeframes" role="group" aria-label="Timeframe"></div>
+    <div class="spacer"></div>
+    <button id="indicatorsBtn">Indicators <span id="indCount" class="num"></span></button>
+    <div class="seg">
+      <button id="styleCandles" class="on">Candles</button>
+      <button id="styleLine">Line</button>
+    </div>
+    <button id="live">Live</button>
+    <button id="theme">Dark</button>
+  </header>
+
+  <div class="tray" id="tray">
+    <div class="picker" id="picker"></div>
+    <aside class="strategies">
+      <h4>Saved strategies</h4>
+      <div class="saveRow">
+        <input id="tplName" placeholder="Name this setup" maxlength="40" aria-label="Strategy name" />
+        <button id="tplSave">Save</button>
+      </div>
+      <div class="msg" id="tplMsg"></div>
+      <div class="tplList" id="tplList"></div>
+      <p class="foot">
+        Saved on this device. Star one to have charts open with it.
+      </p>
+    </aside>
+  </div>
+
+  <div class="card">
+    <div class="quote">
+      <div class="ident">
+        <div class="sym" id="barSymbol">—</div>
+        <div class="name" id="barName"></div>
+      </div>
+      <div class="price">
+        <div class="last" id="barLast">—</div>
+        <div class="chg" id="barChange"></div>
+      </div>
+      <div class="spacer"></div>
+      <div class="ohlc" id="barOhlc"></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="chart"></div>
+  </div>
+
+  <footer>
+    <span class="pill num" id="statBars"></span>
+    <span class="pill" id="statSource"></span>
+    <span class="pill num" id="statTick"></span>
+    <span class="pill" id="statNote"></span>
+    <span id="statErr" class="err"></span>
+  </footer>
+
+  <script type="module" src="/src/demo/main.ts"></script>
+</body>
+</html>

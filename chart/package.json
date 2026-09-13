@@ -1,0 +1,23 @@
+{
+  "name": "@tradingtitans/chart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Trading Titans chart core. Framework-free, so the React web app and the Flutter WebView render from one implementation.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "build:app": "tsc -b && vite build --mode webview",
+    "test": "tsx src/core/aggregate.test.ts && tsx src/core/indicators.test.ts && tsx src/core/templates.test.ts && tsx src/core/drawings.test.ts",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "lightweight-charts": "5.0.9"
+  },
+  "devDependencies": {
+    "@types/node": "22.12.0",
+    "tsx": "4.19.2",
+    "typescript": "5.9.2",
+    "vite": "7.1.9"
+  }
+}

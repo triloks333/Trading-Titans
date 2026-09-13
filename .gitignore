@@ -108,3 +108,6 @@ promo.mp4
 secrets/
 *play-service-account*.json
 *-service-account.json
+
+# Browser-automation scratch output
+.playwright-mcp/

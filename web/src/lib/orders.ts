@@ -123,64 +123,72 @@ export async function placeOrder(req: PlaceOrderRequest): Promise<PlaceOrderResu
 }
 
 /**
- * Cancels a pending order.
+ * Calls a server-side order endpoint with the signed-in user's token.
  *
- * A direct table update rather than a function call, because there is no cancel
- * endpoint and RLS already restricts a user to their own rows. The
- * `status = 'pending'` predicate is the important part: it makes this lose
- * harmlessly if the engine claimed the order in the same instant, instead of
- * cancelling something that has already filled.
+ * Cancel and modify used to be direct table updates. They could not stay that
+ * way: the RLS policy that allowed them (`USING (auth_uid() = user_id)`, with no
+ * WITH CHECK and no column restriction) made "edit my own order" and "rewrite my
+ * own realized_pnl" the same privilege. Both now go through functions that
+ * validate ownership and state, and the direct grant has been withdrawn.
+ *
+ * Like placeOrder, a rejected request is an ordinary result rather than a throw:
+ * "already filled" is something the user needs to read.
  */
-export async function cancelOrder(orderId: string): Promise<PlaceOrderResult> {
-  const { data, error } = await supabase
-    .from('orders')
-    .update({ status: 'cancelled' })
-    .eq('id', orderId)
-    .eq('status', 'pending')
-    .select('id')
+async function callOrderFunction(
+  name: 'cancel-order' | 'modify-order',
+  payload: Record<string, unknown>,
+  fallback: string,
+): Promise<PlaceOrderResult> {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) return { ok: false, message: 'You are signed out. Please sign in again.' }
 
-  if (error) return { ok: false, message: error.message }
-  if (!data || data.length === 0) {
-    return {
-      ok: false,
-      message: 'That order is no longer pending — it may have just been filled.',
+  try {
+    const res = await fetch(`${functionsBase}/${name}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    })
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    if (!res.ok) {
+      return {
+        ok: false,
+        message:
+          body.error ??
+          (res.status === 429
+            ? 'Too many changes in a short time. Please wait a moment.'
+            : `Request rejected (${res.status}).`),
+      }
     }
+    return { ok: true, message: body.message ?? fallback }
+  } catch {
+    return { ok: false, message: 'Could not reach the server. Check your connection.' }
   }
-  return { ok: true, message: 'Order cancelled.', orderId }
+}
+
+/** Cancels a pending order. */
+export async function cancelOrder(orderId: string): Promise<PlaceOrderResult> {
+  const r = await callOrderFunction('cancel-order', { orderId }, 'Order cancelled.')
+  return r.ok ? { ...r, orderId } : r
 }
 
 /**
- * Changes the limit price or quantity of a pending order.
+ * Changes the limit price and/or quantity of a pending order.
  *
- * `price` is the trigger the engine compares against, and `limit_price` is the
- * requested limit it preserves across the fill, so both have to move together —
- * updating only one would leave the order triggering at one price and recorded as
- * having asked for another.
+ * The server keeps `price` and `limit_price` in step and recomputes `total`. This
+ * used to be done here, and `total` was left stale on a quantity-only change.
  */
 export async function modifyOrder(
   orderId: string,
   changes: { quantity?: number; limitPrice?: number },
 ): Promise<PlaceOrderResult> {
-  const patch: Record<string, number> = {}
-  if (changes.quantity != null && changes.quantity > 0) patch.quantity = changes.quantity
-  if (changes.limitPrice != null && changes.limitPrice > 0) {
-    patch.price = changes.limitPrice
-    patch.limit_price = changes.limitPrice
-  }
-  if (Object.keys(patch).length === 0) {
+  const payload: Record<string, unknown> = { orderId }
+  if (changes.quantity != null && changes.quantity > 0) payload.quantity = changes.quantity
+  if (changes.limitPrice != null && changes.limitPrice > 0) payload.price = changes.limitPrice
+  if (Object.keys(payload).length === 1) {
     return { ok: false, message: 'Nothing to change.' }
   }
 
-  const { data, error } = await supabase
-    .from('orders')
-    .update(patch)
-    .eq('id', orderId)
-    .eq('status', 'pending')
-    .select('id')
-
-  if (error) return { ok: false, message: error.message }
-  if (!data || data.length === 0) {
-    return { ok: false, message: 'That order is no longer pending.' }
-  }
-  return { ok: true, message: 'Order updated.', orderId }
+  const r = await callOrderFunction('modify-order', payload, 'Order updated.')
+  return r.ok ? { ...r, orderId } : r
 }

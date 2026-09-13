@@ -22,6 +22,10 @@ class Quote {
   final double? lowerCircuit;
   final double? upperCircuit;
 
+  /// USD to INR rate, present only on quotes priced in a foreign currency.
+  /// Indicative: the binding rate is the one the order engine records at fill.
+  final double? fxRate;
+
   Quote({
     required this.symbol,
     required this.yfSymbol,
@@ -44,7 +48,11 @@ class Quote {
     this.lastTradedTime,
     this.lowerCircuit,
     this.upperCircuit,
+    this.fxRate,
   });
+
+  /// True when this instrument's prices are not in rupees.
+  bool get isNativeCurrency => currency != 'INR';
 
   factory Quote.fromJson(Map<String, dynamic> json) {
     return Quote(
@@ -69,6 +77,7 @@ class Quote {
       lastTradedTime: json['last_traded_time'] as String?,
       lowerCircuit: (json['lower_circuit'] as num?)?.toDouble(),
       upperCircuit: (json['upper_circuit'] as num?)?.toDouble(),
+      fxRate: (json['fx_rate'] as num?)?.toDouble(),
     );
   }
 
@@ -95,6 +104,7 @@ class Quote {
       'last_traded_time': lastTradedTime,
       'lower_circuit': lowerCircuit,
       'upper_circuit': upperCircuit,
+      'fx_rate': fxRate,
     };
   }
 }

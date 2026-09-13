@@ -225,7 +225,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
 
       async signOut() {
-        await supabase.auth.signOut()
+        // scope: 'local' signs this browser out and nothing else.
+        //
+        // The default is 'global', which revokes every refresh token the user
+        // has — so signing out of the web app also signed them out of the phone,
+        // and vice versa. Nobody expects closing a browser session to log them
+        // out of an app on a different device.
+        //
+        // 'global' is still the right tool for "sign out everywhere" after a
+        // password change or a suspected compromise. That is a different,
+        // deliberate action, and this button is not it.
+        await supabase.auth.signOut({ scope: 'local' })
         setProfile(null)
       },
 

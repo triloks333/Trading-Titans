@@ -18,7 +18,15 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": ["./src/*"],
+      // The shared chart package, consumed as SOURCE rather than as a built
+      // artifact. Vite compiles it in the same pass, so there is no dist to keep
+      // current and no chance of the web app shipping a stale chart — which is the
+      // failure mode a `file:` dependency invites. See vite.config.ts.
+      "@chart": ["../chart/src/index.ts"],
+      "@chart/*": ["../chart/src/*"]
+    }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../chart/src"]
 }

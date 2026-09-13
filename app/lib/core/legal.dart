@@ -1,19 +1,26 @@
-/// Terms & Conditions and Privacy Policy shown in the app.
+﻿/// Terms & Conditions and Privacy Policy shown in the app.
 ///
-/// Written for the app as it actually behaves: **completely free**. There are no
-/// paid plans, no wallet top-ups, no payment gateway and nothing to refund, so
-/// this deliberately does NOT mirror the website's paid-era text
-/// (`website/src/components/TermsPage.tsx` / `PrivacyPage.tsx`), which still
-/// describes Razorpay purchases and non-refundable credits. Stating a payment
-/// term for something a user cannot buy is worse than saying nothing.
+/// Written for the app as it actually behaves. As of the September 2026 revision
+/// that includes optional paid plans (Pro, Titan) and one-time demo-cash top-ups,
+/// bought on the web through Razorpay, so the payments, renewal and refund
+/// sections below are load bearing rather than boilerplate.
 ///
-/// If monetisation is ever switched back on (`app_flags.monetization_enabled`),
-/// the payments and refund clauses have to come back with it.
+/// The previous revision said the app was completely free and that "there is
+/// nothing to refund". Leaving that while a live checkout existed would have been
+/// the worst of both worlds: a user charged under terms telling them they could
+/// not be. Must stay in step with `web/src/lib/legal.ts`, including
+/// [termsVersion] â€” that string is what gets recorded against a user's
+/// acceptance, and its whole purpose is being able to say which text they agreed
+/// to.
+///
+/// The paid surfaces themselves remain gated on
+/// `app_flags.monetization_enabled`, so this text describes what a user *can* be
+/// charged for once that flag is on.
 ///
 /// ponytail: held as Dart constants, so editing a policy needs an app release.
-/// The ceiling is exactly that. Upgrade path is an `app_config` row — the
+/// The ceiling is exactly that. Upgrade path is an `app_config` row â€” the
 /// version-gate table already works that way and the app already reads it on
-/// every resume — or a WebView onto the live pages. Not worth either until the
+/// every resume â€” or a WebView onto the live pages. Not worth either until the
 /// text changes more often than the app ships.
 library;
 
@@ -59,7 +66,7 @@ class LegalDoc {
 class LegalDocs {
   LegalDocs._();
 
-  static const String lastUpdated = 'August 17, 2026';
+  static const String lastUpdated = 'September 2, 2026';
 
   /// Version string recorded against a user's acceptance.
   ///
@@ -74,7 +81,7 @@ class LegalDocs {
   /// Purpose-written rather than reusing [terms].notice: that notice runs to four
   /// paragraphs and would dominate an auth screen, and it does not mention data
   /// delays, which is the point users most often misread. This covers the three
-  /// things that actually cause confusion — everything is simulated, we are not a
+  /// things that actually cause confusion â€” everything is simulated, we are not a
   /// broker, and the prices are not live-accurate.
   ///
   /// Kept here beside the policies so all user-facing legal copy lives in one
@@ -82,7 +89,7 @@ class LegalDocs {
   static const String authDisclaimer =
       'Trading Titans is a virtual trading simulator for learning only. Every '
       'price, balance, profit, reward and prize in this app is simulated and has '
-      'no real-world value — nothing can be withdrawn or redeemed.\n\n'
+      'no real-world value â€” nothing can be withdrawn or redeemed.\n\n'
       'We are not a registered broker, exchange or investment adviser, and we '
       'cannot place real trades. Market data comes from third parties and may be '
       'significantly delayed or inaccurate, so never use these prices to make '
@@ -93,12 +100,12 @@ class LegalDocs {
     lastUpdated: lastUpdated,
     noticeTitle: 'IMPORTANT NOTICE',
     notice:
-        'Trading Titans is a free virtual paper-trading simulation for '
-        'educational purposes only.\n\n'
+        'Trading Titans is a virtual paper-trading simulation for educational '
+        'purposes only. It is free to use; some optional features are paid.\n\n'
         'We do not facilitate real-world trading, broker connectivity, real '
         'financial transactions or payouts, and we do not provide professional '
         'financial advice. Every portfolio, balance and profit figure in the app '
-        'is fictional.',
+        'is fictional, including any balance added by a paid top-up.',
     intro:
         'By accessing, downloading, or using the Trading Titans mobile '
         'application or website (together, the "Platform"), you agree to these '
@@ -114,26 +121,62 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '2. The App is Free',
+        heading: '2. Free to Use, With Optional Paid Plans',
         paragraphs: [
-          'Trading Titans is free to use. There are no subscriptions, no paid '
-              'plans, no wallet top-ups and no in-app purchases.',
+          'Creating an account, trading stocks and crypto, challenges, rewards '
+              'and the leaderboard are free. We also offer optional paid plans '
+              '(currently Pro and Titan) and optional one-time demo-cash '
+              'top-ups. You never have to buy anything to use Trading Titans.',
+          'What a payment buys is access to features of a simulator, and '
+              'simulated balances inside it. You are not buying money, '
+              'securities, any financial product, or investment advice.',
         ],
         bullets: [
-          'We will never ask you to pay for demo cash, features, rewards or '
-              'account upgrades.',
-          'We do not collect card details, bank details or UPI information, '
-              'because there is nothing to pay for.',
-          'If anyone asks you to pay money for Trading Titans, or for demo cash '
-              'or an account, it is not us. Please report it to our support '
-              'email below.',
-          'We may introduce optional paid features in future. If we ever do, we '
-              'will update these Terms first and it will be clearly marked '
-              'inside the app before anything is charged.',
+          'We show no advertisements, on any plan, free or paid.',
+          'Prices are in Indian Rupees and include GST. The price shown at '
+              'checkout is the amount you pay.',
+          'Purchases are made on our website and processed by Razorpay. The app '
+              'never asks for and never receives your card, UPI or bank '
+              'details.',
+          'Plans renew automatically at the end of each billing period, at the '
+              'same price, until you cancel. Monthly plans renew monthly; '
+              'annual plans renew annually.',
+          'You can cancel any time from the link in your Razorpay receipt or by '
+              'emailing support. Cancelling stops future renewals; your access '
+              'continues to the end of the period you have already paid for.',
+          'If a renewal payment fails we may retry it. If it keeps failing, '
+              'paid features stop and the account returns to the free plan. '
+              'Demo cash you have already been given is never taken back.',
+          'If anyone asks you to pay for Trading Titans anywhere other than our '
+              'own website checkout, it is not us. Please report it to the '
+              'support email below.',
         ],
       ),
       LegalSection(
-        heading: '3. Virtual Currency and Demo Cash',
+        heading: '3. Cancellations and Refunds',
+        paragraphs: [
+          'Paid features and purchased demo cash are delivered immediately and '
+              'in full, so purchases are generally non-refundable once '
+              'delivered. That said, we would rather fix a genuine problem than '
+              'keep money we have not earned.',
+        ],
+        bullets: [
+          'Charged but nothing delivered: refunded in full. If your payment '
+              'succeeded and your plan or demo cash never appeared, contact us.',
+          'Charged twice for the same thing: the duplicate is refunded in full.',
+          'A renewal you did not intend: contact us within 7 days of the charge '
+              'and, if the period is substantially unused, we will refund it.',
+          'Change of mind after use, dissatisfaction with simulated results, or '
+              'demo cash already spent in the simulator, are not refundable.',
+          'To request a refund, email us from your account address with the '
+              'payment reference. We aim to reply within 3 business days and to '
+              'return an approved refund to the original payment method within '
+              '5 to 7 business days.',
+          'Accounts terminated for abuse of the service are not refunded.',
+        ],
+      ),
+      LegalSection(
+        heading: '4. Virtual Currency and Demo Cash',
         paragraphs: [
           'The Platform uses fictional currency (shown as demo cash, coins or '
               'credits) so you can practise trading without risk.',
@@ -142,16 +185,17 @@ class LegalDocs {
           'Demo cash has zero real-world value. It cannot be withdrawn, '
               'redeemed, transferred or exchanged for real money or any other '
               'thing of value.',
-          'Because nothing is ever purchased, there is nothing to refund. No '
-              'balance in the app represents money you have paid or money you '
-              'are owed.',
+          'This is true of demo cash you have paid for. Buying a top-up buys '
+              'you a larger simulated balance to practise with; it does not '
+              'make that balance real money, and no balance in the app '
+              'represents money you are owed.',
           'Selling, buying or transferring accounts, demo cash or simulated '
               'portfolios outside the app is prohibited and may result in '
               'permanent account termination.',
         ],
       ),
       LegalSection(
-        heading: '4. Simulated Market Data',
+        heading: '5. Simulated Market Data',
         paragraphs: [
           'Market quotes, stock and crypto lists, futures, options and charts '
               'in the app come from third-party data providers (such as Yahoo '
@@ -163,7 +207,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '5. Rewards, Challenges and Referrals',
+        heading: '6. Rewards, Challenges and Referrals',
         paragraphs: [
           'The app offers challenges, XP, levels, streaks and referral rewards. '
               'Every reward is paid in demo cash only and has no real-world '
@@ -178,7 +222,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '6. Acceptable Use and Account Integrity',
+        heading: '7. Acceptable Use and Account Integrity',
         paragraphs: [
           'You agree not to interfere with the Platform or exploit it in ways '
               'it was not designed for. This includes exploiting bugs to '
@@ -189,9 +233,9 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '7. Limitation of Liability',
+        heading: '8. Limitation of Liability',
         paragraphs: [
-          'The Platform is provided free and as-is. Trading Titans, its '
+          'The Platform is provided as-is. Trading Titans, its '
               'founders and affiliates are not liable for any direct, indirect, '
               'incidental or consequential loss arising from your use of, or '
               'inability to use, the Platform. This includes any decision you '
@@ -200,7 +244,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '8. Changes to the Service and These Terms',
+        heading: '9. Changes to the Service and These Terms',
         paragraphs: [
           'We may change, suspend or discontinue any part of the Platform at '
               'any time. We may also revise these Terms; the date at the top of '
@@ -215,9 +259,9 @@ class LegalDocs {
     title: 'Privacy Policy',
     lastUpdated: lastUpdated,
     intro:
-        'Trading Titans is a free virtual trading simulator. This policy '
-        'explains what we collect, why, and what you can do about it. We do not '
-        'sell your data, and we do not collect payment information at all.',
+        'Trading Titans is a virtual trading simulator. This policy explains '
+        'what we collect, why, and what you can do about it. We do not sell '
+        'your data, and we never see your card details.',
     sections: [
       LegalSection(
         heading: '1. Information We Collect',
@@ -247,8 +291,10 @@ class LegalDocs {
       LegalSection(
         heading: '2. What We Do Not Collect',
         bullets: [
-          'No payment information. The app is free, there are no purchases, and '
-              'we never collect card numbers, bank details or UPI IDs.',
+          'No card numbers, bank details or UPI IDs. Purchases happen on our '
+              'website and are processed by Razorpay on their own pages; we '
+              'receive only a payment reference, the amount, and whether it '
+              'succeeded.',
           'No real brokerage or demat account credentials. Trading Titans is '
               'not connected to any broker and cannot place real trades.',
           'No contacts, no precise location, no microphone or camera access '
@@ -256,7 +302,18 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '3. How We Use Your Information',
+        heading: '3. Payment Information',
+        paragraphs: [
+          'If you buy a plan or a top-up, Razorpay collects the payment details '
+              'needed to take the payment, under their own privacy policy. What '
+              'we store is only what is needed to honour the purchase and to '
+              'answer a billing question: which plan you bought, the amount, '
+              'the Razorpay order or subscription reference, and the times it '
+              'was paid and applied.',
+        ],
+      ),
+      LegalSection(
+        heading: '4. How We Use Your Information',
         bullets: [
           'To run your account and your simulated portfolio.',
           'To show prices, execute simulated orders and calculate simulated '
@@ -268,7 +325,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '4. How Your Data is Secured',
+        heading: '5. How Your Data is Secured',
         paragraphs: [
           'Your data is stored using Supabase infrastructure (managed '
               'PostgreSQL). We use encrypted connections (HTTPS), encryption at '
@@ -277,7 +334,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '5. Third-Party Services',
+        heading: '6. Third-Party Services',
         paragraphs: ['We rely on a small number of providers:'],
         bullets: [
           'Supabase: database, authentication and server functions.',
@@ -288,10 +345,12 @@ class LegalDocs {
               'information about you.',
           'Google Play: distributes the app and handles updates. We do not '
               'receive your Google account password.',
+          'Razorpay: processes payments for optional paid plans and top-ups, '
+              'and holds the payment details we deliberately never see.',
         ],
       ),
       LegalSection(
-        heading: '6. Data Sharing',
+        heading: '7. Data Sharing',
         paragraphs: [
           'We do not sell, rent or trade your personal data, and we do not '
               'share it with advertising networks or marketing companies. We '
@@ -301,7 +360,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '7. Data Retention and Your Rights',
+        heading: '8. Data Retention and Your Rights',
         paragraphs: [
           'You can view and edit your profile in the app at any time. You may '
               'ask us to delete your account and personal data by emailing '
@@ -311,7 +370,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '8. Children',
+        heading: '9. Children',
         paragraphs: [
           'Trading Titans is an educational simulator intended for a general '
               'audience and is not directed at children under 13. If you '
@@ -320,7 +379,7 @@ class LegalDocs {
         ],
       ),
       LegalSection(
-        heading: '9. Changes to This Policy',
+        heading: '10. Changes to This Policy',
         paragraphs: [
           'We may update this policy; the date at the top shows when it last '
               'changed. Material changes will be highlighted in the app.',

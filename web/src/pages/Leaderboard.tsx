@@ -3,21 +3,22 @@ import { Trophy, Crown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { money, signedMoney, cn } from '@/lib/format'
 import { useAuth } from '@/lib/auth'
-import { Badge, Card, CardHeader, Delta, EmptyState, Skeleton } from '@/components/ui'
+import { useTierMap } from '@/lib/tier'
+import {
+  Badge,
+  Card,
+  CardHeader,
+  Delta,
+  EmptyState,
+  Skeleton,
+  TierBadge,
+} from '@/components/ui'
 
 interface Row {
   id: string
   name: string | null
-  plan: string | null
   total_realized_pnl: number | null
   wallet_balance: number | null
-}
-
-/** True only for a paying plan. Everything free, however it is spelled, is not. */
-function isPaidPlan(plan: string | null): boolean {
-  if (!plan) return false
-  const p = plan.toLowerCase()
-  return p !== 'free' && !p.startsWith('free_')
 }
 
 /**
@@ -36,7 +37,7 @@ export function Leaderboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leaderboard')
-        .select('id, name, plan, total_realized_pnl, wallet_balance')
+        .select('id, name, total_realized_pnl, wallet_balance')
         .order('total_realized_pnl', { ascending: false })
         .limit(100)
       if (error) throw error
@@ -47,6 +48,12 @@ export function Leaderboard() {
 
   const rows = board.data ?? []
   const myIndex = rows.findIndex((r) => r.id === session?.user?.id)
+
+  // Plan badges come from `user_tiers`, in one follow-up query for the whole page
+  // rather than a lookup per row. The `leaderboard` view's `plan` column is not
+  // used: every account sits on 'free_starter', so it badged all 193 rows
+  // identically and told a reader nothing.
+  const { data: tiers } = useTierMap(rows.map((r) => r.id))
 
   return (
     <div className="space-y-6">
@@ -133,14 +140,7 @@ export function Leaderboard() {
                             {r.name?.trim() || 'Anonymous Titan'}
                           </span>
                           {isMe && <Badge tone="brand">YOU</Badge>}
-                          {/* Only a genuinely paid plan is worth a badge. The check
-                              was `!== 'free'`, but every account is on
-                              'free_starter', so all 176 rows carried an identical
-                              FREE_STARTER tag — pure noise that said nothing about
-                              anyone. */}
-                          {isPaidPlan(r.plan) && (
-                            <Badge tone="violet">{r.plan!.toUpperCase()}</Badge>
-                          )}
+                          <TierBadge tier={tiers?.[r.id]} />
                         </div>
                       </td>
                       <td className="tnum px-3 py-3 text-right text-ink-3">

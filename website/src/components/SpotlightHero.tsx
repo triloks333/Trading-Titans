@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Gift } from 'lucide-react';
-import { PREREG_GIFT_AMOUNT, PLAY_STORE_URL, isPlayStoreLive } from '../lib/config';
+import { Sparkles } from 'lucide-react';
+import { STARTING_CASH, PLAY_STORE_URL, MOTTO } from '../lib/config';
 
 const BG_IMAGE_1 =
   'https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_195923_b0ba8ace-1d1d-4f2c-9a28-1ab84b330680.png&w=1280&q=85';
@@ -96,12 +96,8 @@ export const SpotlightHero: React.FC = () => {
     };
   }, []);
 
-  const scrollToCta = () => {
-    if (isPlayStoreLive()) {
-      window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
-    } else {
-      document.getElementById('prereg')?.scrollIntoView({ behavior: 'smooth' });
-    }
+  const openPlayStore = () => {
+    window.open(PLAY_STORE_URL, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -125,29 +121,28 @@ export const SpotlightHero: React.FC = () => {
             className="block font-playfair italic font-normal text-5xl sm:text-7xl md:text-8xl hero-anim hero-reveal"
             style={{ letterSpacing: '-0.05em', animationDelay: '0.25s' }}
           >
-            Master the markets
+            Play the game.
           </span>
           <span
             className="block font-normal text-5xl sm:text-7xl md:text-8xl -mt-1 hero-anim hero-reveal"
             style={{ letterSpacing: '-0.08em', animationDelay: '0.42s' }}
           >
-            with zero risk
+            Learn the market.
           </span>
         </h1>
         <p
-          className="mt-5 max-w-xl text-sm sm:text-base text-white/85 hero-anim hero-fade"
+          className="mt-5 max-w-2xl text-sm sm:text-base text-white/85 hero-anim hero-fade"
           style={{ animationDelay: '0.6s' }}
         >
-          Trade real NSE stocks, F&amp;O and crypto with virtual money. Move your cursor to look
-          beneath the surface.
+          {MOTTO}
         </p>
       </div>
 
       {/* Bottom-left paragraph */}
       <div className="hidden sm:block absolute bottom-14 left-10 md:left-14 max-w-[260px] z-50 hero-anim hero-fade" style={{ animationDelay: '0.7s' }}>
         <p className="text-sm text-white/80 leading-relaxed">
-          Practice options, futures and stock strategies on live market data, building real skill and
-          discipline without risking a single rupee of real money.
+          16 challenges, XP, Titan levels and daily streaks. Every task you finish pays out more
+          demo cash to practise with, so learning the market feels like levelling up.
         </p>
       </div>
 
@@ -157,20 +152,20 @@ export const SpotlightHero: React.FC = () => {
         style={{ animationDelay: '0.85s' }}
       >
         <div className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20">
-          <Gift className="w-4 h-4 text-[#9fff00]" />
+          <Sparkles className="w-4 h-4 text-[#9fff00]" />
           <span className="text-xs font-semibold text-white">
-            Pre-register &amp; get {PREREG_GIFT_AMOUNT} virtual cash
+            Free &middot; start with {STARTING_CASH} virtual cash
           </span>
         </div>
         <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
-          Learn the market the safe way, compete on leaderboards, and sharpen your edge before you
-          ever put real capital on the line.
+          Earn your way to a bigger practice balance by completing tasks, then put it to work on
+          real market data. No real money, ever.
         </p>
         <button
-          onClick={scrollToCta}
+          onClick={openPlayStore}
           className="bg-[#e8702a] hover:bg-[#d2611f] text-white text-sm font-medium px-7 py-3 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-[#e8702a]/30"
         >
-          Pre-register free
+          Download free
         </button>
       </div>
     </section>

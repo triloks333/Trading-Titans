@@ -13,8 +13,6 @@ class TestLocalStorage extends LocalStorage {
   @override
   Future<void> persistSession(String session) async {}
   @override
-  Future<void> removeSession() async {}
-  @override
   Future<void> removePersistedSession() async {}
 }
 
@@ -31,7 +29,6 @@ void main() {
 
     final service = FoInstrumentsService();
     final lotSize = await service.getLotSize('NSE:FEDERALBNK-EQ-2026-06-25-305-CE');
-    print('RESOLVED LOT SIZE VALUE: $lotSize');
-    expect(lotSize, 2500);
+    expect(lotSize, 2500, reason: 'resolved lot size for FEDERALBNK 305 CE');
   });
 }

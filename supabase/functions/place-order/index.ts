@@ -88,6 +88,20 @@ serve(async (req) => {
     }
     if (instrumentType === "FUTURE" && !expiryDate) return json({ error: "expiryDate required" }, 400);
 
+    // --- Derivatives are free for everyone ----------------------------------
+    // A plan check used to sit here, refusing F&O to the free tier once
+    // `monetization_enabled` was on. Removed deliberately: futures and options are
+    // part of the product for every account now.
+    //
+    // Removed rather than made conditional, because a dormant gate is worse than
+    // none. It fired only when a flag flipped, so nobody would notice it had come
+    // back until a user hit it — which is exactly how it surprised us.
+    //
+    // Only this check is gone. `monetization_enabled` still governs the wallet
+    // top-up card, the Subscribe screen and the plan badges, so top-ups and plans
+    // keep selling. If F&O is ever gated again it needs a fresh decision, not an
+    // uncommented block.
+
     // --- Warm a trusted price into quotes_cache so the engine can price immediately ---
     // US tickers are already bare (AAPL), so extractUnderlying would only ever
     // damage them — it truncates at the first digit and splits on "-".

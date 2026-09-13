@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../core/money.dart';
 
 class PriceChart extends StatelessWidget {
   final List<Map<String, dynamic>> points;
@@ -49,7 +50,7 @@ class PriceChart extends StatelessWidget {
                 reservedSize: 60,
                 getTitlesWidget: (value, meta) {
                   return Text(
-                    '₹${value.toStringAsFixed(0)}',
+                    Money.wallet(value, decimals: 0),
                     style:       TextStyle(fontSize: 10, color: AppColors.ink4),
                   );
                 },
@@ -88,7 +89,7 @@ class PriceChart extends StatelessWidget {
               getTooltipItems: (touchedSpots) {
                 return touchedSpots.map((spot) {
                   return LineTooltipItem(
-                    '₹${spot.y.toStringAsFixed(2)}',
+                    Money.wallet(spot.y, decimals: 2),
                     TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
                   );
                 }).toList();

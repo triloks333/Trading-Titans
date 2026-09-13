@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
+import '../../core/money.dart';
 import '../../models/quote.dart';
 import '../../models/portfolio.dart';
 import '../../models/price_alert.dart';
@@ -11,7 +12,8 @@ import 'fullscreen_chart_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'order_entry_screen.dart';
 import 'option_chain_screen.dart';
-import '../../widgets/tradingview_chart.dart';
+import '../../widgets/instrument_chart.dart';
+
 
 class StockDetailScreen extends StatefulWidget {
   final String symbol;
@@ -243,7 +245,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         children: [
           Text(widget.name, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
           const SizedBox(height: AppSpacing.sm),
-          Text('₹${q.price.toStringAsFixed(2)}',
+          Text(Money.instrument(q.price, market: q.market),
               style:       TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.sm),
           Row(children: [
@@ -254,7 +256,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 borderRadius: BorderRadius.circular(AppRadius.tag),
               ),
               child: Text(
-                '${_isUp ? '+' : ''}${q.change.toStringAsFixed(2)} (${q.changePct.toStringAsFixed(2)}%)',
+                '${_isUp ? '+' : ''}${Money.instrument(q.change, market: widget.market)} (${q.changePct.toStringAsFixed(2)}%)',
                 style: TextStyle(color: _changeColor),
               ),
             ),
@@ -270,7 +272,9 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return Container(
       height: 350,
       decoration: BoxDecoration(
-        color: const Color(0xFF131722),
+        // The chart page's own dark surface, so the frame and the chart do not
+        // meet in two different shades at the rounded corners.
+        color: const Color(0xFF162544),
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
@@ -278,7 +282,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         borderRadius: BorderRadius.circular(AppRadius.xl - 1),
         child: Stack(
           children: [
-            TradingViewChart(
+            InstrumentChart(
               symbol: widget.symbol,
               market: widget.market,
             ),
@@ -327,18 +331,18 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 Text('Key Stats',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
           const SizedBox(height: AppSpacing.md),
-          _statRow('Previous Close', '₹${q.previousClose.toStringAsFixed(2)}'),
+          _statRow('Previous Close', Money.instrument(q.previousClose, market: q.market)),
           _divider(),
           if (q.open != null) ...[
-            _statRow('Open', '₹${q.open!.toStringAsFixed(2)}'),
+            _statRow('Open', Money.instrument(q.open!, market: q.market)),
             _divider(),
           ],
           if (q.dayHigh != null) ...[
-            _statRow('High', '₹${q.dayHigh!.toStringAsFixed(2)}'),
+            _statRow('High', Money.instrument(q.dayHigh!, market: q.market)),
             _divider(),
           ],
           if (q.dayLow != null) ...[
-            _statRow('Low', '₹${q.dayLow!.toStringAsFixed(2)}'),
+            _statRow('Low', Money.instrument(q.dayLow!, market: q.market)),
             _divider(),
           ],
           if (q.volume != null && q.volume! > 0) ...[
@@ -346,7 +350,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             _divider(),
           ],
           _statRow('Day Change',
-              '${_isUp ? '+' : ''}${q.change.toStringAsFixed(2)} (${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%)',
+              '${_isUp ? '+' : ''}${Money.instrument(q.change, market: widget.market)} (${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%)',
               valueColor: _changeColor),
           _divider(),
           _statRow('Market', q.market == 'crypto' ? 'Crypto' : 'NSE/BSE'),
@@ -396,7 +400,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           Text('Quantity ${_holding!.quantity.toStringAsFixed(4)}',
               style:       TextStyle(color: AppColors.ink4)),
           const SizedBox(height: AppSpacing.xs),
-          Text('Avg price ₹${_holding!.avgPrice.toStringAsFixed(2)}',
+          Text('Avg price ${Money.instrument(_holding!.displayAvgPrice, market: _holding!.market)}',
               style:       TextStyle(color: AppColors.ink4)),
         ],
       ),
@@ -644,11 +648,12 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
     }
     setState(() => _saving = true);
     try {
+      final nativeTarget = Money.fromDisplay(target, market: widget.market);
       await SupabaseService().createPriceAlert(
         symbol: widget.symbol,
         market: widget.market,
         name: widget.displayName,
-        targetPrice: target,
+        targetPrice: nativeTarget,
         direction: _direction,
         referencePrice: widget.currentPrice,
       );
@@ -658,7 +663,9 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Alert set: notify when price goes $_direction ₹${target.toStringAsFixed(2)}',
+              // `target` is what the user typed, already in the display currency,
+                // so it is echoed back rather than converted again.
+                'Alert set: notify when price goes $_direction ${Money.symbol}${target.toStringAsFixed(2)}',
             ),
             backgroundColor: AppColors.bull,
           ),
@@ -685,8 +692,12 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
   }
 
   void _autoDirection() {
-    final target = double.tryParse(_targetController.text.trim());
-    if (target != null && widget.currentPrice > 0) {
+    final typed = double.tryParse(_targetController.text.trim());
+    if (typed == null) return;
+    // The field holds a display-currency figure; currentPrice is native. Compare
+    // like with like, or "above"/"below" flips the wrong way in dollars view.
+    final target = Money.fromDisplay(typed, market: widget.market);
+    if (widget.currentPrice > 0) {
       final newDir = target >= widget.currentPrice ? 'above' : 'below';
       if (newDir != _direction) setState(() => _direction = newDir);
     }
@@ -732,7 +743,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
             ),
             const SizedBox(height: 4),
             Text(
-              '${widget.displayName}  •  Current ₹${widget.currentPrice.toStringAsFixed(2)}',
+              '${widget.displayName}  •  Current ${Money.wallet(widget.currentPrice, decimals: 2)}',
               style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
             ),
             const SizedBox(height: 20),
@@ -754,9 +765,9 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
               onChanged: (_) => _autoDirection(),
               style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.ink),
               decoration: InputDecoration(
-                labelText: 'Target price (₹)',
+                labelText: 'Target price (${Money.symbol})',
                 labelStyle: TextStyle(color: AppColors.ink4),
-                hintText: 'e.g. ${(widget.currentPrice * 1.02).toStringAsFixed(2)}',
+                hintText: 'e.g. ${Money.bare(widget.currentPrice * 1.02, from: Money.sourceFor(widget.market))}',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.birch)),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.birch)),
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: AppColors.imperialGold)),
@@ -848,7 +859,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'When price goes ${a.direction} ₹${a.targetPrice.toStringAsFixed(2)}',
+              'When price goes ${a.direction} ${Money.instrument(a.targetPrice, market: widget.market)}',
               style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
             ),
           ),

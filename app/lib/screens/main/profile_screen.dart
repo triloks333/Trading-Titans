@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+﻿import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,13 +6,24 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme.dart';
+import '../../core/legal.dart';
+import '../../widgets/legal_sheet.dart';
+import '../../core/money.dart';
 import '../../core/app_constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/tour_service.dart';
+import '../../services/app_flags_service.dart';
+import '../../services/plan_service.dart';
+import '../../services/currency_service.dart';
+import '../../core/currency.dart';
 import '../../widgets/crown_logo.dart';
+import '../../widgets/plan_badge.dart';
+import '../../widgets/request_feature_sheet.dart';
 import 'subscribe_screen.dart';
+import 'convert_account_screen.dart';
+import 'challenges_screen.dart';
 import 'orders_screen.dart';
 import 'analytics_screen.dart';
 import 'autopsy_screen.dart';
@@ -37,7 +48,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthService>();
     final user = auth.user;
+    // Hides plan badges and the top-up route while the app is free.
+    final monetized = context.watch<AppFlagsService>().monetizationEnabled;
+    final plan = context.watch<PlanService>();
     final themeService = context.watch<ThemeService>();
+    // Watched so the row subtitles and every money figure on this screen update
+    // the moment the preference changes.
+    final currencyService = context.watch<CurrencyService>();
     
     String themeName = 'Light Mode';
     if (themeService.themeMode == ThemeMode.dark) themeName = 'Dark Mode';
@@ -56,7 +73,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   const CrownLogo(size: 56, withRing: true),
                   const SizedBox(height: AppSpacing.md),
-                  Text(user?.name ?? 'Titan', style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          user?.name ?? 'Titan',
+                          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // The plan sits next to the name, which is where a user
+                      // looks for it and where it appears on the leaderboard.
+                      if (monetized && plan.isPaid) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        PlanBadge(tier: plan.tier),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     user == null
@@ -67,18 +102,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4),
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  // Reads the derived tier, not `profiles.subscription_active`.
+                  // That column defaults to true at signup and no payment path
+                  // has ever written it, so it labelled brand-new free accounts
+                  // "ACTIVE".
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                    decoration: AppCard.badge(user?.subscriptionActive == true ? AppColors.bullLight : AppColors.cream),
+                    decoration: AppCard.badge(
+                        monetized && plan.isPaid ? AppColors.bullLight : AppColors.cream),
                     child: Text(
-                      user?.subscriptionActive == true ? 'ACTIVE' : 'FREE STARTER',
-                      style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: user?.subscriptionActive == true ? AppColors.bull : AppColors.ink4, letterSpacing: 0.5),
+                      monetized
+                          ? (plan.isPaid ? '${plan.tier.toUpperCase()} PLAN' : 'FREE PLAN')
+                          : 'FREE ACCESS',
+                      style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: monetized && plan.isPaid
+                              ? AppColors.bull
+                              : AppColors.ink4,
+                          letterSpacing: 0.5),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  _detailRow('Wallet Balance', '₹${user?.walletBalance.toStringAsFixed(0) ?? '0'}'),
+                  _detailRow('Wallet Balance', Money.wallet(user?.walletBalance ?? 0)),
                   const SizedBox(height: AppSpacing.sm),
-                  _detailRow('P&L', '₹${user?.totalRealizedPnl.toStringAsFixed(0) ?? '0'}',
+                  _detailRow('P&L', Money.wallet(user?.totalRealizedPnl ?? 0),
                       valueColor: (user?.totalRealizedPnl ?? 0) >= 0 ? AppColors.bull : AppColors.bear),
                   const SizedBox(height: AppSpacing.sm),
                   _detailRow('Member Since', user != null ? user.createdAt.toLocal().toShortDateString() : '-'),
@@ -86,10 +134,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+            if (auth.isGuest) ...[
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final authService = context.read<AuthService>();
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const ConvertAccountScreen()));
+                  await authService.refreshUser();
+                },
+                icon: Icon(Icons.lock_open_outlined,
+                    size: 18, color: AppColors.pureWhite),
+                label: Text('Make account permanent â€” get â‚¹6,000',
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.pureWhite,
+                        letterSpacing: 0.3)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.ink,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md)),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             ElevatedButton(
               onPressed: () async {
                 final authService = context.read<AuthService>();
-                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen()));
+                await Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const ChallengesScreen()));
                 await authService.refreshUser();
               },
               style: ElevatedButton.styleFrom(
@@ -98,8 +173,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               ),
-              child: Text('Top up Demo Cash', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.pureWhite, letterSpacing: 0.5)),
+              child: Text('Challenges & Rewards',
+                  style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.pureWhite,
+                      letterSpacing: 0.5)),
             ),
+            if (monetized) ...[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton(
+                onPressed: () async {
+                  final authService = context.read<AuthService>();
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen()));
+                  await authService.refreshUser();
+                },
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: AppColors.birch),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                ),
+                child: Text('Plans & top-ups',
+                    style: GoogleFonts.inter(
+                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             
             
@@ -110,6 +208,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
               ),
             ),
+            if (auth.isGuest)
+              _menuItem(context, Icons.lock_open_outlined,
+                  'Make account permanent', const ConvertAccountScreen()),
             _menuItem(context, Icons.star, 'Watchlist', const WatchlistScreen()),
             _menuItem(context, Icons.bar_chart, 'Analytics', const AnalyticsScreen()),
             _menuItem(context, Icons.receipt_long, 'Order History', const OrdersScreen()),
@@ -134,6 +235,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
             _menuItemAction(context, Icons.replay_circle_filled_outlined, 'Replay App Tour', () => _replayTour(context)),
             _menuItemActionWithSubtitle(context, Icons.palette_outlined, 'App Theme', themeName, () => _showThemeSelector(context)),
+            _menuItemActionWithSubtitle(
+              context,
+              Icons.currency_exchange_outlined,
+              'Display Currency',
+              currencyService.displayCurrency.label,
+              () => _showCurrencySelector(context),
+            ),
+            _menuItemActionWithSubtitle(
+              context,
+              Icons.tune_outlined,
+              'Preferred Markets',
+              _marketsSummary(currencyService.preferredMarkets),
+              () => _showMarketsSelector(context),
+            ),
+            _menuItemActionWithSubtitle(
+              context,
+              Icons.public_outlined,
+              'Trading From',
+              currencyService.location?.label ?? 'Not set',
+              () => _showLocationSelector(context),
+            ),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
@@ -165,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setBool('pending_tour_replay', true);
     TourService.requestReplay();
     messenger.showSnackBar(
-      const SnackBar(content: Text('Starting the app tour…')),
+      const SnackBar(content: Text('Starting the app tourâ€¦')),
     );
   }
 
@@ -219,325 +341,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showPrivacyPolicy(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl))),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (context, scrollController) => Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Privacy Policy', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
-              const SizedBox(height: AppSpacing.md),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: [
-                    Text(
-                      'At Trading Titans, we respect your privacy. This policy outlines how we handle your data:\n\n'
-                      '1. Data Collection: We collect account email, profile name, and virtual transaction logs to facilitate virtual trading simulations.\n\n'
-                      '2. Security: Your password credentials are securely handled via Supabase Auth services.\n\n'
-                      '3. Market Feeds: We query public and premium quote APIs. No financial information is shared with third parties.\n\n'
-                      '4. Changes: We reserve the right to modify this policy at any time.',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  void _showPrivacyPolicy(BuildContext context) =>
+      showLegalSheet(context, LegalDocs.privacy);
 
-  void _showTerms(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl))),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (context, scrollController) => Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Terms & Conditions', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
-              const SizedBox(height: AppSpacing.md),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  children: [
-                    Text(
-                      'Welcome to Trading Titans. By accessing our app, you agree to these Terms and Conditions:\n\n'
-                      '1. Virtual Trading Only: All trades, cash, balances, and P&L displayed in this application are strictly virtual. No real-world money is risked or invested.\n\n'
-                      '2. Content Accuracy: Market quote data is sourced from third-party APIs and may experience delays. We are not liable for trading simulations based on delayed data.\n\n'
-                      '3. System Integrity: Any exploitation of bugs, virtual cash balances, or API feeds will result in immediate termination of the user account.',
-                      style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.5),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  void _showTerms(BuildContext context) =>
+      showLegalSheet(context, LegalDocs.terms);
 
-  void _showRequestFeature(BuildContext context) {
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-    XFile? pickedImage;
-    Uint8List? pickedBytes;
-    bool submitting = false;
-    List<Map<String, dynamic>> similarFeatures = [];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl))),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            top: AppSpacing.lg,
-            left: AppSpacing.lg,
-            right: AppSpacing.lg,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Request a Feature', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                const SizedBox(height: AppSpacing.xs),
-                Text('Tell us what we should build next!', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
-                const SizedBox(height: AppSpacing.md),
-                
-                Text('Feature Title', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: titleController,
-                  onChanged: (val) async {
-                    if (val.trim().length >= 5) {
-                      final results = await SupabaseService().searchSimilarFeatures(val.trim());
-                      setModalState(() {
-                        similarFeatures = results;
-                      });
-                    } else {
-                      setModalState(() {
-                        similarFeatures = [];
-                      });
-                    }
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Enter feature name...',
-                    hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
-                  ),
-                ),
-                if (similarFeatures.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.goldPale,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.goldBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Similar requests found. Upvote instead?',
-                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
-                        ),
-                        const SizedBox(height: 6),
-                        ...similarFeatures.map((f) => Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '- ${f['title']}',
-                                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.of(context).pop();
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
-                                  );
-                                },
-                                child: Text(
-                                  'View & Upvote',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.imperialGold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                
-                Text('Description', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: descController,
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: 'Describe the feature in detail...',
-                    hintStyle: GoogleFonts.inter(color: AppColors.ink5),
-                    border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                
-                Text('Attach an Image (Optional)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
-                const SizedBox(height: 6),
-                if (pickedBytes != null)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    height: 120,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.birch),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      image: DecorationImage(
-                        image: MemoryImage(pickedBytes!),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    alignment: Alignment.topRight,
-                    child: IconButton(
-                      icon: const Icon(Icons.cancel, color: Colors.red),
-                      onPressed: () {
-                        setModalState(() {
-                          pickedImage = null;
-                          pickedBytes = null;
-                        });
-                      },
-                    ),
-                  )
-                else
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picker = ImagePicker();
-                      final image = await picker.pickImage(source: ImageSource.gallery);
-                      if (image != null) {
-                        final bytes = await image.readAsBytes();
-                        setModalState(() {
-                          pickedImage = image;
-                          pickedBytes = bytes;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
-                    label: Text('Select Image', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                      side:       BorderSide(color: AppColors.birch),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                    ),
-                  ),
-                
-                const SizedBox(height: AppSpacing.lg),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: submitting
-                        ? null
-                        : () async {
-                            final title = titleController.text.trim();
-                            final desc = descController.text.trim();
-                            if (title.isEmpty || desc.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please fill in both title and description.')),
-                              );
-                              return;
-                            }
-                            if (title.length < 5 || desc.length < 10) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Title must be at least 5 chars, Description at least 10 chars.')),
-                              );
-                              return;
-                            }
-                            
-                            setModalState(() => submitting = true);
-                            final messenger = ScaffoldMessenger.of(context);
-                            try {
-                              String? imageUrl;
-                              if (pickedImage != null && pickedBytes != null) {
-                                imageUrl = await SupabaseService().uploadTicketAttachment(pickedImage!.path, pickedBytes!);
-                              }
-                              await SupabaseService().submitFeatureRequest(
-                                title: title,
-                                description: desc,
-                                imageUrl: imageUrl,
-                              );
-                              if (context.mounted) {
-                                Navigator.of(context).pop();
-                                messenger.showSnackBar(
-                                  const SnackBar(content: Text('Thank you! Your feature request has been submitted to the wishlist.')),
-                                );
-                              }
-                            } catch (e) {
-                              setModalState(() => submitting = false);
-                              messenger.showSnackBar(
-                                SnackBar(content: Text('Error: ${e.toString().replaceAll("Exception:", "")}')),
-                              );
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.imperialGold,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: submitting
-                        ?       SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
-                          )
-                        : Text('Submit', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// Lives in widgets/request_feature_sheet.dart so a notification can open it
+  /// too — `cta_route: 'feature'` lands on the same sheet.
+  void _showRequestFeature(BuildContext context) =>
+      showRequestFeatureSheet(context);
 
   void _showReportIssue(BuildContext context) {
     final titleController = TextEditingController();
@@ -707,6 +520,217 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  /// Human-readable summary of the preferred-market selection, for the row
+  /// subtitle.
+  static String _marketsSummary(List<String> markets) {
+    const names = {
+      'stock': 'Indian Stocks',
+      'us_stock': 'US Stocks',
+      'crypto': 'Crypto',
+    };
+    final ordered = MarketTabOrder.canonical
+        .where(markets.contains)
+        .map((m) => names[m] ?? m)
+        .toList();
+    if (ordered.isEmpty) return 'None selected';
+    if (ordered.length == 3) return 'All markets';
+    return ordered.join(', ');
+  }
+
+  void _showCurrencySelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) {
+        final currency = context.watch<CurrencyService>();
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(),
+                Text('Display Currency',
+                    style: GoogleFonts.inter(
+                        fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                const SizedBox(height: 4),
+                Text(
+                  'Changes every price, balance and profit figure in the app. '
+                  'Your wallet is still held in rupees.',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                for (final c in Currency.values)
+                  _themeOption(
+                    context,
+                    icon: c == Currency.inr
+                        ? Icons.currency_rupee
+                        : Icons.attach_money,
+                    title: c.label,
+                    isSelected: currency.displayCurrency == c,
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await CurrencyService.instance.setDisplayCurrency(c);
+                    },
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLocationSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (context) {
+        final currency = context.watch<CurrencyService>();
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sheetHandle(),
+                Text('Trading From',
+                    style: GoogleFonts.inter(
+                        fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                const SizedBox(height: 4),
+                Text(
+                  'Changing this does not restrict any market, and it leaves your '
+                  'currency and market choices as they are.',
+                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                for (final l in TradingLocation.values)
+                  _themeOption(
+                    context,
+                    icon: l == TradingLocation.india
+                        ? Icons.home_outlined
+                        : Icons.public,
+                    title: l.label,
+                    isSelected: currency.location == l,
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await CurrencyService.instance.setLocation(l);
+                    },
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showMarketsSelector(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+      ),
+      builder: (sheetContext) {
+        // Local copy so toggling several markets is one save, not one per tap.
+        final selected = CurrencyService.instance.preferredMarkets.toSet();
+        return StatefulBuilder(
+          builder: (context, setSheetState) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sheetHandle(),
+                  Text('Preferred Markets',
+                      style: GoogleFonts.inter(
+                          fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'We open your favourite market first. You can still trade '
+                    'anything, any time.',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  for (final m in const [
+                    ('stock', 'Indian Stocks', Icons.currency_rupee),
+                    ('us_stock', 'US Stocks', Icons.attach_money),
+                    ('crypto', 'Cryptocurrency', Icons.currency_bitcoin),
+                  ])
+                    CheckboxListTile(
+                      value: selected.contains(m.$1),
+                      onChanged: (on) => setSheetState(() {
+                        if (on == true) {
+                          selected.add(m.$1);
+                        } else if (selected.length > 1) {
+                          // Never allow an empty selection: the nav bar and the
+                          // default tab both need at least one market.
+                          selected.remove(m.$1);
+                        }
+                      }),
+                      activeColor: AppColors.imperialGold,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      secondary: Icon(m.$3, size: 20, color: AppColors.ink3),
+                      title: Text(m.$2,
+                          style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink)),
+                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(sheetContext);
+                        await CurrencyService.instance
+                            .setPreferredMarkets(selected.toList());
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.ink,
+                        foregroundColor: AppColors.pureWhite,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md)),
+                      ),
+                      child: Text('Save',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _sheetHandle() => Center(
+        child: Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.birch,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
 
   void _showThemeSelector(BuildContext context) {
     showModalBottomSheet(

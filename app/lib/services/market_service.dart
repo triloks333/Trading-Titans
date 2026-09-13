@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
+import 'diagnostics_service.dart';
 
 class MarketService {
   static final String _functionsBase =
@@ -30,6 +31,22 @@ class MarketService {
   }
 
   static final Map<String, Map<String, dynamic>> _quoteCache = {};
+
+  /// How old a `quotes_cache` row may be and still be used instead of a live
+  /// fetch.
+  ///
+  /// Was 45s, which is more than twice the ~20s cadence `refresh-quotes` writes
+  /// at, so a row was effectively *always* accepted and the client never went
+  /// live. Prices then only stepped when the job happened to write, which read
+  /// as a frozen list even though the 4s poll was firing. At 10s a row the job
+  /// has not just refreshed falls through to a live fetch, so movement tracks
+  /// the poll instead of the job.
+  ///
+  /// ponytail: the ceiling is cost — every row the job misses becomes one edge
+  /// function call per client per poll. If that bites, the upgrade path is a
+  /// realtime subscription on `quotes_cache` rather than a longer window, since
+  /// a longer window is what caused this.
+  static const Duration _serverCacheMaxAge = Duration(seconds: 10);
 
   static String normalizeSymbol(String sym, String market) {
     var s = sym.toUpperCase().trim();
@@ -98,6 +115,24 @@ class MarketService {
     return null;
   }
 
+  /// Live USD/INR rate, used to render the app in the user's chosen display
+  /// currency. Returns null on any failure so callers keep their cached rate
+  /// rather than formatting against zero.
+  static Future<double?> fetchUsdInrRate() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_functionsBase/market-quote?market=fx'), headers: _headers)
+          .timeout(_timeout);
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body);
+      if (body is! Map) return null;
+      final rate = (body['price'] as num?)?.toDouble();
+      return (rate != null && rate > 0) ? rate : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Batch variant of [quote]: resolves many symbols with a single server-cache
   /// read per market (collapsing an N-reads-per-list pattern into one), then
   /// falls back to the live per-symbol [quote] for anything not fresh in the
@@ -130,6 +165,7 @@ class MarketService {
           ps.map((p) => cacheKeyFor(p.symbol, market)).toSet().toList();
       if (cacheKeys.isEmpty) continue;
       try {
+        DiagnosticsService.noteDbCall('quotes_cache.select(batch:$market)');
         final rows = await Supabase.instance.client
             .from('quotes_cache')
             .select()
@@ -146,8 +182,7 @@ class MarketService {
           if (m == null) continue;
           final updatedAt = DateTime.tryParse(m['updated_at'] as String? ?? '');
           if (updatedAt == null) continue;
-          if (nowUtc.difference(updatedAt.toUtc()) >
-              const Duration(seconds: 45)) {
+          if (nowUtc.difference(updatedAt.toUtc()) > _serverCacheMaxAge) {
             continue; // stale -> live fallback
           }
           final price = (m['price'] as num?)?.toDouble() ?? 0.0;
@@ -181,7 +216,11 @@ class MarketService {
         .where((p) => !resolved.contains('${p.symbol}\x1F${p.market}'));
     await Future.wait(pending.map((p) async {
       try {
-        final q = await quote(p.symbol, p.market);
+        // forceRefresh because the batch read above already established there is
+        // no fresh cache row for this pair. Without it, quote() re-queries
+        // quotes_cache for a row we know is stale — one wasted round trip per
+        // miss, per poll.
+        final q = await quote(p.symbol, p.market, forceRefresh: true);
         if (q != null) result['${p.symbol}\x1F${p.market}'] = q;
       } catch (_) {}
     }));
@@ -202,12 +241,13 @@ class MarketService {
     return s;
   }
 
-  /// Reads the server-side cached quote if present and fresh (updated within
-  /// the last 45s). Returns null on any miss/stale/error so the caller falls
-  /// back to the live fetch. Never throws.
+  /// Reads the server-side cached quote if present and fresh (within
+  /// [_serverCacheMaxAge]). Returns null on any miss/stale/error so the caller
+  /// falls back to the live fetch. Never throws.
   static Future<Quote?> _readServerCache(String symbol, String market) async {
     try {
       final key = cacheKeyFor(symbol, market);
+      DiagnosticsService.noteDbCall('quotes_cache.select(one:$key)');
       final row = await Supabase.instance.client
           .from('quotes_cache')
           .select()
@@ -219,7 +259,7 @@ class MarketService {
       final updatedAt = DateTime.tryParse(m['updated_at'] as String? ?? '');
       if (updatedAt == null) return null;
       if (DateTime.now().toUtc().difference(updatedAt.toUtc()) >
-          const Duration(seconds: 45)) {
+          _serverCacheMaxAge) {
         return null; // stale -> fall through to a live fetch
       }
       final price = (m['price'] as num?)?.toDouble() ?? 0.0;
@@ -329,7 +369,7 @@ class MarketService {
     'BNB': 'binancecoin',
     'DOT': 'polkadot',
     'AVAX': 'avalanche-2',
-    'MATIC': 'matic-network',
+    'POL': 'polygon-ecosystem-token', // MATIC was delisted after the Polygon rebrand
     'LTC': 'litecoin',
     'LINK': 'chainlink',
     'UNI': 'uniswap',
@@ -388,6 +428,54 @@ class MarketService {
       }
       return _getYfCandles(symbol, interval);
     } catch (_) {
+      return [];
+    }
+  }
+
+  /// Candles for the same symbol, fetched through our own `market-history`
+  /// function instead of calling the upstream provider from the client.
+  ///
+  /// This is the only variant a browser can use. [_getYfCandles] and
+  /// [_getCgCandles] talk to Yahoo/CoinGecko directly, and neither sends the
+  /// CORS headers a browser demands; worse, they set a `User-Agent`, which a
+  /// browser forbids scripts from setting at all. The edge function already
+  /// proxies both providers, returns `{t,o,h,l,c}` verbatim, and answers with
+  /// `corsHeaders`.
+  ///
+  /// Works on mobile too — it is simply one more hop there, which is why the
+  /// phone keeps using the direct path.
+  static Future<List<CandleData>> getCandlesViaFunction(
+    String symbol,
+    String market,
+    String interval,
+  ) async {
+    try {
+      final normSym = market == 'crypto' ? symbol.toUpperCase() : symbol;
+      final response = await http
+          .get(
+            Uri.parse(
+              '$_functionsBase/market-history'
+              '?symbol=${Uri.encodeQueryComponent(normSym)}'
+              '&market=${Uri.encodeQueryComponent(market)}'
+              '&range=1mo'
+              '&interval=${Uri.encodeQueryComponent(interval)}',
+            ),
+            headers: _headers,
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode != 200) return [];
+
+      final body = jsonDecode(response.body);
+      final raw = body is Map ? body['candles'] : null;
+      if (raw is! List) return [];
+
+      return raw
+          .whereType<Map>()
+          .map((c) => CandleData.fromJson(Map<String, dynamic>.from(c)))
+          .toList();
+    } catch (_) {
+      // A chart is not worth an error dialog; the caller renders "no data".
       return [];
     }
   }

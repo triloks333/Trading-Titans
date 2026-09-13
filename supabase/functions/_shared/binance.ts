@@ -10,7 +10,7 @@ const SYMBOL_MAP: Record<string, string> = {
   "XRP": "XRPUSDT",
   "DOGE": "DOGEUSDT",
   "BNB": "BNBUSDT",
-  "MATIC": "MATICUSDT",
+  "POL": "POLUSDT", // MATICUSDT is stale post-rebrand and quotes ~5x the real token
   "DOT": "DOTUSDT",
   "AVAX": "AVAXUSDT",
   "SHIB": "SHIBUSDT",

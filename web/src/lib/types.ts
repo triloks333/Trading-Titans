@@ -20,6 +20,14 @@ export interface Profile {
   challenge_baseline_capital: number
   converted_at: string | null
   total_xp: number | null
+  /**
+   * Residency, from onboarding. `india` | `outside_india` | null, where null
+   * predates the question. This — not `display_currency` — decides which currency
+   * a purchase is billed in; see `billingCurrencyFor` in ./payments.
+   */
+  location: string | null
+  /** Cosmetic preference for how figures are rendered. Never a billing input. */
+  display_currency: string | null
   created_at: string
 }
 

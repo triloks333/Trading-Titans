@@ -137,11 +137,19 @@ serve(async (req) => {
 
     // A stale or missing cache row used to end an order's life right here: the
     // engine reported `stale_price` / `no_cached_price` and moved on, so a limit
-    // the real market had already crossed never filled (AEROENTER sell 145.80
-    // sat through a six-hour-old cache row while the print was above it).
+    // the real market had already crossed never filled.
     // `refresh-quotes` is best-effort — one failed upstream pass leaves a symbol
     // behind until the next tick — so before giving up the engine now asks
     // `market-quote` directly, which is exactly what the app itself does.
+    //
+    // This fallback was originally attributed to the AEROENTER sell that sat
+    // pending with the print above it. That attribution was WRONG and the note
+    // is corrected here so it stops misdirecting the next investigation: that
+    // order was placed at 149 and modified to 145.80, but the app's modifyOrder
+    // updated `price` without `limit_price`, so the engine went on testing the
+    // 149 it had been given while the card displayed 145.80. Nothing was stale;
+    // the limit really was not reached. The fallback below is still worth having
+    // on its own merits — production had `quotes_cache` rows over 1000 hours old.
     //
     // Hits are memoised into `priceMap` and misses into `liveMisses`, so N
     // pending orders on one underlying cost at most one live fetch per run.

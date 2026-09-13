@@ -5,6 +5,28 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 
+/// Where a notification's button can send someone, as an admin picks it.
+///
+/// A fixed list rather than a free-text field: the value has to be one the app
+/// knows how to open, and a typo would ship a button that silently does nothing on
+/// every phone. Keys must exist in `kNotificationCtaRoutes` AND have a case in
+/// `_openCta` — both live in notifications_screen.dart.
+///
+/// `''` is the no-button option. `_custom` swaps in a URL field instead, for
+/// anywhere that only exists on the web.
+const Map<String, String> kAdminCtaDestinations = {
+  '': 'No button',
+  'feature': 'Request a Feature',
+  'wishlist': 'Community Wishlist',
+  'plans': 'Plans & top-ups',
+  'wallet': 'Wallet',
+  'league': 'League',
+  'portfolio': 'Portfolio',
+  'orders': 'Order History',
+  'referral': 'Refer & Earn',
+  '_custom': 'A web link…',
+};
+
 class AdminRewardScreen extends StatefulWidget {
   const AdminRewardScreen({super.key});
 
@@ -33,6 +55,14 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
   XFile? _pickedImage;
   Uint8List? _pickedBytes;
 
+  // Optional call-to-action button on the notification.
+  final _ctaLabelController = TextEditingController();
+  final _ctaUrlController = TextEditingController();
+  String _ctaDestination = '';
+
+  bool get _ctaIsCustomUrl => _ctaDestination == '_custom';
+  bool get _ctaWanted => _ctaDestination.isNotEmpty;
+
   @override
   void dispose() {
     _rewardEmailController.dispose();
@@ -41,6 +71,8 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
     _notifyEmailController.dispose();
     _notifyTitleController.dispose();
     _notifyBodyController.dispose();
+    _ctaLabelController.dispose();
+    _ctaUrlController.dispose();
     super.dispose();
   }
 
@@ -93,11 +125,20 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
         imageUrl = await SupabaseService().uploadTicketAttachment(_pickedImage!.path, _pickedBytes!);
       }
 
+      // Only one of route/url is ever sent. `_custom` means the destination is a
+      // web link, so there is no in-app route to name.
+      final ctaLabel = _ctaWanted ? _ctaLabelController.text.trim() : null;
+      final ctaRoute = _ctaWanted && !_ctaIsCustomUrl ? _ctaDestination : null;
+      final ctaUrl = _ctaIsCustomUrl ? _ctaUrlController.text.trim() : null;
+
       if (_sendToAll) {
         await SupabaseService().sendBroadcastNotification(
           title: title,
           body: body,
           imageUrl: imageUrl,
+          ctaLabel: ctaLabel,
+          ctaRoute: ctaRoute,
+          ctaUrl: ctaUrl,
         );
       } else {
         await SupabaseService().sendCustomNotification(
@@ -105,6 +146,9 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
           title: title,
           body: body,
           imageUrl: imageUrl,
+          ctaLabel: ctaLabel,
+          ctaRoute: ctaRoute,
+          ctaUrl: ctaUrl,
         );
       }
 
@@ -112,9 +156,12 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
         _notifyEmailController.clear();
         _notifyTitleController.clear();
         _notifyBodyController.clear();
+        _ctaLabelController.clear();
+        _ctaUrlController.clear();
         setState(() {
           _pickedImage = null;
           _pickedBytes = null;
+          _ctaDestination = '';
         });
         messenger.showSnackBar(
           SnackBar(content: Text('Notification sent to ${_sendToAll ? "all users" : email} successfully!')),
@@ -395,6 +442,90 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                           ),
                         ),
+
+                      const SizedBox(height: AppSpacing.lg),
+
+                      // ── Optional button on the notification ──────────────
+                      Text('Add a Button (Optional)',
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.ink2)),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: _ctaDestination,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(
+                              borderSide: BorderSide(color: AppColors.birch)),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                        ),
+                        items: kAdminCtaDestinations.entries
+                            .map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value,
+                                      style: GoogleFonts.inter(
+                                          fontSize: 14, color: AppColors.ink)),
+                                ))
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _ctaDestination = v ?? ''),
+                      ),
+                      if (_ctaWanted) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        TextFormField(
+                          controller: _ctaLabelController,
+                          style: GoogleFonts.inter(color: AppColors.ink),
+                          decoration: InputDecoration(
+                            hintText: 'Button text, e.g. Request a feature',
+                            hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                            border: OutlineInputBorder(
+                                borderSide: BorderSide(color: AppColors.birch)),
+                          ),
+                          validator: (v) {
+                            if (!_ctaWanted) return null;
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Give the button some text, or pick "No button"';
+                            }
+                            return null;
+                          },
+                        ),
+                        if (_ctaIsCustomUrl) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          TextFormField(
+                            controller: _ctaUrlController,
+                            style: GoogleFonts.inter(color: AppColors.ink),
+                            keyboardType: TextInputType.url,
+                            decoration: InputDecoration(
+                              hintText: 'https://…',
+                              hintStyle:
+                                  GoogleFonts.inter(color: AppColors.ink5),
+                              border: OutlineInputBorder(
+                                  borderSide: BorderSide(color: AppColors.birch)),
+                            ),
+                            // https only, matching the check the app applies before
+                            // launching. Rejected here as well so the mistake is
+                            // caught while it can still be corrected, rather than
+                            // shipping a button that does nothing.
+                            validator: (v) {
+                              if (!_ctaIsCustomUrl) return null;
+                              final s = (v ?? '').trim();
+                              if (!s.startsWith('https://')) {
+                                return 'Must start with https://';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Text(
+                          'Older app versions show the notification without the '
+                          'button, so mention the destination in the message too.',
+                          style: GoogleFonts.inter(
+                              fontSize: 11, color: AppColors.ink4),
+                        ),
+                      ],
 
                       const SizedBox(height: AppSpacing.xl),
                       SizedBox(

@@ -73,8 +73,11 @@ export function CardHeader({
   action?: ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-birch px-5 py-4">
-      <div>
+    // flex-wrap so an action drops onto its own line rather than crushing the
+    // title. The monthly/annual toggle on /plans is the case that forced this:
+    // beside a title on a 390px phone it squeezed both into unreadable columns.
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-birch px-4 py-4 sm:px-5">
+      <div className="min-w-0 flex-1">
         <h2 className="text-sm font-bold text-ink">{title}</h2>
         {subtitle && <p className="mt-0.5 text-xs text-ink-4">{subtitle}</p>}
       </div>
@@ -124,6 +127,29 @@ export function Badge({
   className,
 }: VariantProps<typeof badgeVariants> & { children: ReactNode; className?: string }) {
   return <span className={cn(badgeVariants({ tone }), className)}>{children}</span>
+}
+
+// ── Plan badge ───────────────────────────────────────────────────────────────
+/**
+ * The plan marker shown beside a name, on a profile and on the leaderboard.
+ *
+ * Renders nothing for the free tier. Every account used to carry an identical
+ * FREE_STARTER tag, which told a reader precisely nothing; a badge is only worth
+ * the space when it distinguishes.
+ */
+export function TierBadge({
+  tier,
+  className,
+}: {
+  tier: 'free' | 'pro' | 'titan' | null | undefined
+  className?: string
+}) {
+  if (tier !== 'pro' && tier !== 'titan') return null
+  return (
+    <Badge tone={tier === 'titan' ? 'violet' : 'brand'} className={className}>
+      {tier === 'titan' ? 'TITAN' : 'PRO'}
+    </Badge>
+  )
 }
 
 // ── Value with direction colouring ───────────────────────────────────────────

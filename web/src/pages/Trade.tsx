@@ -287,7 +287,11 @@ export function Trade() {
                 title="Price chart"
                 subtitle={
                   active.instrumentType === 'EQUITY'
-                    ? 'Drawn from our own market data'
+                    ? // Precise on purpose. The live bar comes from `quotes_cache`,
+                      // which is what the engine fills at, but the historical bars
+                      // are the vendor's and will not agree to the paisa. Claiming
+                      // the whole chart is ours would be the wrong half to round.
+                      'Live price from our own feed; history from the market'
                     : `Underlying ${quoteSymbol} — derivatives have no separate price feed`
                 }
               />

@@ -1,0 +1,79 @@
+-- Revoke TRUNCATE from anon and authenticated
+-- ============================================================================
+-- NOT APPLIED. Written for review, per the standing rule that permission changes
+-- are shown before they run.
+--
+-- WHAT WAS FOUND
+-- `anon` and `authenticated` both hold TRUNCATE on 67 tables in `public`,
+-- including profiles, orders, holdings, wallet_transactions, settlement_ledger,
+-- realized_pnl_log, and the broker credential tables fyers_tokens / kite_tokens.
+--
+-- Verified empirically against production, inside a rolled-back transaction, as
+-- the `authenticated` role with a real user's JWT claims:
+--
+--     truncate table public.profiles cascade;   -- SUCCEEDED
+--     truncate table public.subscriptions;      -- SUCCEEDED
+--     truncate table public.plan_catalogue;     -- SUCCEEDED
+--     truncate table public.orders;             -- refused, but only by a
+--                                               -- foreign key (0A000), not by
+--                                               -- permissions; CASCADE from
+--                                               -- profiles takes it anyway
+--
+-- WHY IT MATTERS
+-- TRUNCATE is not filtered by row-level security. Every RLS policy on these
+-- tables is irrelevant to it: one statement empties the table regardless of who
+-- owns which row. `truncate profiles cascade` would delete all 193 accounts and
+-- everything referencing them.
+--
+-- HOW EXPOSED IS IT, HONESTLY
+-- Not remotely exploitable through the documented API today. PostgREST offers
+-- GET/POST/PATCH/DELETE and has no TRUNCATE verb, and `authenticated` is a
+-- NOLOGIN role that only PostgREST assumes via SET ROLE. So this is a latent
+-- privilege, not an open door.
+--
+-- It stops being latent the moment any of these appears:
+--   - a SECURITY INVOKER function that interpolates user input into dynamic SQL
+--   - a future admin/reporting RPC that runs a caller-supplied statement
+--   - anything that leaks a direct Postgres connection string
+-- The grant is doing no work for anybody in the meantime: no client can issue
+-- TRUNCATE, so revoking it cannot break a single caller.
+--
+-- WHERE IT CAME FROM
+-- Supabase's default privileges grant ALL on new tables in `public` to anon and
+-- authenticated. 20260901000000_financial_write_lockdown.sql revoked
+-- INSERT/UPDATE/DELETE, which is what the probe tested, and TRUNCATE was not on
+-- that list. The two payment tables added in 20260902000000 inherited it the same
+-- way, which is how this surfaced.
+--
+-- EXPECTED AFFECTED OBJECTS
+--   - all current tables in schema public: TRUNCATE removed from anon,
+--     authenticated (67 tables at time of writing)
+--   - default privileges for future tables: TRUNCATE no longer granted
+--   - service_role and postgres: unchanged. The edge functions use service_role
+--     and are unaffected.
+--   - no RLS policy, no function, no column grant is touched
+--
+-- CLIENT COMPATIBILITY IMPACT
+-- None. Neither the Flutter app, the web app, nor any edge function issues
+-- TRUNCATE, and PostgREST cannot express it.
+--
+-- ROLLBACK
+--   grant truncate on all tables in schema public to anon, authenticated;
+--   alter default privileges in schema public
+--     grant truncate on tables to anon, authenticated;
+-- (Restoring it is not recommended; it is recorded only for completeness.)
+--
+-- VERIFY AFTER APPLYING
+--   select count(*) from information_schema.role_table_grants
+--    where table_schema='public' and privilege_type='TRUNCATE'
+--      and grantee in ('anon','authenticated');
+--   -- expect 0
+--
+-- Then re-run supabase/tests/financial_integrity_probe.sql; it must stay all-PASS.
+
+revoke truncate on all tables in schema public from anon, authenticated;
+
+-- Without this, the next `create table` in public re-grants TRUNCATE and the hole
+-- reopens quietly. This is the half that keeps it closed.
+alter default privileges in schema public
+  revoke truncate on tables from anon, authenticated;

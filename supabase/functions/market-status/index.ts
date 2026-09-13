@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { isUsDst, isUsMarketOpen } from "../_shared/us_market.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,15 +41,27 @@ serve((req) => {
         crypto: {
           open: true,
           hours: "24/7"
+        },
+        us_stock: {
+          open: isUsMarketOpen(),
+          hours: "9:30 AM - 4:00 PM ET",
+          timezone: "America/New_York",
+          dst: isUsDst(),
+          // The session lands overnight in India, and the IST clock time shifts
+          // by an hour when US daylight saving flips.
+          ist_hours: isUsDst() ? "7:00 PM - 1:30 AM IST" : "8:00 PM - 2:30 AM IST"
         }
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

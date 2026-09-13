@@ -4,12 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
+import '../../core/money.dart';
+import '../../core/currency.dart';
 import '../../models/quote.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/fo_instruments_service.dart';
-import '../../services/notification_service.dart';
 import '../../widgets/swipe_button.dart';
 import '../../widgets/info_tooltip.dart';
 import 'wallet_screen.dart';
@@ -93,7 +94,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         ? initialQty.toString() 
         : initialQty.toInt().toString();
 
-    _priceController.text = widget.quote.price.toStringAsFixed(2);
+    _priceController.text =
+        Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market));
     _qtyController = TextEditingController(text: qtyStr);
     _qtyController.addListener(_updateState);
     _priceController.addListener(_updateState);
@@ -175,7 +177,13 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   double get _quantityValue {
     if (_inputByMoney && _isCrypto) {
-      final money = double.tryParse(_moneyController.text) ?? 0.0;
+      // The amount is typed in the user's display currency, but _price is in the
+      // instrument's own currency. Convert before dividing, or a dollar-entered
+      // amount would buy ~88x too much.
+      final money = Money.fromDisplay(
+        double.tryParse(_moneyController.text) ?? 0.0,
+        market: widget.quote.market,
+      );
       if (_price > 0) return money / _price;
       return 0.0;
     }
@@ -192,9 +200,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     return 1;
   }
 
+  /// Price in the instrument's own currency — the only currency the order engine
+  /// understands.
   double get _price {
     if (_isMarket) return widget.quote.price;
-    return double.tryParse(_priceController.text) ?? widget.quote.price;
+    final typed = double.tryParse(_priceController.text);
+    if (typed == null) return widget.quote.price;
+    // A limit price is typed in the display currency, so convert it back.
+    return Money.fromDisplay(typed, market: widget.quote.market);
   }
 
   double get _marginRequired {
@@ -202,9 +215,11 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     if (widget.isExitOrder) return 0.0;
 
     if (_inputByMoney && _isCrypto) {
-      return double.tryParse(_moneyController.text) ?? 0.0;
+      // Compared against the wallet, which is rupees, so the typed figure has to
+      // come back to rupees regardless of what is being displayed.
+      return Money.typedToInr(double.tryParse(_moneyController.text) ?? 0.0);
     }
-    
+
     final orderQty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
     final isDerivative = widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE';
     final marginPct = isDerivative ? 0.15 : 1.0;
@@ -270,27 +285,32 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       // Funnel: record the user's first-ever trade (fires once per install).
       await AnalyticsService.logFirstTradeOnce(widget.quote.market);
 
-      // Trigger push notification based on execution status
-      if (order.isExecuted) {
-        NotificationService().showNotification(
-          id: order.id.hashCode,
-          title: 'Order Executed',
-          body: 'Your ${order.side} order for ${order.quantity} ${order.symbol} at ₹${order.price.toStringAsFixed(2)} has been executed.',
-          category: NotificationCategory.orderExecuted,
-        );
-      } else if (order.isPending) {
-        NotificationService().showNotification(
-          id: order.id.hashCode,
-          title: 'Order Placed (Pending)',
-          body: '${order.side.toUpperCase()} ${order.quantity} ${order.symbol} placed at ₹${order.price.toStringAsFixed(2)}',
-          category: NotificationCategory.orderPending,
-        );
-      }
+      // Deliberately no local notification here. Every row written to
+      // `notifications` fires trg_push_on_notification -> push-notification ->
+      // FCM, and the server already writes exactly one row per event ("Order
+      // Pending" from place-order, "<Side> Order Executed" from the
+      // notify_order_executed trigger). Posting a local one on top is what put
+      // two of every alert in the tray. The server path also covers what this
+      // one never could: a pending order filling later, or the app being closed.
+
+      // Fire-and-forget: a filled order can complete First Blood, Sniper,
+      // Morning Bell and friends, so re-check straight away for instant
+      // feedback. Failures are logged inside the service and never block the
+      // order flow; the nightly sweep would catch it anyway.
+      SupabaseService().evaluateChallenges();
 
       if (!mounted) return;
+      final side = widget.isBuy ? 'BUY' : 'SELL';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Successfully placed ${widget.isBuy ? 'BUY' : 'SELL'} order for ${widget.quote.symbol}!'),
+          // The removed local push was the instant signal for whether the order
+          // filled or is still resting; the server push carries that a second or
+          // two later, so say it here rather than losing the immediacy. Any
+          // non-executed status keeps the original wording, which is accurate
+          // for a resting order.
+          content: Text(order.isExecuted
+              ? '$side order for ${widget.quote.symbol} executed!'
+              : 'Successfully placed $side order for ${widget.quote.symbol}!'),
           backgroundColor: AppColors.bull,
         ),
       );
@@ -549,8 +569,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           ),
           const SizedBox(height: 10),
           _buildBillRow(
-            '${_isCrypto ? _quantityValue.toStringAsFixed(6) : qty.toStringAsFixed(0)} ${widget.quote.symbol} × ₹${price.toStringAsFixed(2)}',
-            '₹${totalValue.toStringAsFixed(2)}',
+            '${_isCrypto ? _quantityValue.toStringAsFixed(6) : qty.toStringAsFixed(0)} ${widget.quote.symbol} × ${Money.instrument(price, market: widget.quote.market)}',
+            Money.instrument(totalValue, market: widget.quote.market),
             AppColors.ink,
             isMain: true,
           ),
@@ -559,21 +579,21 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(height: 4),
               _buildBillRow(
                 'Margin to Release (~15%)',
-                '₹${marginUsed.toStringAsFixed(2)}',
+                Money.wallet(marginUsed, decimals: 2),
                 AppColors.ink3,
               ),
             ] else ...[
               const SizedBox(height: 4),
               _buildBillRow(
                 isDeriv ? 'Est. Premium Value to Receive' : 'Est. Holding Value to Receive',
-                '₹${totalValue.toStringAsFixed(2)}',
+                Money.instrument(totalValue, market: widget.quote.market),
                 AppColors.ink3,
               ),
             ],
             const SizedBox(height: 4),
             _buildBillRow(
               'Est. P&L (LTP vs Entry)',
-              '${estimatedPnl >= 0 ? "+" : "-"} ₹${estimatedPnl.abs().toStringAsFixed(2)}',
+              '${estimatedPnl >= 0 ? "+" : "-"} ${Money.wallet(estimatedPnl.abs(), decimals: 2)}',
               estimatedPnl >= 0 ? AppColors.bull : AppColors.bear,
             ),
           ] else ...[
@@ -581,7 +601,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(height: 4),
               _buildBillRow(
                 'Initial Margin Required (15%)',
-                '₹${(totalValue * 0.15).toStringAsFixed(2)}',
+                Money.wallet(totalValue * 0.15, decimals: 2),
                 AppColors.ink3,
               ),
             ],
@@ -589,7 +609,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(height: 4),
               _buildBillRow(
                 'Margin Required (100%)',
-                '₹${_marginRequired.toStringAsFixed(2)}',
+                Money.wallet(_marginRequired, decimals: 2),
                 AppColors.ink3,
               ),
             ],
@@ -597,7 +617,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           const SizedBox(height: 6),
           Container(height: 0.5, color: AppColors.birch),
           const SizedBox(height: 6),
-          _buildBillRow('Charges & taxes', '+ ₹${totalCharges.toStringAsFixed(2)}', AppColors.ink3),
+          _buildBillRow('Charges & taxes', '+ ${Money.wallet(totalCharges, decimals: 2)}', AppColors.ink3),
           const SizedBox(height: 8),
           Container(height: 1.5, color: color.withValues(alpha: 0.25)),
           const SizedBox(height: 8),
@@ -615,7 +635,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 ),
               ),
               Text(
-                '₹${grandTotal.abs().toStringAsFixed(2)}',
+                Money.instrument(grandTotal.abs(), market: widget.quote.market),
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -626,9 +646,37 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               ),
             ],
           ),
+          // The wallet is always in rupees. Whenever the figure above is not
+          // rupees - because the user views dollars, or the stock is US-priced,
+          // or both - state the real charge before they swipe to confirm.
+          if (Money.differsFromWallet(widget.quote.market)) ...[
+            const SizedBox(height: 4),
+            Builder(
+              builder: (context) {
+                final inrValue = Money.inrValueOf(
+                  grandTotal.abs(),
+                  market: widget.quote.market,
+                );
+                final rate = Money.rate;
+                return Text(
+                  rate == null
+                      ? '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet'
+                      : '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet '
+                          '(1 \u0024 = \u20b9${rate.toStringAsFixed(2)})',
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink3,
+                  ),
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
-            'Charges: ₹${totalCharges.toStringAsFixed(2)} • Deducted from virtual cash only',
+            Money.sourceFor(widget.quote.market) == Currency.usd
+                ? 'No brokerage or Indian taxes on US trades • Virtual cash only'
+                : 'Charges: ${Money.wallet(totalCharges, decimals: 2)} • Deducted from virtual cash only',
             style: GoogleFonts.inter(
               fontSize: 10,
               color: AppColors.ink5,
@@ -695,7 +743,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             ),
             if (widget.instrumentType == 'OPTION')
               Text(
-                '${widget.optionType} | Strike: ₹${widget.strikePrice?.toStringAsFixed(0)} | Exp: ${widget.expiryDate}',
+                '${widget.optionType} | Strike: ${Money.wallet(widget.strikePrice ?? 0, decimals: 0)} | Exp: ${widget.expiryDate}',
                 style: GoogleFonts.inter(
                   color: AppColors.ink4,
                   fontSize: 11,
@@ -727,7 +775,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_isCrypto ? "CRYPTO" : "NSE"}  ${AppFormat.formatINR(widget.quote.price)}',
+                  '${_isCrypto ? "CRYPTO" : "NSE"}  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
                   style: GoogleFonts.inter(
                     color: AppColors.ink,
                     fontWeight: FontWeight.w600,
@@ -823,7 +871,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   (widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION')) ...[
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Your margin blocked: ₹${widget.marginUsed!.toStringAsFixed(0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
+                                  'Your margin blocked: ${Money.wallet(widget.marginUsed!, decimals: 0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     color: AppColors.ink3,
@@ -845,7 +893,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                           children: [
                             _buildToggleTab('Quantity', !_inputByMoney, () => setState(() => _inputByMoney = false), isExpanded: true),
                             const SizedBox(width: 12),
-                            _buildToggleTab('Amount (₹)', _inputByMoney, () => setState(() => _inputByMoney = true), isExpanded: true),
+                            _buildToggleTab('Amount (${Money.symbol})', _inputByMoney, () => setState(() => _inputByMoney = true), isExpanded: true),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -861,7 +909,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500),
                                 decoration: InputDecoration(
-                                  prefixText: '₹ ',
+                                  prefixText: '${Money.symbol} ',
                                   prefixStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: AppColors.ink3),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
@@ -922,7 +970,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                       enabled: !_isMarket,
                                       style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
                                       decoration: InputDecoration(
-                                        hintText: _isMarket ? widget.quote.price.toStringAsFixed(2) : '0.00',
+                                        hintText: _isMarket
+                                    ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
+                                    : '0.00',
                                         filled: _isMarket,
                                         fillColor: AppColors.parchment,
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1003,7 +1053,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     enabled: !_isMarket,
                                     style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
                                     decoration: InputDecoration(
-                                      hintText: _isMarket ? widget.quote.price.toStringAsFixed(2) : '0.00',
+                                      hintText: _isMarket
+                                    ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
+                                    : '0.00',
                                       filled: _isMarket,
                                       fillColor: AppColors.parchment,
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

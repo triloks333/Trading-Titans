@@ -20,6 +20,22 @@ class Holding {
   final String? expiryDate;    // e.g. '2026-06-05' (null for equity)
   final String productType;    // 'NRML' | 'MIS' | 'CNC' (CNC = delivery for equity)
 
+  /// Cost basis in the instrument's own currency (USD for `us_stock`).
+  ///
+  /// [avgPrice] is always INR because that is what the wallet paid; this is what
+  /// the user saw on screen. Null for INR markets, where the two are the same.
+  final double? nativeAvgPrice;
+
+  /// Live price in the instrument's own currency. [currentPrice] is the same
+  /// figure converted to INR, so portfolio-wide totals can stay in rupees.
+  final double? nativeCurrentPrice;
+
+  /// Previous close in the instrument's own currency, for the day's move.
+  final double? nativePreviousClose;
+
+  /// ISO code for the native fields above, e.g. 'USD'. Null for INR markets.
+  final String? nativeCurrency;
+
   Holding({
     required this.symbol,
     required this.name,
@@ -39,7 +55,53 @@ class Holding {
     this.strikePrice,
     this.expiryDate,
     this.productType = 'CNC',
+    this.nativeAvgPrice,
+    this.nativeCurrentPrice,
+    this.nativePreviousClose,
+    this.nativeCurrency,
   });
+
+  // ── Native-currency view ───────────────────────────────────────────────────
+  // A US position can be valued entirely in dollars with no FX involved: the
+  // cost basis and the live price are both USD, so invested, current value and
+  // P&L all follow directly. Only the wallet balance and the portfolio-wide
+  // totals stay in rupees, because that is the currency that actually moved.
+
+  /// True when this position's prices are not in rupees.
+  bool get isNativeCurrency => nativeCurrency != null && nativeCurrency != 'INR';
+
+  /// Cost basis to display, in the position's own currency.
+  double get displayAvgPrice => nativeAvgPrice ?? avgPrice;
+
+  /// Live price to display, in the position's own currency.
+  double get displayCurrentPrice => nativeCurrentPrice ?? currentPrice;
+
+  /// Amount invested, in the position's own currency.
+  double get displayInvested =>
+      isNativeCurrency ? displayAvgPrice * quantity.abs() : invested;
+
+  /// Current market value, in the position's own currency.
+  double get displayCurrent =>
+      isNativeCurrency ? displayCurrentPrice * quantity.abs() : current;
+
+  /// Unrealized P&L, in the position's own currency.
+  double get displayPnl => isNativeCurrency
+      ? (displayCurrentPrice - displayAvgPrice) * quantity
+      : pnl;
+
+  /// Unrealized P&L as a percentage. Ratio-based, so it reads the same in either
+  /// currency — but computed from the native pair so no rate is mixed in.
+  double get displayPnlPct {
+    if (!isNativeCurrency) return pnlPct;
+    final basis = displayAvgPrice * quantity.abs();
+    if (basis == 0) return 0;
+    return (displayPnl / basis) * 100;
+  }
+
+  /// Today's P&L, in the position's own currency.
+  double get displayDayPnl => isNativeCurrency
+      ? (displayCurrentPrice - (nativePreviousClose ?? displayCurrentPrice)) * quantity
+      : dayPnl;
 
   // Convenience getters
   bool get isOption => instrumentType == 'OPTION';
@@ -88,6 +150,10 @@ class Holding {
       strikePrice: (json['strike_price'] as num?)?.toDouble(),
       expiryDate: json['expiry_date'] as String?,
       productType: json['product_type'] as String? ?? 'CNC',
+      nativeAvgPrice: (json['native_avg_price'] as num?)?.toDouble(),
+      nativeCurrentPrice: (json['native_current_price'] as num?)?.toDouble(),
+      nativePreviousClose: (json['native_previous_close'] as num?)?.toDouble(),
+      nativeCurrency: json['native_currency'] as String?,
     );
   }
 
@@ -111,6 +177,10 @@ class Holding {
       'strike_price': strikePrice,
       'expiry_date': expiryDate,
       'product_type': productType,
+      'native_avg_price': nativeAvgPrice,
+      'native_current_price': nativeCurrentPrice,
+      'native_previous_close': nativePreviousClose,
+      'native_currency': nativeCurrency,
     };
   }
 }
