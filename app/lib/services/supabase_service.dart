@@ -1525,9 +1525,12 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> getLeaderboard() async {
     // Reads from the `leaderboard` view (safe columns only — no email),
     // since profiles is now restricted to owner/admin reads.
+    // wallet_balance is deliberately not selected: the League screen ranks on
+    // realised P&L and shows only that. The column still exists on the view for
+    // builds already in the wild that ask for it by name.
     final data = await client
         .from('leaderboard')
-        .select('id, name, wallet_balance, total_realized_pnl')
+        .select('id, name, total_realized_pnl')
         .order('total_realized_pnl', ascending: false)
         .limit(20);
     final rows = (data as List<dynamic>)
@@ -1546,8 +1549,6 @@ class SupabaseService {
           return {
             'user_id': row['id'],
             'name': row['name'],
-            'wallet_balance':
-                (row['wallet_balance'] as num?)?.toDouble() ?? 0.0,
             'tier': tiers[row['id']] ?? 'free',
             'realized_pnl':
                 (row['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,

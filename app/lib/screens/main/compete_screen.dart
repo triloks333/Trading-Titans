@@ -360,9 +360,6 @@ class _CompeteScreenState extends State<CompeteScreen> {
             ],
           ],
         ),
-        const SizedBox(height: 2),
-        Text('${Money.wallet(_wallet(row))} wallet',
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5)),
       ],
     );
   }
@@ -394,8 +391,9 @@ class _CompeteScreenState extends State<CompeteScreen> {
   double _pnl(Map<String, dynamic> row) =>
       (row['realized_pnl'] as num?)?.toDouble() ?? 0;
 
-  double _wallet(Map<String, dynamic> row) =>
-      (row['wallet_balance'] as num?)?.toDouble() ?? 0;
+  // No _wallet helper: the board ranks on realised P&L and now shows only that.
+  // A wallet balance beside a rank invited the comparison it is worst at — it is
+  // mostly a function of top-ups and starting cash, not of trading well.
 
   /// Gold, silver, bronze for the podium; brand blue for everyone else. These are
   /// the only non-theme colours on the screen, and they are here because a medal

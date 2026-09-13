@@ -16,14 +16,15 @@ import '../../services/supabase_service.dart';
 /// anywhere that only exists on the web.
 const Map<String, String> kAdminCtaDestinations = {
   '': 'No button',
-  'feature': 'Request a Feature',
-  'wishlist': 'Community Wishlist',
-  'plans': 'Plans & top-ups',
-  'wallet': 'Wallet',
-  'league': 'League',
+  'trade': 'Trade (buy / sell)',
   'portfolio': 'Portfolio',
   'orders': 'Order History',
+  'wallet': 'Wallet',
+  'league': 'League',
+  'feature': 'Request a Feature',
+  'wishlist': 'Community Wishlist',
   'referral': 'Refer & Earn',
+  'plans': 'Plans & top-ups (paywall)',
   '_custom': 'A web link…',
 };
 

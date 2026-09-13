@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Trophy, Crown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { money, signedMoney, cn } from '@/lib/format'
+import { signedMoney, cn } from '@/lib/format'
 import { useAuth } from '@/lib/auth'
 import { useTierMap } from '@/lib/tier'
 import {
@@ -18,7 +18,6 @@ interface Row {
   id: string
   name: string | null
   total_realized_pnl: number | null
-  wallet_balance: number | null
 }
 
 /**
@@ -37,7 +36,10 @@ export function Leaderboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leaderboard')
-        .select('id, name, total_realized_pnl, wallet_balance')
+        // wallet_balance is deliberately not selected: the board ranks on
+        // realised P&L and shows only that. Owners and admins are excluded by
+        // the view itself, not here.
+        .select('id, name, total_realized_pnl')
         .order('total_realized_pnl', { ascending: false })
         .limit(100)
       if (error) throw error
@@ -104,7 +106,6 @@ export function Leaderboard() {
                 <tr className="border-b border-birch text-left text-[11px] uppercase tracking-wide text-ink-4">
                   <th className="px-5 py-2.5 font-medium">#</th>
                   <th className="px-3 py-2.5 font-medium">Trader</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Wallet</th>
                   <th className="px-5 py-2.5 text-right font-medium">Realised P&L</th>
                 </tr>
               </thead>
@@ -142,9 +143,6 @@ export function Leaderboard() {
                           {isMe && <Badge tone="brand">YOU</Badge>}
                           <TierBadge tier={tiers?.[r.id]} />
                         </div>
-                      </td>
-                      <td className="tnum px-3 py-3 text-right text-ink-3">
-                        {money(r.wallet_balance ?? 0)}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <Delta value={r.total_realized_pnl ?? 0}>

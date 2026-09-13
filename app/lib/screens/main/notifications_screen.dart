@@ -43,6 +43,7 @@ Map<String, dynamic>? parseActionData(Object? raw) {
 const Set<String> kNotificationCtaRoutes = {
   'plans', 'topup', 'subscribe', 'wallet', 'league', 'leaderboard',
   'feature', 'wishlist', 'portfolio', 'orders', 'referral',
+  'trade', 'notifications',
 };
 
 /// The call-to-action button's text, or null when there should be no button.
@@ -64,6 +65,26 @@ String? ctaLabel(Map<String, dynamic>? data) {
 
   final url = (data?['cta_url'] as String?)?.trim() ?? '';
   return url.startsWith('https://') ? label : null;
+}
+
+/// The instrument a tapped notification should open, or null when it should open
+/// the detail sheet instead.
+///
+/// Top-level, and keyed on the SYMBOL rather than the action type, because the
+/// inline version of this decision had a hole: it opened the stock screen for
+/// `action_type` 'order'/'order_pending' whenever `action_data` was non-null, and
+/// when that payload carried no `symbol` it did nothing whatsoever — no
+/// navigation, no sheet, no fallback. The daily pending-order expiry cron writes
+/// precisely that payload (`{"view":"orders"}`, no symbol), so those rows could
+/// not be opened at all. That is the notification that "opens blank".
+///
+/// Returning null means "there is no instrument here", and the caller shows the
+/// sheet — so a payload missing a field degrades to the readable view instead of
+/// swallowing the tap.
+String? instrumentSymbolFor(String? actionType, Map<String, dynamic>? actionData) {
+  if (actionType != 'order' && actionType != 'order_pending') return null;
+  final symbol = (actionData?['symbol'] as String?)?.trim();
+  return (symbol == null || symbol.isEmpty) ? null : symbol;
 }
 
 class NotificationsScreen extends StatefulWidget {
@@ -122,11 +143,26 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Marks one notification read, updating the row in place.
+  ///
+  /// Deliberately NOT `await _load()`. Refetching set `_loading = true`, which
+  /// replaced the whole list with a full-screen spinner and re-queried every row
+  /// from Postgres — on every single tap, to learn one boolean the caller already
+  /// knew. The tap is not awaited by the caller either, so the sheet was opening
+  /// over a list that was busy rebuilding itself underneath it.
   Future<void> _markAsRead(String id) async {
-    await Supabase.instance.client
-        .from('notifications')
-        .update({'is_read': true}).eq('id', id);
-    await _load();
+    final i = _notifications.indexWhere((n) => n['id'] == id);
+    if (i == -1) return;
+    if (mounted) setState(() => _notifications[i]['is_read'] = true);
+    try {
+      await Supabase.instance.client
+          .from('notifications')
+          .update({'is_read': true}).eq('id', id);
+    } catch (_) {
+      // Put the dot back rather than leave the badge claiming a row was read
+      // when the database still says it was not.
+      if (mounted) setState(() => _notifications[i]['is_read'] = false);
+    }
   }
 
   int get _unreadCount =>
@@ -317,38 +353,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             : null,
         onTap: () {
           if (!isRead) _markAsRead(id);
-          final actionType = n['action_type'] as String?;
-          final actionData = n['action_data'];
           // 'order_pending' is the pending-order alert (it carries its own
           // channel/sound); it must stay tappable like an executed 'order' one,
           // otherwise changing the type would silently drop the tap-through to
-          // the stock screen.
-          if ((actionType == 'order' || actionType == 'order_pending') &&
-              actionData != null) {
-            Map<String, dynamic>? data;
-            if (actionData is Map) {
-              data = Map<String, dynamic>.from(actionData);
-            } else if (actionData is String) {
-              try {
-                data = Map<String, dynamic>.from(jsonDecode(actionData));
-              } catch (_) {}
-            }
-            if (data != null) {
-              final symbol = data['symbol'] as String?;
-              final market = data['market'] as String? ?? 'stock';
-              if (symbol != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => StockDetailScreen(
-                      symbol: symbol,
-                      market: market,
-                      name: symbol,
-                    ),
-                  ),
-                );
-              }
-            }
+          // the stock screen. See instrumentSymbolFor for why the symbol, and
+          // not the action type, is what decides this.
+          final symbol =
+              instrumentSymbolFor(n['action_type'] as String?, actionDataMap);
+          if (symbol != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StockDetailScreen(
+                  symbol: symbol,
+                  market: actionDataMap?['market'] as String? ?? 'stock',
+                  name: symbol,
+                ),
+              ),
+            );
           } else {
             // Show full notification details in a premium modal bottom sheet
             showModalBottomSheet(
@@ -580,6 +602,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       case 'portfolio':
         NavTabService.goToTab(NavTabService.portfolio);
         Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      case 'trade':
+        NavTabService.goToTab(NavTabService.trade);
+        Navigator.of(context).popUntil((r) => r.isFirst);
+        return;
+      case 'notifications':
+        // Deliberately does nothing: the sheet has already closed and this screen
+        // IS the notification list, so there is nowhere left to go. The route is
+        // still accepted rather than dropped, because `ctaLabel` refuses to draw
+        // a button for a route it does not recognise — so without this case a
+        // campaign naming it would show no button at all, and a future push-tap
+        // handler would have no valid target to send people to.
         return;
     }
 
