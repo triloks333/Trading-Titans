@@ -18,7 +18,7 @@ import {
   fxFactor,
   scalePrices,
 } from './aggregate'
-import { periodsFor } from './periods'
+import { DEFAULT_PERIOD, periodFor, periodsFor } from './periods'
 import { cacheKeyFor, historySymbol } from './symbols'
 import type { Candle, Sample } from './types'
 
@@ -201,6 +201,34 @@ check('every button names a bar size, and each one is distinct', () => {
       seen.set(p.interval, p.id)
       // And the label says the bar size, so the row reads as one idea.
       assert.equal(p.label, p.id)
+    }
+  }
+})
+
+check('the default period is a period that actually exists', () => {
+  // The check for a real shipped bug. `main.ts` initialised its period id to the
+  // string '3M', which stopped being a valid id when the row became bar sizes
+  // only. Nothing caught it because `periodFor` falls back to the default, so the
+  // CANVAS was always correct — but `currentPeriod()` returned '3M', which matches
+  // no chip, so the app opened with no timeframe highlighted at all.
+  //
+  // Anything holding a period id must hold one of these, so assert the default is
+  // one and that the fallback really does land on it.
+  for (const market of ['stock', 'us_stock', 'crypto'] as const) {
+    const ids = periodsFor(market).map((p) => p.id)
+    assert.ok(
+      ids.includes(DEFAULT_PERIOD),
+      `${market}: DEFAULT_PERIOD ${DEFAULT_PERIOD} is not in [${ids.join(', ')}]`,
+    )
+    assert.equal(periodFor(market, DEFAULT_PERIOD).id, DEFAULT_PERIOD)
+    // A retired or misspelled id must land on the default rather than throwing or
+    // drawing an empty chart.
+    for (const dead of ['3M', '1Y', '5Y', '10m', '1M', '', 'nonsense']) {
+      assert.equal(
+        periodFor(market, dead).id,
+        DEFAULT_PERIOD,
+        `${market}: '${dead}' should fall back to ${DEFAULT_PERIOD}`,
+      )
     }
   }
 })

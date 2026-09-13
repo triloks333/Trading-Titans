@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:app": "tsc -b && vite build --mode webview",
-    "test": "tsx src/core/aggregate.test.ts && tsx src/core/indicators.test.ts && tsx src/core/templates.test.ts && tsx src/core/drawings.test.ts",
+    "test": "tsx src/core/aggregate.test.ts && tsx src/core/indicators.test.ts && tsx src/core/templates.test.ts && tsx src/core/drawings.test.ts && tsx src/data/prefs.test.ts",
     "typecheck": "tsc -b"
   },
   "dependencies": {

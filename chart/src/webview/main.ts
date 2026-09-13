@@ -1,7 +1,9 @@
 import { createTitanChart, type TitanChart } from '../core/chart'
 import { INDICATOR_BY_ID, defaultParams } from '../core/registry'
-import { periodFor } from '../core/periods'
+import { DEFAULT_PERIOD, periodFor } from '../core/periods'
+import { palette } from '../core/theme'
 import { defaultTemplate } from '../data/templates'
+import { loadPrefs, savePrefs } from '../data/prefs'
 import { sanitise, type TemplateEntry } from '../core/templates'
 import { cacheKeyFor } from '../core/symbols'
 import { fetchHistory } from '../data/history'
@@ -12,7 +14,7 @@ import { fxFactor, scalePrices } from '../core/aggregate'
 import { loadDrawings, saveDrawings } from '../core/drawings'
 import type { HoverState } from '../core/chart'
 import type { IndicatorResult } from '../core/indicators'
-import type { Currency, Market, SeriesStyle, ThemeMode } from '../core/types'
+import type { Candle, Currency, Market, SeriesStyle, ThemeMode } from '../core/types'
 
 /*
  * The bridge between Flutter and the chart.
@@ -61,10 +63,22 @@ const controlsRoot = document.getElementById('controls')!
 const legendRoot = document.getElementById('legend')!
 let chart: TitanChart | null = null
 let mode: ThemeMode = 'light'
-let style: SeriesStyle = 'candles'
+/** Bar size and series style as this device last left them. See data/prefs.ts. */
+const savedPrefs = loadPrefs()
+let style: SeriesStyle = savedPrefs.style ?? 'candles'
 let symbol = ''
 let market: Market = 'stock'
-let periodId = '3M'
+// The saved bar size, normalised through periodFor so this is ALWAYS a real id.
+//
+// Never a literal, and never a raw stored string. This was initialised to '3M', an
+// id that stopped existing when the period row became bar sizes only. periodFor
+// falls back when drawing, so the canvas was always right and the bug was
+// invisible there — but currentPeriod() handed '3M' to the chip row, which matches
+// nothing, so the chart opened with no timeframe highlighted at all. A retired id
+// coming back out of localStorage would reproduce that exactly, so it is
+// normalised on the way in rather than trusted. Every market offers the same set,
+// so 'stock' is a safe lens to validate through before the real market is known.
+let periodId: string = periodFor('stock', savedPrefs.period ?? DEFAULT_PERIOD).id
 let entries: TemplateEntry[] = []
 let results: IndicatorResult[] = []
 /** Guards against a slow fetch landing after the user has moved on. */
@@ -104,6 +118,16 @@ function shownCurrency(): Currency {
 const NO_HOVER: HoverState = { bar: null, values: new Map() }
 
 /**
+ * The last crosshair state, so a live tick can refresh the legend without
+ * stomping what the user is currently holding a finger on.
+ *
+ * Re-rendering with the same state is a no-op visually; re-rendering with
+ * NO_HOVER re-reads the latest bar, which is what makes the OHLC close track the
+ * live price.
+ */
+let lastHover: HoverState = NO_HOVER
+
+/**
  * Indicator values, as chips above the chart.
  *
  * Rendered here rather than posted to Flutter for Dart to draw: the crosshair fires
@@ -112,9 +136,66 @@ const NO_HOVER: HoverState = { bar: null, values: new Map() }
  * rows themselves come from `readLegend`, the same function the web app uses, so the
  * two clients read a legend identically.
  */
+/**
+ * A price with as many decimals as it actually needs.
+ *
+ * Mirrors `precisionFor` in core/chart.ts, which sets the axis, but decides per
+ * value rather than per series. `compactValue` is wrong for prices: it rounds
+ * anything under 1 to four places, which flattens SHIB at 0.00002 to "0.0000".
+ */
+function priceText(v: number): string {
+  const a = Math.abs(v)
+  return v.toFixed(a >= 1 ? 2 : a >= 0.01 ? 4 : 8)
+}
+
+/**
+ * The tapped bar's open, high, low and close, as one chip.
+ *
+ * The crosshair already handed us the whole bar — `HoverState.bar` is read from
+ * the chart's own candle array precisely so it still carries a full OHLC in line
+ * mode — but `readLegend` only ever looked at indicator plot values, so the bar
+ * was thrown away and a tap showed nothing but the axis price label.
+ *
+ * Built from the existing `.tt-leg*` classes so it needs no new CSS and sits in
+ * the same row as the indicator chips.
+ */
+function ohlcChip(bar: Candle): HTMLElement {
+  const chip = document.createElement('span')
+  chip.className = 'tt-leg'
+  const colours = palette(mode)
+  for (const [label, v] of [
+    ['O', bar.open],
+    ['H', bar.high],
+    ['L', bar.low],
+    ['C', bar.close],
+  ] as [string, number][]) {
+    const name = document.createElement('span')
+    name.className = 'tt-leg-name'
+    name.textContent = label
+    const num = document.createElement('span')
+    num.className = 'tt-leg-num'
+    num.textContent = priceText(v)
+    // Only the close is tinted. Colouring all four reads as four separate
+    // signals when it is one candle, and the direction is a property of the
+    // candle, not of its high. palette() rather than the --up/--down CSS vars
+    // because the dark theme does not override those, so a dark chart would tint
+    // the close with the light palette while the candle beside it used the dark.
+    if (label === 'C') {
+      num.style.color = bar.close >= bar.open ? colours.up : colours.down
+    }
+    chip.append(name, num)
+  }
+  return chip
+}
+
 function renderLegend(state: HoverState): void {
+  lastHover = state
   const rows = readLegend(results, state)
-  if (rows.length === 0) {
+  // The bar under the crosshair, or the most recent one when the pointer is
+  // away, so lifting a thumb leaves the last price readable instead of blanking
+  // the row.
+  const bar = state.bar ?? chart?.lastBar() ?? null
+  if (!bar && rows.length === 0) {
     legendRoot.hidden = true
     legendRoot.textContent = ''
     return
@@ -124,6 +205,8 @@ function renderLegend(state: HoverState): void {
   // is our own, but building HTML by concatenation is the habit that eventually
   // meets a value that is not.
   legendRoot.textContent = ''
+  // Price first, indicators after: the bar is what the tap was aimed at.
+  if (bar) legendRoot.append(ohlcChip(bar))
   for (const row of rows) {
     const chip = document.createElement('span')
     chip.className = 'tt-leg'
@@ -260,6 +343,7 @@ window.ttChart = {
     const wanted: SeriesStyle = next === 'line' ? 'line' : 'candles'
     if (wanted === style) return
     style = wanted
+    savePrefs({ style: wanted })
     chart?.setStyle(style)
   },
 
@@ -308,8 +392,14 @@ window.ttChart = {
     market = (['stock', 'us_stock', 'crypto'] as const).includes(nextMarket as Market)
       ? (nextMarket as Market)
       : 'stock'
-    periodId = String(nextPeriod ?? '3M')
-    // Crypto offers fewer periods, so the chips are rebuilt for the new market.
+    // Falls back to the CURRENT period, not to the default. Flutter calls this
+    // without a period on every instrument change, so defaulting here is what used
+    // to snap the chart back to 1D every time you opened a different stock — the
+    // selected timeframe never survived leaving the screen.
+    periodId = String(nextPeriod ?? periodId)
+    // Rebuild the chips for the new instrument. Every market now offers the same
+    // seven bar sizes — crypto included, since history moved to CoinDCX — so this
+    // no longer changes the list, only the highlighted chip.
     controls.refresh()
     void load()
   },
@@ -322,13 +412,19 @@ window.ttChart = {
         // Same conversion as the series it folds into. A raw tick here would put
         // one rupee bar on the end of a dollar chart, which reads as a spike.
         chart.pushTick({ time: q.time, price: q.price * factor() })
-        // ponytail: the legend is not recomputed here. A tick moves only the
-        // forming bar, so only the last value of each indicator would change,
-        // and rebuilding nineteen of them over several hundred bars on every poll
-        // is real work on a phone for a digit or two. The ceiling is a legend that
-        // trails the live price by one bar; the upgrade path is an incremental
-        // `update(lastBar)` on each indicator, which the current `build(bars)`
-        // signature does not offer.
+        // Re-READ the legend, which is cheap, without re-BUILDING the indicators,
+        // which is not. `readLegend` only looks up values already computed in
+        // `results`, so this costs a few map reads and keeps the OHLC close
+        // tracking the live price. Passing `lastHover` rather than NO_HOVER so a
+        // tick cannot yank the row away from the bar the user is holding.
+        //
+        // ponytail: the indicator VALUES still trail by one bar. A tick moves only
+        // the forming bar, so only each indicator's last value would change, and
+        // rebuilding nineteen of them over several hundred bars on every poll is
+        // real work on a phone for a digit or two. The ceiling is that trailing
+        // value; the upgrade path is an incremental `update(lastBar)` per
+        // indicator, which the current `build(bars)` signature does not offer.
+        renderLegend(lastHover)
       })
       .catch(() => {
         // A failed poll is not worth reporting: another one is coming and the
@@ -350,6 +446,7 @@ const controls = mountControls(controlsRoot, {
   currentPeriod: () => periodId,
   onPeriod(id) {
     periodId = id
+    savePrefs({ period: id })
     void load()
   },
   onIndicators(next) {
@@ -358,6 +455,7 @@ const controls = mountControls(controlsRoot, {
   },
   onStyle(next) {
     style = next
+    savePrefs({ style: next })
     chart?.setStyle(next)
   },
 })
