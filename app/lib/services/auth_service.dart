@@ -15,9 +15,31 @@ import 'diagnostics_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
+/// Shown when a banned account tries to sign in.
+///
+/// A named constant because the login screen matches on it to decide between
+/// inline text and a dialog. A ban is not a typo the user can correct by trying
+/// again, so it does not belong in 13px of red text under the password field — it
+/// needs the reason and somewhere to appeal.
+///
+/// Supabase's own wording for this is the bare string "User is banned", which
+/// [mapAuthException] would otherwise pass through verbatim via its final
+/// `return error.message`.
+const String kBannedAccountMessage =
+    'Your account has been banned for violating our Terms & Conditions and for '
+    'exploiting features.\n\nIf you believe this is incorrect, email us at '
+    '${AppConstants.supportEmail} and we will look into it.';
+
 String mapAuthException(dynamic error) {
   if (error is AuthException) {
     final message = error.message.toLowerCase();
+    // Checked first, and on both signals. `code` is authoritative but is only
+    // populated for errors that came back on an HTTP response; the message match
+    // covers the rest. A ban must never fall through to a generic credentials
+    // message, or the user retypes a correct password forever.
+    if (error.code == 'user_banned' || message.contains('user is banned')) {
+      return kBannedAccountMessage;
+    }
     if (message.contains('invalid login credentials') || message.contains('invalid credentials')) {
       return 'Incorrect email or password. Please try again.';
     } else if (message.contains('email not confirmed')) {

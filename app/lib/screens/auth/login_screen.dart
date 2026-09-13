@@ -50,14 +50,62 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await auth.login(_emailController.text.trim(), _passwordController.text);
     } catch (e) {
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-      });
+      _failWith(e);
     } finally {
       setState(() {
         _busy = false;
       });
     }
+  }
+
+  /// Surfaces a sign-in failure.
+  ///
+  /// Shared by all three sign-in paths, which previously each carried their own
+  /// copy of this unwrapping. A ban additionally gets a dialog: it is the one
+  /// failure here the user cannot fix by trying again, so it has to say why and
+  /// where to appeal rather than sit as a line of red text they may not even read.
+  void _failWith(Object e) {
+    if (!mounted) return;
+    final message = e.toString().replaceFirst('Exception: ', '');
+    setState(() {
+      _error = message;
+    });
+    // Kept inline as well as in the dialog, so the reason survives after it is
+    // dismissed and is still reachable to a screen reader on the form itself.
+    if (message == kBannedAccountMessage) _showBannedDialog(message);
+  }
+
+  void _showBannedDialog(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.pureWhite,
+        title: Text(
+          'Account banned',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+            color: AppColors.ink,
+          ),
+        ),
+        content: Text(
+          message,
+          style: TextStyle(fontSize: 14, color: AppColors.ink3, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text(
+              'Close',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.imperialGold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Gate for the two buttons on this screen that can CREATE an account.
@@ -91,9 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await AnalyticsService.logSignupMethodSelected('google');
       await auth.signInWithGoogle();
     } catch (e) {
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-      });
+      _failWith(e);
     } finally {
       setState(() {
         _busy = false;
@@ -113,9 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await AnalyticsService.logSignupMethodSelected('guest');
       await auth.continueAsGuest();
     } catch (e) {
-      setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
-      });
+      _failWith(e);
     } finally {
       if (mounted) {
         setState(() {

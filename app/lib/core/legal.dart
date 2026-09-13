@@ -24,6 +24,8 @@
 /// text changes more often than the app ships.
 library;
 
+import 'app_constants.dart';
+
 /// One numbered section of a policy document.
 class LegalSection {
   const LegalSection({
@@ -49,7 +51,7 @@ class LegalDoc {
     required this.sections,
     this.notice,
     this.noticeTitle,
-    this.supportEmail = 'support@thetradingtitans.com',
+    this.supportEmail = AppConstants.supportEmail,
   });
 
   final String title;

@@ -13,6 +13,10 @@ class AppConstants {
   /// Equity & crypto block the full notional value (no leverage).
   static const double equityMarginPct = 1.0;
 
+  /// The address users are told to write to. Shown in the legal documents and in
+  /// any dead end the user cannot fix themselves, such as a banned account.
+  static const String supportEmail = 'support@thetradingtitans.com';
+
   // ── Auth ────────────────────────────────────────────────────────────────--
   /// Domain used to synthesize a placeholder email for anonymous (guest) users.
   /// Never shown to users — the UI renders "Guest account" instead.
