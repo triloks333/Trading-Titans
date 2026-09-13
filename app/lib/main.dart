@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme.dart';
@@ -47,7 +47,22 @@ Future<void> _refreshSessionState() async {
   // foreground, without the user having to reinstall or sign out.
   await PlanService.instance.refresh();
   await SupabaseService().touchLoginStreak();
+  await SupabaseService().recordPlatform(platformTag());
 }
+
+/// The platform name for `record_platform`.
+///
+/// Derived from [defaultTargetPlatform] rather than `Platform.operatingSystem`
+/// because `dart:io` does not exist on web, which is one of the three answers we
+/// care about. Sends the real platform name even for platforms we do not ship —
+/// the RPC lowercases what it recognises and silently ignores the rest, so a
+/// desktop build reads as unknown instead of quietly inflating Android.
+///
+/// Deliberately not tied to push-token registration: that only runs once FCM
+/// hands over a token, so it would miss every web user and everyone who declined
+/// notifications, and count them as having no platform at all.
+String platformTag() =>
+    kIsWeb ? 'web' : defaultTargetPlatform.name; // 'iOS' → RPC lowercases it.
 
 /// The gate that should currently be shown to the user, in priority order.
 ///

@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/core/countries.dart';
 import 'package:mobile/core/currency.dart';
 import 'package:mobile/main.dart';
 import 'package:mobile/services/currency_service.dart';
@@ -215,6 +216,88 @@ void main() {
         expect(l.label, isNotEmpty);
         expect(l.subtitle, isNotEmpty);
       }
+    });
+  });
+
+  group('Countries', () {
+    // The packed strings are hand-maintained, and a typo there is a money bug:
+    // save_user_preferences derives profiles.location from the code, and location
+    // is the sole input to the billing currency. A malformed code fails the
+    // database CHECK and the save silently returns null; a code that is well
+    // formed but wrong bills the user on the wrong continent. So these assert the
+    // same shape the database does.
+    test('every code is ISO 3166-1 alpha-2 shaped, like the DB constraint', () {
+      final shape = RegExp(r'^[A-Z]{2}$');
+      for (final code in Countries.byCode.keys) {
+        expect(shape.hasMatch(code), isTrue, reason: '$code is not alpha-2');
+      }
+    });
+
+    test('every country has a name', () {
+      for (final entry in Countries.byCode.entries) {
+        expect(entry.value.trim(), isNotEmpty, reason: '${entry.key} has no name');
+      }
+    });
+
+    test('all 249 assigned codes parsed, so nothing collided or got dropped', () {
+      // A duplicated code would silently overwrite in the map literal and show up
+      // here as a short count, which is the only symptom it would ever have.
+      expect(Countries.byCode.length, 249);
+    });
+
+    test('India resolves, and lookup tolerates what the RPC tolerates', () {
+      expect(Countries.name('IN'), 'India');
+      expect(Countries.name('in'), 'India');
+      expect(Countries.name(' gb '), 'United Kingdom');
+      expect(Countries.name('ZZ'), isNull);
+      expect(Countries.name(null), isNull);
+    });
+
+    test('sortedByName holds every country, in name order', () {
+      final sorted = Countries.sortedByName;
+      expect(sorted.length, Countries.byCode.length);
+      final names = sorted.map((e) => e.value).toList();
+      expect(names, orderedEquals(List.of(names)..sort()));
+    });
+
+    test('India has 28 states plus 8 union territories', () {
+      expect(Countries.subdivisionsOf('IN').length, 36);
+    });
+
+    test('every subdivision fits the 80-character column', () {
+      for (final s in Countries.indiaSubdivisions) {
+        expect(s.trim(), isNotEmpty);
+        expect(s.length, lessThanOrEqualTo(80), reason: '$s is too long to save');
+      }
+    });
+
+    test('countries without a shipped list fall back to free text', () {
+      expect(Countries.subdivisionsOf('US'), isEmpty);
+      expect(Countries.subdivisionsOf(null), isEmpty);
+    });
+  });
+
+  group('platformTag', () {
+    test('the shipped platforms lowercase into what record_platform accepts', () {
+      // platformTag() sends defaultTargetPlatform.name and relies on the RPC to
+      // lowercase it. If Flutter ever renamed these enum values, the RPC would
+      // silently ignore the new spelling and the platform breakdown would quietly
+      // fill up with 'unknown' — no error anywhere. This is that tripwire.
+      const accepted = {'android', 'ios', 'web'};
+      expect(accepted, contains(TargetPlatform.android.name.toLowerCase()));
+      expect(accepted, contains(TargetPlatform.iOS.name.toLowerCase()));
+    });
+
+    test('returns something the RPC accepts on the platform under test', () {
+      expect(const {'android', 'ios', 'web'}, contains(platformTag().toLowerCase()));
+    });
+
+    test('desktop is not silently counted as a phone', () {
+      // Sending the real name means an unshipped platform reads as unknown rather
+      // than inflating Android.
+      const accepted = {'android', 'ios', 'web'};
+      expect(accepted, isNot(contains(TargetPlatform.macOS.name.toLowerCase())));
+      expect(accepted, isNot(contains(TargetPlatform.windows.name.toLowerCase())));
     });
   });
 }

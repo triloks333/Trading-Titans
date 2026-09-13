@@ -4030,10 +4030,23 @@ class SupabaseService {
   }
 
   /// Saves any subset of the preferences. Nulls are left untouched server-side.
+  ///
+  /// [countryCode] is ISO 3166-1 alpha-2. Passing it also moves `location`, because
+  /// the RPC derives residency from the country — 'IN' is india, anything else is
+  /// outside_india. That is deliberate: residency decides the billing currency, so
+  /// a country and an independent residency flag would be two copies of one fact
+  /// and the day they disagreed someone in London would be billed in rupees. Do
+  /// not try to set them separately.
+  ///
+  /// [state] follows the same null-means-leave-it rule as the rest, with one
+  /// addition: an empty string clears the column, which is how the picker offers
+  /// "not set".
   Future<Map<String, dynamic>?> saveUserPreferences({
     String? displayCurrency,
     List<String>? preferredMarkets,
     String? location,
+    String? countryCode,
+    String? state,
     bool completeOnboarding = false,
   }) async {
     try {
@@ -4041,6 +4054,8 @@ class SupabaseService {
         'p_display_currency': displayCurrency,
         'p_preferred_markets': preferredMarkets,
         'p_location': location,
+        'p_country_code': countryCode,
+        'p_state': state,
         'p_complete_onboarding': completeOnboarding,
       });
       if (rows is List && rows.isNotEmpty) {
@@ -4050,6 +4065,38 @@ class SupabaseService {
     } catch (e) {
       debugPrint('saveUserPreferences failed: $e');
       return null;
+    }
+  }
+
+  /// Records which platform this session is running on, for the admin breakdown.
+  ///
+  /// Fire-and-forget on every launch: the RPC only touches the caller's own row,
+  /// ignores values it does not recognise, and writes nothing when unchanged, so
+  /// a future platform name can never stop the app from starting. Failure is
+  /// logged and dropped — analytics must not block a launch.
+  Future<void> recordPlatform(String platform) async {
+    try {
+      await client.rpc('record_platform', params: {'p_platform': platform});
+    } catch (e) {
+      debugPrint('recordPlatform failed: $e');
+    }
+  }
+
+  /// Aggregate user counts for the admin analytics screen, as
+  /// `(dimension, value, users)` rows. Admin-only, enforced inside the RPC.
+  ///
+  /// Returned long rather than grouped so a dimension added server-side needs no
+  /// client change — the screen groups by `dimension` instead of naming them.
+  Future<List<Map<String, dynamic>>> getAdminUserStats() async {
+    try {
+      final rows = await client.rpc('admin_user_stats');
+      if (rows is List) {
+        return rows.map((r) => Map<String, dynamic>.from(r as Map)).toList();
+      }
+      return const [];
+    } catch (e) {
+      debugPrint('getAdminUserStats failed: $e');
+      return const [];
     }
   }
 

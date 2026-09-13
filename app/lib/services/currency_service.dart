@@ -29,6 +29,8 @@ class CurrencyService extends ChangeNotifier {
   static const _kRate = 'usd_inr_rate';
   static const _kOnboarded = 'onboarding_done';
   static const _kLocation = 'trading_location';
+  static const _kCountry = 'country_code';
+  static const _kState = 'state';
 
   /// Refetch the rate at most this often. A paper-trading display does not need
   /// tick-level FX.
@@ -36,6 +38,8 @@ class CurrencyService extends ChangeNotifier {
 
   Currency _display = Currency.inr;
   TradingLocation? _location;
+  String? _countryCode;
+  String? _state;
   List<String> _preferredMarkets = const ['stock', 'crypto'];
   double _usdInr = 0;
   DateTime? _rateFetchedAt;
@@ -46,6 +50,14 @@ class CurrencyService extends ChangeNotifier {
 
   /// Null for accounts that predate the question, or before onboarding.
   TradingLocation? get location => _location;
+
+  /// ISO 3166-1 alpha-2, or null for accounts that only answered the older
+  /// india/outside_india question. Finer-grained than [location] and never
+  /// contradicts it: the server derives one from the other.
+  String? get countryCode => _countryCode;
+
+  /// Subdivision within [countryCode], as picked or typed. Null when not set.
+  String? get state => _state;
   List<String> get preferredMarkets => List.unmodifiable(_preferredMarkets);
   double get usdInr => _usdInr;
   bool get onboardingComplete => _onboardingComplete;
@@ -89,6 +101,8 @@ class CurrencyService extends ChangeNotifier {
       _display = Currency.fromCode(prefs.getString(_kCurrency));
       _preferredMarkets = prefs.getStringList(_kMarkets) ?? _preferredMarkets;
       _location = TradingLocation.fromCode(prefs.getString(_kLocation));
+      _countryCode = prefs.getString(_kCountry);
+      _state = prefs.getString(_kState);
       _usdInr = prefs.getDouble(_kRate) ?? 0;
       _onboardingComplete = prefs.getBool(_kOnboarded) ?? false;
       _loaded = true;
@@ -114,6 +128,8 @@ class CurrencyService extends ChangeNotifier {
         _preferredMarkets = markets.map((e) => '$e').toList();
       }
       _location = TradingLocation.fromCode(prefs['location'] as String?);
+      _countryCode = prefs['country_code'] as String?;
+      _state = prefs['state'] as String?;
       _onboardingComplete = prefs['onboarding_completed_at'] != null;
       await _persist();
       notifyListeners();
@@ -158,12 +174,35 @@ class CurrencyService extends ChangeNotifier {
     await SupabaseService().saveUserPreferences(displayCurrency: currency.code);
   }
 
-  Future<void> setLocation(TradingLocation location) async {
-    if (location == _location) return;
-    _location = location;
+  // There is deliberately no setLocation. Settings sets a country, and residency
+  // is derived from it (see [setCountryAndState]); a coarse setter alongside that
+  // would let the two contradict each other and bill someone on the wrong
+  // continent. Onboarding still records the coarse answer directly via
+  // [completeOnboarding], which is safe because a new account has no country yet.
+
+  /// Records the country, and optionally the subdivision within it.
+  ///
+  /// Moves [location] in the same step, mirroring the derivation the RPC applies:
+  /// 'IN' is india, any other country is outside_india. Done locally as well as
+  /// server-side because [billingCurrency] reads [location] to put a price on
+  /// screen, and leaving it stale until the next refresh would quote a user one
+  /// currency and charge them another.
+  ///
+  /// Pass an empty [state] to clear it; pass null to leave it alone.
+  Future<void> setCountryAndState(String countryCode, {String? state}) async {
+    final code = countryCode.trim().toUpperCase();
+    if (code.length != 2) return;
+    _countryCode = code;
+    _location =
+        code == 'IN' ? TradingLocation.india : TradingLocation.outsideIndia;
+    if (state != null) _state = state.trim().isEmpty ? null : state.trim();
     await _persist();
     notifyListeners();
-    await SupabaseService().saveUserPreferences(location: location.code);
+    await SupabaseService().saveUserPreferences(
+      countryCode: code,
+      // '' clears server-side, which null would not.
+      state: state == null ? null : (_state ?? ''),
+    );
   }
 
   Future<void> setPreferredMarkets(List<String> markets) async {
@@ -210,6 +249,8 @@ class CurrencyService extends ChangeNotifier {
     _display = Currency.inr;
     _preferredMarkets = const ['stock', 'crypto'];
     _location = null;
+    _countryCode = null;
+    _state = null;
     _onboardingComplete = false;
     await _persist();
     notifyListeners();
@@ -234,6 +275,16 @@ class CurrencyService extends ChangeNotifier {
         await prefs.setString(_kLocation, _location!.code);
       } else {
         await prefs.remove(_kLocation);
+      }
+      if (_countryCode != null) {
+        await prefs.setString(_kCountry, _countryCode!);
+      } else {
+        await prefs.remove(_kCountry);
+      }
+      if (_state != null) {
+        await prefs.setString(_kState, _state!);
+      } else {
+        await prefs.remove(_kState);
       }
       if (_usdInr > 0) await prefs.setDouble(_kRate, _usdInr);
     } catch (e) {

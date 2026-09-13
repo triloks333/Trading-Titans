@@ -17,6 +17,7 @@ import '../../services/tour_service.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/plan_service.dart';
 import '../../services/currency_service.dart';
+import '../../core/countries.dart';
 import '../../core/currency.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/plan_badge.dart';
@@ -33,6 +34,7 @@ import 'watchlist_screen.dart';
 import 'notifications_screen.dart';
 import 'refer_earn_screen.dart';
 import 'support_tickets_screen.dart';
+import 'admin_analytics_screen.dart';
 import 'admin_reward_screen.dart';
 import 'community_wishlist_screen.dart';
 
@@ -253,12 +255,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               context,
               Icons.public_outlined,
               'Trading From',
-              currencyService.location?.label ?? 'Not set',
+              _locationSummary(currencyService),
               () => _showLocationSelector(context),
             ),
             if (user?.isAdmin == true) ...[
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
+              _menuItem(context, Icons.insights_outlined, 'User Analytics', const AdminAnalyticsScreen()),
             ],
 
             const SizedBox(height: AppSpacing.md),
@@ -587,48 +590,175 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showLocationSelector(BuildContext context) {
-    showModalBottomSheet(
+  /// Row subtitle: the most specific answer on file. Falls back to the coarse
+  /// india/outside_india label for accounts that answered before the country
+  /// question existed, so those users see something truthful rather than
+  /// 'Not set'.
+  static String _locationSummary(CurrencyService currency) {
+    final country = Countries.name(currency.countryCode);
+    if (country == null) return currency.location?.label ?? 'Not set';
+    final state = currency.state;
+    return state == null ? country : '$state, $country';
+  }
+
+  /// Country, then subdivision where we ship a list for it.
+  ///
+  /// Replaces the old two-option india/outside_india sheet rather than sitting
+  /// beside it. Residency is derived from the country server-side now, so keeping
+  /// the coarse toggle would let someone pick India and then flip the residency
+  /// that decides their billing currency, leaving the two contradicting each
+  /// other. One input, one answer.
+  Future<void> _showLocationSelector(BuildContext context) async {
+    final service = CurrencyService.instance;
+    final previous = service.countryCode;
+    final code = await _pickFromList(
+      context,
+      title: 'Trading From',
+      subtitle: 'Sets the currency you are billed in: India is billed in rupees, '
+          'everywhere else in dollars. It does not restrict any market.',
+      options: Countries.sortedByName,
+      selected: previous,
+    );
+    if (code == null) return;
+
+    final states = Countries.subdivisionsOf(code);
+    if (states.isEmpty) {
+      // No list for this country, so anything already stored belongs to a
+      // different one and must not survive the move.
+      await service.setCountryAndState(code, state: '');
+      return;
+    }
+    if (!context.mounted) return;
+    final state = await _pickFromList(
+      context,
+      title: 'State',
+      subtitle: 'Optional. Close this and only your country is saved.',
+      options: [for (final s in states) MapEntry(s, s)],
+      selected: service.state,
+    );
+    await service.setCountryAndState(
+      code,
+      // Dismissed: leave the state as it was, unless the country just moved, in
+      // which case the old state belongs to the old country.
+      state: state ?? (code == previous ? null : ''),
+    );
+  }
+
+  /// A searchable single-select sheet, returning the chosen key or null if
+  /// dismissed. Options are `key => label`; the label is what gets searched.
+  ///
+  /// The search field is not a nicety at 249 countries — scrolling that blind is
+  /// how the wrong country gets saved, and the wrong country is the wrong billing
+  /// currency.
+  Future<String?> _pickFromList(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<MapEntry<String, String>> options,
+    String? selected,
+  }) {
+    return showModalBottomSheet<String>(
       context: context,
       backgroundColor: AppColors.pureWhite,
+      // The list is taller than the default half-sheet, and the search field
+      // needs room to sit above the keyboard.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
       ),
-      builder: (context) {
-        final currency = context.watch<CurrencyService>();
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sheetHandle(),
-                Text('Trading From',
-                    style: GoogleFonts.inter(
-                        fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                const SizedBox(height: 4),
-                Text(
-                  'Changing this does not restrict any market, and it leaves your '
-                  'currency and market choices as they are.',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                for (final l in TradingLocation.values)
-                  _themeOption(
-                    context,
-                    icon: l == TradingLocation.india
-                        ? Icons.home_outlined
-                        : Icons.public,
-                    title: l.label,
-                    isSelected: currency.location == l,
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await CurrencyService.instance.setLocation(l);
-                    },
+      builder: (sheetContext) {
+        var query = '';
+        final media = MediaQuery.of(sheetContext);
+        return Padding(
+          padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+          child: SizedBox(
+            // Fixed height so the list scrolls lazily. shrinkWrap would build all
+            // 249 rows on every keystroke.
+            height: media.size.height * 0.75,
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                final needle = query.trim().toLowerCase();
+                final shown = needle.isEmpty
+                    ? options
+                    : options
+                        .where((e) => e.value.toLowerCase().contains(needle))
+                        .toList();
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sheetHandle(),
+                        Text(title,
+                            style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 4),
+                        Text(subtitle,
+                            style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: AppColors.ink4,
+                                height: 1.4)),
+                        const SizedBox(height: AppSpacing.md),
+                        TextField(
+                          onChanged: (v) => setSheetState(() => query = v),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            labelText: 'Search',
+                            prefixIcon: const Icon(Icons.search, size: 20),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Expanded(
+                          child: shown.isEmpty
+                              ? Center(
+                                  child: Text('No matches',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: AppColors.ink4)),
+                                )
+                              : ListView.builder(
+                                  itemCount: shown.length,
+                                  itemBuilder: (_, i) {
+                                    final option = shown[i];
+                                    final isSelected =
+                                        option.key == selected;
+                                    return ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(
+                                        option.value,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 15,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: AppColors.ink,
+                                        ),
+                                      ),
+                                      trailing: isSelected
+                                          ? const Icon(Icons.check,
+                                              size: 18,
+                                              color: AppColors.imperialGold)
+                                          : null,
+                                      onTap: () => Navigator.pop(
+                                          context, option.key),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
+                );
+              },
             ),
           ),
         );
