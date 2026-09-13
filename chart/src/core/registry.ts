@@ -9,6 +9,7 @@ import {
   keltner,
   macd,
   momentum,
+  pivots,
   psar,
   roc,
   rsi,
@@ -191,6 +192,35 @@ export const INDICATORS: IndicatorSpec[] = [
           line('dc.u', 'Upper', col.up, points(c, d.upper), 1),
           line('dc.m', 'Basis', col.textMuted, points(c, d.mid), 1),
           line('dc.l', 'Lower', col.down, points(c, d.lower), 1),
+        ],
+      }
+    },
+  },
+  {
+    id: 'pivots',
+    name: 'Pivot Points',
+    group: 'Bands & channels',
+    pane: 'price',
+    // No parameters: classic pivots are defined by a formula, not tuned. Offering a
+    // "length" would imply a choice that does not exist.
+    params: [],
+    build: (c, _p, mode) => {
+      const v = pivots(c)
+      const col = palette(mode)
+      return {
+        id: 'pivots',
+        label: 'Pivots',
+        pane: 'price',
+        plots: [
+          // Resistance in the falling colour and support in the rising one, so the
+          // side of the market each level belongs to is readable without the label.
+          line('pv.r3', 'R3', col.down, points(c, v.r3), 1),
+          line('pv.r2', 'R2', col.down, points(c, v.r2), 1),
+          line('pv.r1', 'R1', col.down, points(c, v.r1), 1),
+          line('pv.pp', 'PP', col.textMuted, points(c, v.pp), 2),
+          line('pv.s1', 'S1', col.up, points(c, v.s1), 1),
+          line('pv.s2', 'S2', col.up, points(c, v.s2), 1),
+          line('pv.s3', 'S3', col.up, points(c, v.s3), 1),
         ],
       }
     },

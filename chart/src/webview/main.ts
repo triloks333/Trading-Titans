@@ -12,6 +12,7 @@ import { mountControls, setActiveEntries } from './controls'
 import { compactValue, readLegend } from '../core/chart'
 import { fxFactor, scalePrices } from '../core/aggregate'
 import { loadDrawings, saveDrawings } from '../core/drawings'
+import type { DrawingKind } from '../core/drawings'
 import type { HoverState } from '../core/chart'
 import type { IndicatorResult } from '../core/indicators'
 import type { Candle, Currency, Market, SeriesStyle, ThemeMode } from '../core/types'
@@ -486,7 +487,7 @@ function wireDrawing(): void {
 
   for (const b of buttons) {
     b.addEventListener('click', () => {
-      const kind = b.dataset.tool as 'trend' | 'horizontal'
+      const kind = b.dataset.tool as DrawingKind
       // Tapping the armed tool again disarms it, so a mis-tap does not leave the
       // chart unpannable with no obvious way out.
       layer.setTool(layer.activeTool() === kind ? null : kind)

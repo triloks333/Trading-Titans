@@ -572,6 +572,82 @@ export function donchian(c: Candle[], n = 20) {
   return { upper, mid, lower }
 }
 
+/**
+ * Classic ("floor") pivot points, from the PREVIOUS day's high, low and close.
+ *
+ *   PP = (H + L + C) / 3
+ *   R1 = 2·PP − L        S1 = 2·PP − H
+ *   R2 = PP + (H − L)    S2 = PP − (H − L)
+ *   R3 = H + 2·(PP − L)  S3 = L − 2·(H − PP)
+ *
+ * WHY THIS IS AN INDICATOR AND NOT A DRAWING TOOL
+ * It was asked for alongside trendlines and rectangles, but pivots are computed,
+ * not placed: the levels follow from yesterday's range, and every one of the seven
+ * moves on its own each session. Drawing them by hand would mean placing seven
+ * lines a day and redoing them tomorrow. As an indicator they appear in the same
+ * picker as everything else and update themselves.
+ *
+ * GROUPED BY UTC DAY
+ * Every market this app charts trades inside a single UTC day — NSE 03:45-10:00,
+ * US 13:30-20:00, crypto continuously — so a UTC date is a correct session key for
+ * all three without needing an exchange calendar. On a daily-or-coarser chart each
+ * bar is its own day, so "previous day" degrades to "previous bar", which is the
+ * right answer there too.
+ *
+ * The levels are flat across the whole session, stepping once at each boundary,
+ * which is what makes them readable as levels rather than as a wobbling average.
+ */
+export function pivots(c: Candle[]) {
+  const n = c.length
+  const blank = (): Series => new Array(n).fill(null)
+  const pp = blank()
+  const r1 = blank()
+  const r2 = blank()
+  const r3 = blank()
+  const s1 = blank()
+  const s2 = blank()
+  const s3 = blank()
+
+  const SECONDS_PER_DAY = 86400
+  let day: number | null = null
+  let cur = { high: -Infinity, low: Infinity, close: 0 }
+  let prev: { high: number; low: number; close: number } | null = null
+
+  for (let i = 0; i < n; i++) {
+    const bar = c[i]!
+    const d = Math.floor(bar.time / SECONDS_PER_DAY)
+
+    if (day === null) {
+      day = d
+    } else if (d !== day) {
+      // The day just ended, so it becomes the basis for the one starting now.
+      prev = cur
+      cur = { high: -Infinity, low: Infinity, close: 0 }
+      day = d
+    }
+
+    cur.high = Math.max(cur.high, bar.high)
+    cur.low = Math.min(cur.low, bar.low)
+    // Overwritten every bar, so by the session's end it holds the last close.
+    cur.close = bar.close
+
+    // The first session has nothing before it, so it gets no levels rather than
+    // levels derived from a half-formed day.
+    if (!prev) continue
+    const p = (prev.high + prev.low + prev.close) / 3
+    const range = prev.high - prev.low
+    pp[i] = p
+    r1[i] = 2 * p - prev.low
+    s1[i] = 2 * p - prev.high
+    r2[i] = p + range
+    s2[i] = p - range
+    r3[i] = prev.high + 2 * (p - prev.low)
+    s3[i] = prev.low - 2 * (prev.high - p)
+  }
+
+  return { pp, r1, r2, r3, s1, s2, s3 }
+}
+
 /** Keltner Channels: an EMA with ATR-scaled bands. */
 export function keltner(c: Candle[], n = 20, mult = 2, atrPeriod = 10) {
   const mid = ema(closes(c), n)

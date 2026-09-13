@@ -27,7 +27,7 @@ import type { Seconds, ThemeMode } from './types'
  * another branch in `pointsOf` and `paint`.
  */
 
-export type DrawingKind = 'trend' | 'horizontal'
+export type DrawingKind = 'trend' | 'horizontal' | 'fib' | 'rect' | 'arc'
 
 export interface DrawingAnchor {
   /** Bar time in SECONDS, matching Candle.time. */
@@ -38,10 +38,41 @@ export interface DrawingAnchor {
 export interface Drawing {
   id: string
   kind: DrawingKind
-  /** Two anchors for a trendline; the first only for a horizontal. */
+  /**
+   * One anchor for a horizontal, two for everything else.
+   *
+   * For `fib` and `rect` the two anchors are opposite corners of the box; for
+   * `arc` the first is the centre and the second sets the radius.
+   */
   anchors: DrawingAnchor[]
   colour?: string
 }
+
+/**
+ * How many anchors each kind needs to be drawable.
+ *
+ * One table rather than a scatter of `kind === 'horizontal' ? 1 : 2` checks, so
+ * adding a kind cannot leave the creation path and the storage validator
+ * disagreeing about whether a drawing is complete — which would store shapes that
+ * then silently fail to paint.
+ */
+const ANCHORS_NEEDED: Record<DrawingKind, number> = {
+  horizontal: 1,
+  trend: 2,
+  fib: 2,
+  rect: 2,
+  arc: 2,
+}
+
+/**
+ * Fibonacci retracement levels, as fractions of the anchor span.
+ *
+ * 0 and 1 included so the two ends are drawn as levels too — a retracement with
+ * no line on the swing high and low reads as though those are not part of it.
+ * 78.6 is the square root of 61.8 and is the one people add by hand when a chart
+ * package omits it.
+ */
+const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const
 
 /** Pixels within which a click counts as hitting a line. Sized for a fingertip. */
 const HIT_SLOP = 11
@@ -225,24 +256,7 @@ export function createDrawingLayer(
       ctx.save()
       ctx.strokeStyle = d.colour ?? col.accent
       ctx.lineWidth = isSelected ? 2.5 : 1.75
-      ctx.setLineDash(d.kind === 'horizontal' ? [6, 4] : [])
-      ctx.beginPath()
-      ctx.moveTo(p.x1, p.y1)
-      ctx.lineTo(p.x2, p.y2)
-      ctx.stroke()
-
-      // Price label on a horizontal line: a support level with no number on it
-      // makes the user read it off the axis by eye.
-      if (d.kind === 'horizontal') {
-        const label = formatLevel(d.anchors[0]!.price)
-        ctx.setLineDash([])
-        ctx.font = '600 11px ui-monospace, "SF Mono", monospace'
-        const tw = ctx.measureText(label).width
-        ctx.fillStyle = d.colour ?? col.accent
-        ctx.fillRect(4, p.y1 - 14, tw + 10, 15)
-        ctx.fillStyle = '#ffffff'
-        ctx.fillText(label, 9, p.y1 - 3)
-      }
+      paintShape(ctx, d, p, w)
 
       if (isSelected) {
         ctx.setLineDash([])
@@ -262,6 +276,102 @@ export function createDrawingLayer(
     if (a >= 1000) return v.toFixed(1)
     if (a >= 1) return v.toFixed(2)
     return v.toFixed(4)
+  }
+
+  /** A small filled caption, used for price levels. Returns nothing; paints. */
+  function tag(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fill: string): void {
+    ctx.setLineDash([])
+    ctx.font = '600 11px ui-monospace, "SF Mono", monospace'
+    const tw = ctx.measureText(text).width
+    ctx.fillStyle = fill
+    ctx.fillRect(x, y - 14, tw + 10, 15)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(text, x + 5, y - 3)
+  }
+
+  /**
+   * The shape itself, per kind. Stroke style and width are already set.
+   *
+   * Everything here works off the same bounding segment `pointsOf` returns, which
+   * is why adding a kind needs no coordinate work: for the two-anchor kinds
+   * (x1,y1) and (x2,y2) are the anchors, and for `rect` and `fib` they are
+   * opposite corners of the box those anchors describe.
+   */
+  function paintShape(
+    ctx: CanvasRenderingContext2D,
+    d: Drawing,
+    p: { x1: number; y1: number; x2: number; y2: number },
+    width: number,
+  ): void {
+    const stroke = ctx.strokeStyle as string
+
+    if (d.kind === 'rect') {
+      const x = Math.min(p.x1, p.x2)
+      const y = Math.min(p.y1, p.y2)
+      const rw = Math.abs(p.x2 - p.x1)
+      const rh = Math.abs(p.y2 - p.y1)
+      ctx.setLineDash([])
+      // A faint wash so the box reads as a zone rather than four unrelated lines,
+      // but light enough that the candles inside it stay legible — the point of
+      // marking a range is to keep watching what happens inside it.
+      ctx.globalAlpha = 0.1
+      ctx.fillStyle = stroke
+      ctx.fillRect(x, y, rw, rh)
+      ctx.globalAlpha = 1
+      ctx.strokeRect(x, y, rw, rh)
+      return
+    }
+
+    if (d.kind === 'fib') {
+      // Levels run between the two anchor PRICES, spanning from the left anchor to
+      // the right edge: a retracement is read forward in time, so stopping the
+      // lines at the second anchor hides the part you are waiting on.
+      const left = Math.min(p.x1, p.x2)
+      for (const level of FIB_LEVELS) {
+        const y = p.y1 + (p.y2 - p.y1) * level
+        // 0 and 1 are the swing itself, so they are solid; the retracements between
+        // them are dashed, which is how every chart package distinguishes them.
+        ctx.setLineDash(level === 0 || level === 1 ? [] : [5, 4])
+        ctx.beginPath()
+        ctx.moveTo(left, y)
+        ctx.lineTo(width, y)
+        ctx.stroke()
+        // The percentage, not the price: the price is on the axis, and the whole
+        // point of a retracement is which ratio the market is sitting on.
+        tag(ctx, `${(level * 100).toFixed(1)}%`, left + 4, y, stroke)
+      }
+      return
+    }
+
+    if (d.kind === 'arc') {
+      // Centred on the first anchor, radius out to the second, drawn as a
+      // semicircle facing the way the second anchor lies.
+      //
+      // ponytail: a semicircle rather than a full Fibonacci arc set. The ceiling is
+      // that it is one arc, not the 38.2/50/61.8 family; the upgrade path is the
+      // same loop `fib` already uses, scaling the radius per level. One arc is what
+      // "arc" was asked for and it needs no new state.
+      const r = Math.hypot(p.x2 - p.x1, p.y2 - p.y1)
+      if (r < 1) return
+      const facing = Math.atan2(p.y2 - p.y1, p.x2 - p.x1)
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.arc(p.x1, p.y1, r, facing - Math.PI / 2, facing + Math.PI / 2)
+      ctx.stroke()
+      return
+    }
+
+    // trend and horizontal: one straight segment. A horizontal is dashed and
+    // carries its price, because a support level with no number on it makes the
+    // user read it off the axis by eye.
+    ctx.setLineDash(d.kind === 'horizontal' ? [6, 4] : [])
+    ctx.beginPath()
+    ctx.moveTo(p.x1, p.y1)
+    ctx.lineTo(p.x2, p.y2)
+    ctx.stroke()
+    if (d.kind === 'horizontal') {
+      tag(ctx, formatLevel(d.anchors[0]!.price), 4, p.y1, stroke)
+    }
   }
 
   /** Draggable points, in screen space, in anchor order. */
@@ -302,6 +412,67 @@ export function createDrawingLayer(
     return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
   }
 
+  /**
+   * Distance in pixels from a point to the drawing as it is actually PAINTED.
+   *
+   * Load-bearing per kind. Measuring every shape against the bounding segment —
+   * which is what the single `distanceToSegment` call used to do — would mean a
+   * rectangle could only be selected by touching its diagonal, where nothing is
+   * drawn, and a fib could only be grabbed on the sloping line between its
+   * corners. The shape you can see has to be the shape you can hit.
+   */
+  function distanceTo(
+    d: Drawing,
+    p: { x1: number; y1: number; x2: number; y2: number },
+    x: number,
+    y: number,
+    width: number,
+  ): number {
+    if (d.kind === 'rect') {
+      const l = Math.min(p.x1, p.x2)
+      const r = Math.max(p.x1, p.x2)
+      const t = Math.min(p.y1, p.y2)
+      const b = Math.max(p.y1, p.y2)
+      // The four edges, not the filled interior: a big zone would otherwise swallow
+      // every tap inside it, including taps meant for the chart underneath.
+      return Math.min(
+        distanceToSegment(x, y, l, t, r, t),
+        distanceToSegment(x, y, l, b, r, b),
+        distanceToSegment(x, y, l, t, l, b),
+        distanceToSegment(x, y, r, t, r, b),
+      )
+    }
+
+    if (d.kind === 'fib') {
+      const left = Math.min(p.x1, p.x2)
+      let best = Infinity
+      for (const level of FIB_LEVELS) {
+        const ly = p.y1 + (p.y2 - p.y1) * level
+        best = Math.min(best, distanceToSegment(x, y, left, ly, width, ly))
+      }
+      return best
+    }
+
+    if (d.kind === 'arc') {
+      const r = Math.hypot(p.x2 - p.x1, p.y2 - p.y1)
+      if (r < 1) return Infinity
+      // Radial distance from the circle, then reject the half that is not drawn, so
+      // the invisible mirror semicircle is not selectable.
+      const dx = x - p.x1
+      const dy = y - p.y1
+      const facing = Math.atan2(p.y2 - p.y1, p.x2 - p.x1)
+      let delta = Math.atan2(dy, dx) - facing
+      // Normalise to (-pi, pi] before comparing, or a point either side of the
+      // wrap-around reads as being on the far side of the arc.
+      while (delta > Math.PI) delta -= 2 * Math.PI
+      while (delta < -Math.PI) delta += 2 * Math.PI
+      if (Math.abs(delta) > Math.PI / 2) return Infinity
+      return Math.abs(Math.hypot(dx, dy) - r)
+    }
+
+    return distanceToSegment(x, y, p.x1, p.y1, p.x2, p.y2)
+  }
+
   function hitTest(x: number, y: number): { id: string; anchorIndex: number | null } | null {
     // Topmost first, so the drawing painted last is the one grabbed.
     for (let i = drawings.length - 1; i >= 0; i--) {
@@ -316,7 +487,7 @@ export function createDrawingLayer(
           return { id: d.id, anchorIndex: d.kind === 'horizontal' ? 0 : h }
         }
       }
-      if (distanceToSegment(x, y, p.x1, p.y1, p.x2, p.y2) <= HIT_SLOP) {
+      if (distanceTo(d, p, x, y, canvas.clientWidth) <= HIT_SLOP) {
         return { id: d.id, anchorIndex: null }
       }
     }
@@ -362,9 +533,9 @@ export function createDrawingLayer(
       const d: Drawing = {
         id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
         kind: tool,
-        anchors: tool === 'horizontal' ? [a] : [a, { ...a }],
+        anchors: ANCHORS_NEEDED[tool] === 1 ? [a] : [a, { ...a }],
       }
-      if (tool === 'horizontal') {
+      if (ANCHORS_NEEDED[tool] === 1) {
         // One click is the whole gesture: commit immediately rather than making the
         // user drag a line that spans the width no matter what they do.
         drawings = [...drawings, d]
@@ -555,7 +726,11 @@ export function sanitiseDrawings(value: unknown): Drawing[] {
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue
     const d = raw as Partial<Drawing>
-    if (d.kind !== 'trend' && d.kind !== 'horizontal') continue
+    // Membership test against the anchor table rather than a list of kinds, so a
+    // kind added above cannot be silently rejected on read — which would look like
+    // drawings vanishing after a reload.
+    if (typeof d.kind !== 'string' || !(d.kind in ANCHORS_NEEDED)) continue
+    const kind = d.kind as DrawingKind
     const anchors = Array.isArray(d.anchors) ? d.anchors : []
     const clean = anchors
       .filter(
@@ -564,11 +739,12 @@ export function sanitiseDrawings(value: unknown): Drawing[] {
           Number.isFinite((a as DrawingAnchor).price),
       )
       .map((a) => ({ time: a.time, price: a.price }))
-    // A trendline without both ends cannot be placed; a horizontal needs one.
-    if (clean.length < (d.kind === 'trend' ? 2 : 1)) continue
+    // Anything short of its anchors cannot be placed: a trendline, fib, rect or arc
+    // needs both, a horizontal needs one.
+    if (clean.length < ANCHORS_NEEDED[kind]) continue
     out.push({
       id: typeof d.id === 'string' && d.id ? d.id : `d${Math.random().toString(36).slice(2, 9)}`,
-      kind: d.kind,
+      kind,
       anchors: clean,
       colour: typeof d.colour === 'string' ? d.colour : undefined,
     })

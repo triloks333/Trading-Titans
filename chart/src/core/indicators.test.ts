@@ -25,6 +25,7 @@ import {
   lowest,
   macd,
   momentum,
+  pivots,
   psar,
   roc,
   rsi,
@@ -116,6 +117,52 @@ check('population stdev, and Bollinger bands sit symmetrically on the basis', ()
   near(b.mid[7], 5)
   near(b.upper[7], 9)
   near(b.lower[7], 1)
+})
+
+check('pivots come from the previous UTC day and stay flat across the session', () => {
+  // Three intraday bars on day 0, two on day 1. The point of the test is the day
+  // GROUPING: pivots read the completed previous session, not a rolling window, so
+  // getting the boundary wrong is the failure that still produces plausible numbers.
+  const intraday: Candle[] = [
+    { time: 0, open: 10, high: 12, low: 8, close: 11 },
+    { time: 3600, open: 11, high: 15, low: 9, close: 14 },
+    { time: 7200, open: 14, high: 13, low: 10, close: 12 },
+    { time: 86400, open: 12, high: 20, low: 11, close: 19 },
+    { time: 90000, open: 19, high: 21, low: 18, close: 20 },
+  ]
+  const v = pivots(intraday)
+
+  // Day 0 has nothing before it.
+  for (let i = 0; i < 3; i++) {
+    assert.equal(v.pp[i], null, `bar ${i} is in the first session and must have no levels`)
+  }
+
+  // Day 0 closed with high 15, low 9 (not 8 — the third bar's low is 10, the first
+  // is 8, so the session low is 8). Recomputed here rather than hardcoded so the
+  // assertion cannot quietly encode a wrong extreme.
+  const h = Math.max(12, 15, 13)
+  const l = Math.min(8, 9, 10)
+  const c = 12 // last close of the session
+  const pp = (h + l + c) / 3
+
+  near(v.pp[3], pp)
+  near(v.r1[3], 2 * pp - l)
+  near(v.s1[3], 2 * pp - h)
+  near(v.r2[3], pp + (h - l))
+  near(v.s2[3], pp - (h - l))
+  near(v.r3[3], h + 2 * (pp - l))
+  near(v.s3[3], l - 2 * (h - pp))
+
+  // Flat across the session: both of day 1's bars carry identical levels. A pivot
+  // that drifts bar to bar is a moving average wearing the wrong label.
+  near(v.pp[4], pp)
+  near(v.r1[4], 2 * pp - l)
+  near(v.s3[4], l - 2 * (h - pp))
+
+  // And ordered, which is what makes them usable as support and resistance.
+  assert.ok(v.s3[3]! < v.s2[3]! && v.s2[3]! < v.s1[3]!, 'supports must descend')
+  assert.ok(v.r1[3]! < v.r2[3]! && v.r2[3]! < v.r3[3]!, 'resistances must ascend')
+  assert.ok(v.s1[3]! < v.pp[3]! && v.pp[3]! < v.r1[3]!, 'PP must sit between S1 and R1')
 })
 
 check('Donchian tracks the extremes of the window, mid is their midpoint', () => {

@@ -85,6 +85,54 @@ check('a horizontal needs only one anchor', () => {
   assert.equal(out[0]!.kind, 'horizontal')
 })
 
+check('every kind requires exactly the anchors it needs', () => {
+  // Table-driven against ANCHORS_NEEDED in drawings.ts. A kind added to the union
+  // but forgotten in that table would either be dropped on read — drawings
+  // vanishing after a reload — or stored with too few anchors and then silently
+  // failing to paint, which looks identical to the storage being broken.
+  const needed: Record<string, number> = {
+    horizontal: 1,
+    trend: 2,
+    fib: 2,
+    rect: 2,
+    arc: 2,
+  }
+  const one = [{ time: 10, price: 100 }]
+  const two = [{ time: 10, price: 100 }, { time: 20, price: 200 }]
+
+  for (const [kind, n] of Object.entries(needed)) {
+    assert.equal(
+      sanitiseDrawings([{ id: 'a', kind, anchors: two }]).length,
+      1,
+      `${kind} should survive with two anchors`,
+    )
+    assert.equal(
+      sanitiseDrawings([{ id: 'a', kind, anchors: one }]).length,
+      n === 1 ? 1 : 0,
+      `${kind} needs ${n} anchor(s)`,
+    )
+    assert.equal(
+      sanitiseDrawings([{ id: 'a', kind, anchors: [] }]).length,
+      0,
+      `${kind} with no anchors cannot be placed`,
+    )
+  }
+})
+
+check('the kind is matched exactly, not fuzzily', () => {
+  // 'fib' is a real kind; 'fibonacci' is not, and must not be coerced into one.
+  // Storage can hold a name from any past or future build.
+  const two = [{ time: 10, price: 100 }, { time: 20, price: 200 }]
+  assert.equal(sanitiseDrawings([{ id: 'a', kind: 'fib', anchors: two }]).length, 1)
+  for (const wrong of ['fibonacci', 'Fib', 'FIB', 'rectangle', 'circle', 'arcs', '']) {
+    assert.equal(
+      sanitiseDrawings([{ id: 'a', kind: wrong, anchors: two }]).length,
+      0,
+      `'${wrong}' must not be accepted`,
+    )
+  }
+})
+
 check('unknown kinds and non-finite anchors are dropped', () => {
   const out = sanitiseDrawings([
     { id: 'x', kind: 'fibonacci', anchors: [{ time: 1, price: 2 }, { time: 3, price: 4 }] },
