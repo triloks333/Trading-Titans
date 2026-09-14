@@ -11,6 +11,65 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.7 (versionCode 51)
+
+The F&O drift fix, finished. 1.2.6 shipped an incomplete version of it.
+
+**1.2.6 did not fix the reported bug.** P&L kept climbing on the live build: ₹1640 at
+18:33, ₹1647 at 20:03, ₹1651 at 21:13, with the LTP frozen at ₹232.88 throughout.
+
+The reason is duplication. 1.2.6 routed the *service layer* through a valuation time
+that holds still while the market is shut, but `portfolio_screen._estimateFoPrice`
+computes its **own** LTP from `DateTime.now()`. The Portfolio F&O tab is the screen
+users actually look at, so fixing the service and not the screen changed nothing
+visible.
+
+The calculation turned out to be inlined in **seven** places with **three** different
+fallbacks for a missing expiry — 0, 7 and 15 days:
+
+| Site | What it drove |
+|---|---|
+| `fo_positions` OPTION branch | theta on option positions |
+| `fo_positions` FUTURE branch | carry on futures positions |
+| synthetic future quote | future LTP elsewhere in the app |
+| synthetic option quote | option LTP elsewhere in the app |
+| monthly futures list | the futures picker |
+| option-chain builder | every premium in the chain |
+| `portfolio_screen` ×2 | **the reported bug**, current and previous close |
+
+All seven now share `MarketHours.daysToExpiry`. This is the same tax already paid for
+five copies of the session window and two copies of the owner email list.
+
+Left alone deliberately: two sites in `_executePendingOrdersInner`. That path is inert
+(`_serverExecOnly = true`, and the financial write lockdown would fail it with
+`42501`) and `docs/cleanup-task-dormant-on-device-money-paths.md` has it queued for
+deletion. Editing an unreachable money path adds risk for no behaviour change.
+
+The tests now reproduce **each site's own formula** and assert it is stable across the
+close, rather than only testing the shared helper — which is precisely the gap that
+let 1.2.6 pass its tests while the bug survived. The previous-close variant is pinned
+too: if the prior-session base drifted, change and change% would move even with a
+static LTP.
+
+**How to verify without taking anyone's word:** note Total P&L with the market shut,
+check an hour later. It should be identical to the rupee. Before this it moved about
+₹4 an hour on a 2250-unit lot.
+
+### Play Store "What's new" (paste this)
+
+Covers **1.2.4 through 1.2.7**. `app_config.latest_version` is still 1.2.3, so no user
+has been prompted to take any of them.
+
+```
+• Fixed F&O profit and loss drifting on its own while the market was closed.
+• Indian market holidays are now respected — no trades or price moves on a closed day.
+• Titans Room: a public chat for every trader. Text, photos, sender names and admin tags.
+• Tapping a notification now opens the right screen instead of doing nothing.
+• New chart tools: rectangle, Fibonacci, arc and pivot points. Tap any candle for its OHLC.
+```
+
+---
+
 ## 1.2.6 (versionCode 50)
 
 F&O positions stop drifting while the market is shut.
