@@ -215,6 +215,30 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// Marks a message as coming from the Trading Titans team.
+  ///
+  /// Worth being explicit rather than relying on the name alone: an admin is the
+  /// only account allowed to post links here, so users need to be able to tell a
+  /// real announcement from someone claiming to be one.
+  Widget _adminTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.imperialGold,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        'ADMIN',
+        style: GoogleFonts.inter(
+          fontSize: 8.5,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+
   static String _stamp(DateTime t) {
     final h = t.hour.toString().padLeft(2, '0');
     final m = t.minute.toString().padLeft(2, '0');
@@ -252,7 +276,13 @@ class _ChatScreenState extends State<ChatScreen> {
                         controller: _scroll,
                         padding: const EdgeInsets.all(AppSpacing.md),
                         itemCount: _messages.length,
-                        itemBuilder: (_, i) => _bubble(_messages[i]),
+                        itemBuilder: (_, i) => _bubble(
+                          _messages[i],
+                          // WhatsApp groups a run from one sender and labels only
+                          // the first, which is what stops a back-and-forth from
+                          // repeating the same name down the whole screen.
+                          previous: i == 0 ? null : _messages[i - 1],
+                        ),
                       ),
           ),
           _composer(),
@@ -261,9 +291,13 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _bubble(ChatMessage message) {
+  Widget _bubble(ChatMessage message, {ChatMessage? previous}) {
     final isMine =
         message.userId == context.read<AuthService>().user?.id;
+    // Your own messages carry no name, the same as WhatsApp: you know who you are,
+    // and labelling both sides doubles the noise in a two-person conversation.
+    // A room where you are the only sender therefore shows no names at all.
+    final showAuthor = !isMine && previous?.userId != message.userId;
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
@@ -282,23 +316,35 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!isMine)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      message.authorName ?? 'Titan',
-                      style: GoogleFonts.inter(
-                          fontSize: 12,
+              if (showAuthor)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        message.authorName ?? 'Titan',
+                        style: GoogleFonts.inter(
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.ink3),
-                    ),
-                    if (message.authorTier != null &&
-                        message.authorTier != 'free') ...[
-                      const SizedBox(width: 4),
-                      PlanBadge(tier: message.authorTier!, compact: true),
+                          // Named senders get a colour so the header reads as an
+                          // attribution rather than as part of the message.
+                          color: message.authorIsAdmin
+                              ? AppColors.imperialGold
+                              : AppColors.ink3,
+                        ),
+                      ),
+                      if (message.authorIsAdmin) ...[
+                        const SizedBox(width: 5),
+                        _adminTag(),
+                      ],
+                      if (message.authorTier != null &&
+                          message.authorTier != 'free') ...[
+                        const SizedBox(width: 4),
+                        PlanBadge(tier: message.authorTier!, compact: true),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               if (message.isImage && message.mediaPath != null)
                 _media(message.mediaPath!),

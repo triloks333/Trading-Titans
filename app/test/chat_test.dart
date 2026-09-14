@@ -102,6 +102,42 @@ void main() {
       expect(m.isVoice, isFalse);
     });
 
+    test('the admin tag is read from the feed', () {
+      expect(
+        ChatMessage.fromRow({
+          'id': 'a', 'user_id': 'u', 'kind': 'text', 'body': 'hi',
+          'created_at': '2026-09-14T10:00:00Z',
+          'author_name': 'Pawan', 'author_is_admin': true,
+        }).authorIsAdmin,
+        isTrue,
+      );
+    });
+
+    test('a missing admin flag is not an admin', () {
+      // An older row, or a payload from a build that did not select the column,
+      // must never be mistaken for a moderator — that badge is what tells users a
+      // link or an announcement is genuine.
+      for (final value in [null, false, 'false', 0, '']) {
+        expect(
+          ChatMessage.fromRow({
+            'id': 'a', 'user_id': 'u', 'kind': 'text', 'body': 'hi',
+            'created_at': '2026-09-14T10:00:00Z',
+            'author_is_admin': value,
+          }).authorIsAdmin,
+          isFalse,
+          reason: 'author_is_admin=$value was treated as admin',
+        );
+      }
+      // Absent entirely.
+      expect(
+        ChatMessage.fromRow({
+          'id': 'a', 'user_id': 'u', 'kind': 'text', 'body': 'hi',
+          'created_at': '2026-09-14T10:00:00Z',
+        }).authorIsAdmin,
+        isFalse,
+      );
+    });
+
     test('an unknown kind does not throw', () {
       // kind is a string, not an enum, so a message from a newer build renders as
       // unsupported instead of crashing the whole room.

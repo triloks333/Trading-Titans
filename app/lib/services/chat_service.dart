@@ -15,6 +15,7 @@ class ChatMessage {
     this.durationMs,
     this.authorName,
     this.authorTier,
+    this.authorIsAdmin = false,
   });
 
   final String id;
@@ -30,6 +31,11 @@ class ChatMessage {
   final int? durationMs;
   final String? authorName;
   final String? authorTier;
+
+  /// Wears the moderator tag in the room. Comes from `profiles.is_admin`, which is
+  /// already true for exactly the three intended accounts, rather than a fourth
+  /// hardcoded copy of the owner email list.
+  final bool authorIsAdmin;
 
   /// Reads a row from `public.chat_feed`, which already carries the author's name
   /// and tier as flat columns.
@@ -47,6 +53,7 @@ class ChatMessage {
           : null,
       authorName: row['author_name'] as String?,
       authorTier: row['author_tier'] as String?,
+      authorIsAdmin: row['author_is_admin'] == true,
     );
   }
 
@@ -82,7 +89,7 @@ class ChatService {
   /// already filters soft-deleted rows.
   static const String _columns =
       'id, user_id, kind, body, media_path, duration_ms, created_at, '
-      'author_name, author_tier';
+      'author_name, author_tier, author_is_admin';
 
   static const String _view = 'chat_feed';
 
