@@ -1,5 +1,27 @@
 -- One public chat room, with the moderation needed to run it.
 --
+-- ── APPLIED TO PRODUCTION AS SEVEN VERSIONS ────────────────────────────────
+-- This file is the consolidated final state. Production applied it incrementally,
+-- because two holes and a missing read path were found by testing between steps:
+--
+--   20260914020314  public_chat_room                        tables
+--   20260914020337  ..._link_detection_and_insert_gate      first cut
+--   20260914020357  ..._rls_and_moderation                  policies + RPCs
+--   20260914020415  ..._media_realtime_and_assertions       bucket, realtime
+--   20260914020707  chat_link_detection_short_domains_and_no_guest_posting
+--   20260914021437  chat_feed_view                          the read path
+--   20260914022026  chat_insert_gate_null_safe_identity_check
+--
+-- Replaying THIS file on a fresh database lands on the same schema as production;
+-- the superseded first cuts are described in place rather than reproduced. The
+-- local filename keeps this directory's ordering, matching how the 13 Sep
+-- migrations were already recorded. Production's schema_migrations is the authority
+-- on what has run — the same documentation-only relationship as
+-- 20260709010000_push_on_notification_insert.sql.
+--
+-- Write GRANTS are NOT here: see 20260914000200. Nothing in this file could be
+-- written to by a client until that ran.
+--
 -- Requested: a single room for all users, carrying text, images and voice notes,
 -- with links restricted to admins, a report button, admin delete and per-user
 -- mute. Voice notes capped at 60 seconds, images compressed on device.
