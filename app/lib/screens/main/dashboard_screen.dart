@@ -22,6 +22,7 @@ import 'trade_screen.dart';
 import 'whatif_screen.dart';
 import 'orders_screen.dart';
 import 'notifications_screen.dart';
+import 'chat_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -321,6 +322,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           ],
                                         ),
                                       ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              // Titans Room (public chat). Guests can read it; the
+                              // composer is replaced by an upgrade prompt for them,
+                              // so the entry point is not hidden.
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatScreen())),
+                                child: SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Center(
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.cream,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.birch),
+                                      ),
+                                      child: Icon(Icons.forum_outlined, size: 20, color: AppColors.ink2),
                                     ),
                                   ),
                                 ),
