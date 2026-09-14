@@ -17,6 +17,10 @@ class AppConstants {
   /// any dead end the user cannot fix themselves, such as a banned account.
   static const String supportEmail = 'support@thetradingtitans.com';
 
+  /// The public marketing site, which also serves the server-rendered blog at
+  /// `/blog`. No trailing slash.
+  static const String marketingSiteUrl = 'https://thetradingtitans.com';
+
   // ── Auth ────────────────────────────────────────────────────────────────--
   /// Domain used to synthesize a placeholder email for anonymous (guest) users.
   /// Never shown to users — the UI renders "Guest account" instead.

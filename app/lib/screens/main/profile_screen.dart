@@ -35,6 +35,7 @@ import 'notifications_screen.dart';
 import 'refer_earn_screen.dart';
 import 'support_tickets_screen.dart';
 import 'admin_analytics_screen.dart';
+import 'admin_blog_screen.dart';
 import 'admin_reward_screen.dart';
 import 'community_wishlist_screen.dart';
 
@@ -262,6 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
               _menuItem(context, Icons.insights_outlined, 'User Analytics', const AdminAnalyticsScreen()),
+              _menuItem(context, Icons.article_outlined, 'Blog Posts', const AdminBlogScreen()),
             ],
 
             const SizedBox(height: AppSpacing.md),

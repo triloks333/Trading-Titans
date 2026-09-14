@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/app_constants.dart';
 import '../../core/theme.dart';
 import '../../widgets/empty_state.dart';
+import 'chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/app_network_image.dart';
 import '../../services/nav_tab_service.dart';
@@ -43,7 +45,7 @@ Map<String, dynamic>? parseActionData(Object? raw) {
 const Set<String> kNotificationCtaRoutes = {
   'plans', 'topup', 'subscribe', 'wallet', 'league', 'leaderboard',
   'feature', 'wishlist', 'portfolio', 'orders', 'referral',
-  'trade', 'notifications',
+  'trade', 'notifications', 'chat', 'blog',
 };
 
 /// The call-to-action button's text, or null when there should be no button.
@@ -636,6 +638,21 @@ Future<void> openNotificationCta(
     case 'trade':
       NavTabService.goToTab(NavTabService.trade);
       Navigator.of(context).popUntil((r) => r.isFirst);
+      return;
+    case 'chat':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ChatScreen()),
+      );
+      return;
+    case 'blog':
+      // The blog is server-rendered on the marketing site, so there is nothing
+      // in-app to open. Still a named route rather than leaving admins to paste a
+      // URL into cta_url: the destination is fixed, and a typo in a hand-entered
+      // link ships a dead button to everyone.
+      await launchUrl(
+        Uri.parse('${AppConstants.marketingSiteUrl}/blog'),
+        mode: LaunchMode.externalApplication,
+      );
       return;
     case 'notifications':
       // No navigation of its own. For the in-app button this screen already IS

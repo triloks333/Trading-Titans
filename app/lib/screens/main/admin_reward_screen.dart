@@ -25,6 +25,8 @@ const Map<String, String> kAdminCtaDestinations = {
   'wishlist': 'Community Wishlist',
   'referral': 'Refer & Earn',
   'plans': 'Plans & top-ups (paywall)',
+  'chat': 'Titans Room (chat)',
+  'blog': 'Blog',
   '_custom': 'A web link…',
 };
 

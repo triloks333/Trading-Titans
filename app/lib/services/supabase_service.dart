@@ -4068,6 +4068,124 @@ class SupabaseService {
     }
   }
 
+  // ── Blog (admin authoring; the site renders these server-side) ─────────────
+
+  /// Every post, drafts included. Admin-only by RLS — a non-admin sees only
+  /// published rows through the same call, which is harmless.
+  Future<List<Map<String, dynamic>>> listBlogPosts() async {
+    try {
+      final rows = await client
+          .from('blog_posts')
+          .select('id, slug, title, excerpt, body_markdown, cover_url, published_at')
+          .order('created_at', ascending: false);
+      return (rows as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+    } catch (e) {
+      debugPrint('listBlogPosts failed: $e');
+      return const [];
+    }
+  }
+
+  /// Creates or updates a post. Returns null on success, or a message to show.
+  ///
+  /// `published_at` is only set when publishing and only if it was not already
+  /// set, so re-saving a live post does not move its publication date — that date
+  /// is in the page's structured data and shifting it re-dates the article for
+  /// search engines.
+  Future<String?> saveBlogPost({
+    String? id,
+    required String slug,
+    required String title,
+    required String bodyMarkdown,
+    String? excerpt,
+    String? coverUrl,
+    required bool publish,
+  }) async {
+    try {
+      final row = <String, dynamic>{
+        'slug': slug,
+        'title': title,
+        'body_markdown': bodyMarkdown,
+        'excerpt': (excerpt == null || excerpt.trim().isEmpty)
+            ? null
+            : excerpt.trim(),
+        'cover_url': coverUrl,
+      };
+      if (id == null) {
+        row['published_at'] =
+            publish ? DateTime.now().toUtc().toIso8601String() : null;
+        row['author_id'] = currentUser?.id;
+        await client.from('blog_posts').insert(row);
+      } else {
+        if (!publish) {
+          row['published_at'] = null;
+        } else {
+          final existing = await client
+              .from('blog_posts')
+              .select('published_at')
+              .eq('id', id)
+              .maybeSingle();
+          final already = (existing as Map?)?['published_at'];
+          row['published_at'] =
+              already ?? DateTime.now().toUtc().toIso8601String();
+        }
+        await client.from('blog_posts').update(row).eq('id', id);
+      }
+      return null;
+    } catch (e) {
+      final message = e is PostgrestException ? e.message : '$e';
+      // The one failure worth naming, because it is the one an author will
+      // actually hit and can fix themselves.
+      if (message.contains('blog_posts_slug_key') ||
+          message.contains('duplicate key')) {
+        return 'That slug is already taken. Pick another.';
+      }
+      debugPrint('saveBlogPost failed: $e');
+      return 'That post could not be saved.';
+    }
+  }
+
+  Future<bool> deleteBlogPost(String id) async {
+    try {
+      await client.from('blog_posts').delete().eq('id', id);
+      return true;
+    } catch (e) {
+      debugPrint('deleteBlogPost failed: $e');
+      return false;
+    }
+  }
+
+  /// Uploads a blog image and returns its PUBLIC url.
+  ///
+  /// Public, not signed: this url ends up in an `<img>` on a crawled page and in
+  /// og:image, neither of which can refresh an expiring link.
+  Future<String?> uploadBlogImage({
+    required Uint8List bytes,
+    required String extension,
+  }) async {
+    try {
+      final path =
+          'covers/${DateTime.now().millisecondsSinceEpoch}_${bytes.length}.$extension';
+      await client.storage.from('blog-media').uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: extension == 'png'
+                  ? 'image/png'
+                  : extension == 'webp'
+                      ? 'image/webp'
+                      : 'image/jpeg',
+              upsert: false,
+            ),
+          );
+      return client.storage.from('blog-media').getPublicUrl(path);
+    } catch (e) {
+      debugPrint('uploadBlogImage failed: $e');
+      return null;
+    }
+  }
+
   /// Records which platform this session is running on, for the admin breakdown.
   ///
   /// Fire-and-forget on every launch: the RPC only touches the caller's own row,
