@@ -11,6 +11,67 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.5 (versionCode 49)
+
+The public chat room, and the sender names it shipped without.
+
+**1.2.4 went out without an entry in this file.** Its copy was written to
+`docs/whats-new-1.2.4.md` instead, which nothing reads — exactly the failure the
+header above warns about. `latest_version` was never raised either, so it is still
+`1.2.3` and **no user was ever prompted to take 1.2.4**. That is why the copy below
+covers 1.2.4 as well as 1.2.5: in practice almost everyone is jumping straight from
+1.2.3, and there is precedent for a combined block in the 1.2.2 entry below.
+
+**Titans Room.** One public room for all users, carrying text and photos. Links are
+admin-only and that is enforced by a database trigger, not by the UI, so no write
+path can miss it — along with a per-user mute, a report button, admin delete and a
+rate limit. Guests can read the room but not post; they get an upgrade prompt where
+the composer would be, because an anonymous account costs nothing to create and
+abandon, which is what makes a public room worth abusing.
+
+**Names on messages, which 1.2.4 was missing.** 1.2.4 rendered a sender's name only
+on other people's messages, WhatsApp-style, so a room with a single sender showed
+none at all and looked broken. 1.2.5 keeps that rule but adds the rest of the
+pattern: consecutive messages from one person are grouped and only the first is
+labelled, and the three admin accounts wear an ADMIN tag. The tag matters because
+admins are the only accounts allowed to post links here, so users need to tell a
+genuine announcement from someone claiming to be one.
+
+**Sending was broken for a few hours after 1.2.4 shipped**, and was fixed
+server-side with no release. `alter default privileges` from the September lockdown
+means every new table in `public` arrives SELECT-only, so `chat_messages` had an RLS
+insert policy but no table grant — and a missing grant is checked before RLS, so the
+policy never ran. Anyone on 1.2.4 can post now without updating.
+
+**Notification taps go somewhere.** Previously nothing was wired to a tap on a
+system-tray push. All three paths are now handled — background, terminated and
+foreground — and the push carries the same route names the in-app button uses, so
+the two cannot drift apart.
+
+Also: country and state in Settings, an admin analytics screen, chart rectangle /
+Fibonacci / arc / pivot-point tools, OHLC on tap, remembered timeframe and style,
+and a real explanation instead of "User is banned" for a banned account.
+
+Voice notes are deliberately absent. The schema, storage bucket and send path all
+accept them, but recording needs microphone permission and `core/legal.dart`
+promises users "no microphone or camera access beyond a photo you deliberately
+choose to upload". Changing that re-prompts every existing user for consent, because
+`termsVersion` is `lastUpdated`.
+
+### Play Store "What's new" (paste this)
+
+Covers **1.2.4 as well as 1.2.5**, since nobody was prompted to take 1.2.4.
+
+```
+• Titans Room: a public chat for every trader. Text, photos, sender names and admin tags.
+• Tapping a notification now opens the right screen instead of doing nothing.
+• New chart tools: rectangle, Fibonacci, arc and pivot points. Tap any candle for its OHLC.
+• Your chart timeframe and style are remembered between sessions.
+• Set your country and state in Settings.
+```
+
+---
+
 ## 1.2.3 (versionCode 47)
 
 Derivatives for everyone, timeframes that mean what they say, and drawing on the
