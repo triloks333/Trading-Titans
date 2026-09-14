@@ -1,3 +1,9 @@
+> **SUPERSEDED.** Everything this document lists as pending was completed in the
+> session that followed it: 9a and 9b are applied to production, the item 12
+> backfill has run, item F is committed, and items 11 and 17 are built. The current
+> state and the only remaining steps are in `docs/whats-new-1.2.4.md`. Kept for the
+> reasoning it records, not as a to-do list.
+
 # Trading Titans — session record, 13 Sep 2026 (session 2)
 
 Continues the 19-item work list. This session closed **3 items** (12, 9-client, E)
