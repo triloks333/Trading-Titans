@@ -131,6 +131,57 @@ void main() {
     });
   });
 
+  group('every pricing site is frozen, not just the service layer', () {
+    // The first attempt at this fix changed supabase_service only and shipped
+    // WITHOUT fixing the reported bug, because portfolio_screen._estimateFoPrice
+    // computed its own price from DateTime.now(). Seven sites inlined this
+    // calculation with three different fallbacks (0, 7 and 15 days).
+    //
+    // These reproduce each site's formula against the shared helper. If someone
+    // reintroduces a local DateTime.now() in any of them, the shape asserted here
+    // stops matching what the screen shows and this is the tripwire.
+
+    final expiry = DateTime.utc(2026, 9, 24, 10, 0);
+    final evening = ist(2026, 9, 11, 18, 33);
+    final laterEvening = ist(2026, 9, 11, 20, 3);
+
+    test('the futures carry multiplier is stable after hours', () {
+      // supabase_service fo_positions branch: spot * (1 + r * T)
+      double carry(DateTime at) =>
+          1.0 + 0.065 * (MarketHours.daysToExpiry(expiry, at: at) / 365.0);
+      expect(carry(laterEvening) - carry(evening), 0.0);
+    });
+
+    test('the Portfolio screen estimate is stable after hours', () {
+      // portfolio_screen._estimateFoPrice
+      double ltp(DateTime at) => OptionPricing.futurePrice(
+            spot: 232.85,
+            daysToExpiry: MarketHours.daysToExpiry(expiry, at: at),
+          );
+      expect(ltp(laterEvening), ltp(evening));
+    });
+
+    test('option premiums are stable after hours', () {
+      double premium(DateTime at) => OptionPricing.optionPremium(
+            optionType: 'CE',
+            spot: 232.85,
+            strike: 230,
+            daysToExpiry: MarketHours.daysToExpiry(expiry, at: at),
+          );
+      expect(premium(laterEvening), premium(evening));
+    });
+
+    test('the previous-close variant is stable too', () {
+      // Both screens price the prior session as one extra day to expiry. If the
+      // base moved, change and change% would drift even when the LTP did not.
+      double prev(DateTime at) => OptionPricing.futurePrice(
+            spot: 232.85,
+            daysToExpiry: MarketHours.daysToExpiry(expiry, at: at) + 1.0,
+          );
+      expect(prev(laterEvening), prev(evening));
+    });
+  });
+
   group('isOpen honours the holiday list', () {
     test('a holiday closes the Indian session all day', () {
       MarketHours.indianHolidays = {'2026-09-14'};

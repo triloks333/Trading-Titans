@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import '../../core/app_constants.dart';
+import '../../core/market_hours.dart';
 import '../../core/money.dart';
 import '../../core/option_pricing.dart';
 import '../../models/portfolio.dart';
@@ -200,7 +201,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     if (spotQuote == null || spotQuote.price <= 0) return pos.avgEntryPrice;
     final spotPrice = spotQuote.price;
 
-    final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+    // Valued at the session close while the market is shut, not at the wall clock.
+    // THIS is the line behind "P&L keeps increasing after hours": carry and theta
+    // both shrink as expiry approaches, so a live clock repriced the position every
+    // hour with nothing trading. This screen had its OWN copy of the calculation, so
+    // fixing supabase_service alone did not fix what the Portfolio tab displayed.
+    final daysLeft = MarketHours.daysToExpiry(pos.expiry);
     if (pos.instrumentType == 'FUTURE') {
       return OptionPricing.futurePrice(spot: spotPrice, daysToExpiry: daysLeft);
     } else {
@@ -234,7 +240,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     final spotPrevClose = spotQuote.previousClose;
 
     // Price the prior session by treating it as one extra day to expiry.
-    final daysLeft = pos.expiry.difference(DateTime.now()).inHours / 24.0;
+    final daysLeft = MarketHours.daysToExpiry(pos.expiry);
     if (pos.instrumentType == 'FUTURE') {
       return OptionPricing.futurePrice(spot: spotPrevClose, daysToExpiry: daysLeft + 1.0);
     } else {

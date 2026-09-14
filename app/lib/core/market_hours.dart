@@ -148,10 +148,12 @@ class MarketHours {
   /// Days from [market]'s valuation time until [expiry], for the synthetic
   /// derivative pricers. Never negative.
   ///
-  /// One helper so the five places that used to inline
-  /// `expiry.difference(DateTime.now()).inHours / 24.0` cannot drift apart again —
-  /// they already had two different fallbacks (15 days and 7 days) for a missing
-  /// expiry.
+  /// One helper because this calculation was inlined in SEVEN places across the
+  /// service layer, the Portfolio screen and the option-chain builder, with three
+  /// different fallbacks for a missing expiry (0, 7 and 15 days). Fixing only the
+  /// service layer left the Portfolio tab still drifting, because that screen
+  /// computed its own price — which is exactly how the first attempt at this fix
+  /// shipped without fixing the reported bug.
   static double daysToExpiry(
     DateTime? expiry, {
     String market = 'stock',

@@ -976,13 +976,15 @@ class SupabaseService {
         final optType = activeRow?['option_type'] as String? ?? 'CE';
         final expiryStr = activeRow?['expiry_date'] as String?;
 
-        double daysLeft = 0.0;
-        if (expiryStr != null) {
-          try {
-            final expiry = DateTime.parse(expiryStr);
-            daysLeft = expiry.difference(now).inHours / 24.0;
-          } catch (_) {}
-        }
+        // Option positions decay against the VALUATION time, not the wall clock —
+        // same fix as the futures branch below. Theta is the option equivalent of
+        // cost of carry: with a live clock a closed market still bled premium every
+        // hour, moving P&L with nothing trading.
+        final daysLeft = MarketHours.daysToExpiry(
+          expiryStr != null ? DateTime.tryParse(expiryStr) : null,
+          market: market,
+          fallback: 0.0,
+        );
         final T = math.max(0.0001, daysLeft) / 365.0;
         currentPrice = _blackScholes(optType, spotPrice, strikePrice, T);
 
@@ -1409,7 +1411,9 @@ class SupabaseService {
     for (final entry in byExpiry.entries) {
       final expiry = entry.key;
       final expDate = DateTime.tryParse(expiry) ?? now;
-      final daysLeft = expDate.difference(now).inHours / 24.0;
+      // Chain premiums hold still outside market hours too, so the chain a user
+      // reads in the evening matches the one they saw at the close.
+      final daysLeft = MarketHours.daysToExpiry(expDate);
       final strikes = <Map<String, dynamic>>[];
       for (final row in entry.value) {
         final strike = (row['strike_price'] as num).toDouble();
@@ -1508,7 +1512,7 @@ class SupabaseService {
       final expiryDt = DateTime(lastThu.year, lastThu.month, lastThu.day, 15, 30);
       monthOffset++;
       if (expiryDt.isBefore(now)) continue;
-      final daysLeft = expiryDt.difference(now).inHours / 24.0;
+      final daysLeft = MarketHours.daysToExpiry(expiryDt);
       final fut = OptionPricing.futurePrice(spot: spot, daysToExpiry: daysLeft);
       final futRounded = (fut * 100).round() / 100;
       final futChange = (change * (spot > 0 ? fut / spot : 1.0) * 100).round() / 100;
