@@ -1012,17 +1012,24 @@ class SupabaseService {
         final expiryStr = activeRow?['expiry_date'] as String?;
 
         // Calculate carry cost: futures ≈ spot × (1 + r × T)
+        //
+        // T comes from MarketHours.daysToExpiry, which values a closed market at
+        // its last session close rather than at the live clock. THIS is the line
+        // that made a short F&O position's P&L climb every hour through the
+        // evening: carry shrinks as expiry approaches, so with a live clock the
+        // futures price fell all night and a short gained about ₹4 an hour per
+        // 2250-unit lot, with no trade and no price change behind it.
         double carryMultiplier = 1.0;
         if (expiryStr != null && expiryStr != 'PERPETUAL') {
-          try {
-            final expiry = DateTime.parse(expiryStr);
-            final now = DateTime.now();
-            final daysLeft = expiry.difference(now).inHours / 24.0;
-            if (daysLeft > 0) {
-              // Risk-free rate ~6.5% annualized
-              carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
-            }
-          } catch (_) {}
+          final daysLeft = MarketHours.daysToExpiry(
+            DateTime.tryParse(expiryStr),
+            market: market,
+            fallback: 0.0,
+          );
+          if (daysLeft > 0) {
+            // Risk-free rate ~6.5% annualized
+            carryMultiplier = 1.0 + 0.065 * (daysLeft / 365.0);
+          }
         }
 
         currentPrice = spotPrice * carryMultiplier;
@@ -1280,11 +1287,14 @@ class SupabaseService {
         // Use the contract's ACTUAL days-to-expiry so the LTP matches the
         // portfolio screen and the fill engine (previously hardcoded 15 days,
         // which made the same future show a different price across screens).
-        double daysToExpiry = 15.0;
-        final fExpiry = expiryDate != null ? DateTime.tryParse(expiryDate) : null;
-        if (fExpiry != null) {
-          daysToExpiry = fExpiry.difference(DateTime.now()).inHours / 24.0;
-        }
+        // Valued at the session close when the market is shut, NOT at the live
+        // clock. Cost of carry shrinks as expiry approaches, so a live clock made
+        // this price — and every F&O position's P&L — drift overnight, at weekends
+        // and on holidays with nothing trading behind it.
+        final daysToExpiry = MarketHours.daysToExpiry(
+          expiryDate != null ? DateTime.tryParse(expiryDate) : null,
+          fallback: 15.0,
+        );
         price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: daysToExpiry);
         previousClose = OptionPricing.futurePrice(spot: spotQuote.previousClose, daysToExpiry: daysToExpiry + 1.0);
       } else {
@@ -1293,13 +1303,13 @@ class SupabaseService {
         final strikePrice = double.tryParse(parts[4]) ?? 0.0;
         final optType = parts.last;
 
-        double daysToExpiry = 7.0;
-        final expiry = DateTime.tryParse(
-          '${parts[1]}-${parts[2].padLeft(2, '0')}-${parts[3].padLeft(2, '0')}',
+        // Same reason as the futures branch above: theta decays against the
+        // valuation time, not the wall clock, so a closed market holds its premium.
+        final daysToExpiry = MarketHours.daysToExpiry(
+          DateTime.tryParse(
+            '${parts[1]}-${parts[2].padLeft(2, '0')}-${parts[3].padLeft(2, '0')}',
+          ),
         );
-        if (expiry != null) {
-          daysToExpiry = expiry.difference(DateTime.now()).inHours / 24.0;
-        }
 
         price = OptionPricing.optionPremium(
           optionType: optType,
@@ -4183,6 +4193,37 @@ class SupabaseService {
     } catch (e) {
       debugPrint('uploadBlogImage failed: $e');
       return null;
+    }
+  }
+
+  /// Loads the exchange holiday calendar into [MarketHours].
+  ///
+  /// Read from the server rather than compiled in, so a holiday can be declared
+  /// with no app release — which is the whole reason `market_holidays` is a table.
+  /// Only future and recent dates are fetched; the list is small and this runs on
+  /// every foreground alongside the flags refresh.
+  ///
+  /// On failure the existing set is left alone rather than cleared: an offline
+  /// launch should keep yesterday's answer, not silently reopen a closed market.
+  Future<void> refreshMarketHolidays() async {
+    try {
+      final rows = await client
+          .from('market_holidays')
+          .select('holiday_date')
+          .eq('market', 'stock')
+          .gte('holiday_date',
+              DateTime.now().subtract(const Duration(days: 7)).toIso8601String())
+          .limit(400);
+      final dates = (rows as List)
+          .map((r) => '${(r as Map)['holiday_date']}')
+          // The column is a date, but PostgREST can hand it back with a time
+          // component depending on the driver, so keep only YYYY-MM-DD.
+          .map((s) => s.length >= 10 ? s.substring(0, 10) : s)
+          .where((s) => s.length == 10)
+          .toSet();
+      MarketHours.indianHolidays = dates;
+    } catch (e) {
+      debugPrint('refreshMarketHolidays failed: $e');
     }
   }
 

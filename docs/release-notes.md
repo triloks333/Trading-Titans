@@ -11,6 +11,64 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.6 (versionCode 50)
+
+F&O positions stop drifting while the market is shut.
+
+**REPORTED AS** an F&O position's profit growing hour by hour through the evening,
+and through an exchange holiday, with the LTP visibly frozen at ₹232.88 in two
+screenshots ninety minutes apart. Deployed capital and Total P&L both moved; Day P&L
+did not.
+
+**The cause was time, not price.** A future is priced `spot × (1 + r × T)` and an
+option by Black-Scholes, and both were evaluated against `DateTime.now()`. T shrinks
+continuously, so the synthetic price drifted with the clock even with the spot frozen
+and nothing trading. `.inHours` truncation made it step once an hour rather than
+smoothly. Per unit the drift is a fraction of a paisa, which is exactly why the LTP
+looked static — but a 2250-unit ONGC lot turned it into about ₹4 an hour on the P&L
+line, and because the position was short, a falling futures price displayed as
+growing profit. The observed ₹7 over ninety minutes is two hourly steps.
+
+This was never holiday-specific. It happened every evening, every weekend and after
+every close, for as long as that code has shipped. The market being closed is simply
+what made it visible.
+
+**The fix** is `MarketHours.valuationTime()`: derivatives are now valued at the live
+clock while a session is open, and at the most recent session CLOSE once it is not.
+So the same position values identically at 18:33 and 20:03, overnight, at weekends
+and across a holiday — while a live session still reprices normally, which the tests
+assert in both directions. The five call sites that each inlined
+`expiry.difference(DateTime.now()).inHours / 24.0`, with two different fallbacks, now
+share one helper.
+
+**The app also honours exchange holidays now.** `MarketHours` reads the
+`market_holidays` table on every foreground, so the Indian session can be closed
+server-side with no further release and the badge stops claiming "Market Open" on a
+day nothing can trade. An empty list degrades to the old weekends-only behaviour, so
+an offline launch never invents a closure.
+
+Server-side, already live and independent of this build: a trigger on `orders`
+declines the execution engine's claim on a holiday, so nothing fills even on 1.2.4
+and 1.2.5, and a second trigger freezes Indian quotes so prices stop moving.
+
+Note for the record: 1.2.4 and 1.2.5 both shipped without `app_config.latest_version`
+being raised, so no user was ever prompted to take either. The copy below therefore
+covers 1.2.4, 1.2.5 and 1.2.6 together.
+
+### Play Store "What's new" (paste this)
+
+Covers **1.2.4, 1.2.5 and 1.2.6**, since nobody was prompted to take the first two.
+
+```
+• Fixed F&O profit and loss drifting on its own while the market was closed.
+• Indian market holidays are now respected — no trades or price moves on a closed day.
+• Titans Room: a public chat for every trader. Text, photos, sender names and admin tags.
+• Tapping a notification now opens the right screen instead of doing nothing.
+• New chart tools: rectangle, Fibonacci, arc and pivot points. Tap any candle for its OHLC.
+```
+
+---
+
 ## 1.2.5 (versionCode 49)
 
 The public chat room, and the sender names it shipped without.

@@ -41,12 +41,32 @@ class MarketHours {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  /// Whether the given market is currently accepting fills.
+  // ── Exchange holidays ──────────────────────────────────────────────────────
+
+  /// IST calendar days (YYYY-MM-DD) on which NSE and BSE do not trade.
   ///
-  /// ponytail: weekends only, no exchange holiday calendar for either market.
-  /// On Diwali or Thanksgiving this reports open and a market order fills at the
-  /// last published price. Upgrade path: a `market_holidays` table checked here
-  /// and in the matching edge-function helpers.
+  /// Loaded from the `market_holidays` table on each foreground, so a holiday can
+  /// be added server-side with no app release. Empty until that first load
+  /// completes, which degrades to the old weekends-only behaviour rather than
+  /// guessing a calendar.
+  ///
+  /// Indian equities and F&O only. Crypto never closes and US equities have their
+  /// own window, so nothing here can shut either of them.
+  static Set<String> indianHolidays = const {};
+
+  /// The IST calendar day of [at] as a YYYY-MM-DD key, matching the
+  /// `market_holidays.holiday_date` column.
+  static String istDateKey([DateTime? at]) {
+    final ist = _ist(at);
+    final m = ist.month.toString().padLeft(2, '0');
+    final d = ist.day.toString().padLeft(2, '0');
+    return '${ist.year}-$m-$d';
+  }
+
+  static bool isIndianHoliday([DateTime? at]) =>
+      indianHolidays.contains(istDateKey(at));
+
+  /// Whether the given market is currently accepting fills.
   static bool isOpen(String market, {DateTime? at}) {
     if (market == 'crypto') return true;
 
@@ -59,12 +79,89 @@ class MarketHours {
 
     final now = _ist(at);
     if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) return false;
+    // Checked before the clock so a holiday closes the whole day. The server
+    // enforces the same thing independently: a BEFORE UPDATE trigger on `orders`
+    // declines the execution engine's claim, so nothing fills even on a build that
+    // predates this check.
+    if (isIndianHoliday(at)) return false;
     final minutes = now.hour * 60 + now.minute;
     // 555 = 09:15, 930 = 15:30. This read `< 915` (15:15) and so closed the
     // session a quarter of an hour early, disagreeing with both `sessionLabel`
     // below and the market-status endpoint, which have always said 3:30 PM.
     // The server-side copies are fixed in _shared/market_hours.ts.
     return minutes >= 555 && minutes < 930;
+  }
+
+  /// The instant a market's prices should be valued at.
+  ///
+  /// Now while the session is open; the most recent session CLOSE once it is not.
+  ///
+  /// THE BUG THIS FIXES. Derivative prices in this app are synthetic — a future is
+  /// spot plus cost of carry, an option is Black-Scholes — and both depend on time
+  /// to expiry. Valuing them against a live clock meant every F&O position's P&L
+  /// kept moving overnight, at weekends and on exchange holidays, with no trade and
+  /// no price change behind it. `.inHours` truncation made it step once an hour, so
+  /// a short 2250-unit ONGC lot gained about ₹4 every hour while the market was
+  /// shut. The LTP looked frozen because the per-unit drift is a fraction of a
+  /// paisa; multiplied by the lot size it became rupees on the P&L line.
+  ///
+  /// Crypto genuinely trades around the clock, so this is always now for it.
+  static DateTime valuationTime(String market, {DateTime? at}) {
+    final now = at ?? DateTime.now();
+    if (market == 'crypto' || isOpen(market, at: now)) return now;
+    return market == usStock ? _lastUsClose(now) : _lastIndianClose(now);
+  }
+
+  /// 15:30 IST on the most recent Indian trading day at or before [now].
+  static DateTime _lastIndianClose(DateTime now) {
+    final ist = _ist(now);
+    // Start from today's close, then step back a day at a time until the day both
+    // is a weekday and is not a holiday. Bounded at 10 days so a mis-seeded
+    // holiday list can never spin.
+    var day = DateTime.utc(ist.year, ist.month, ist.day, 15, 30);
+    if (ist.isBefore(day)) day = day.subtract(const Duration(days: 1));
+    for (var i = 0; i < 10; i++) {
+      final asUtc = day.subtract(const Duration(hours: 5, minutes: 30));
+      final isWeekend =
+          day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
+      if (!isWeekend && !isIndianHoliday(asUtc)) return asUtc;
+      day = day.subtract(const Duration(days: 1));
+    }
+    return day.subtract(const Duration(hours: 5, minutes: 30));
+  }
+
+  /// 16:00 US Eastern on the most recent US trading day at or before [now].
+  static DateTime _lastUsClose(DateTime now) {
+    final et = usEastern(now);
+    var day = DateTime.utc(et.year, et.month, et.day, 16);
+    if (et.isBefore(day)) day = day.subtract(const Duration(days: 1));
+    for (var i = 0; i < 10; i++) {
+      if (day.weekday != DateTime.saturday && day.weekday != DateTime.sunday) {
+        // usEastern() shifts UTC -> ET, so invert it to get back to UTC.
+        return day.add(Duration(hours: isUsDst(now) ? 4 : 5));
+      }
+      day = day.subtract(const Duration(days: 1));
+    }
+    return day;
+  }
+
+  /// Days from [market]'s valuation time until [expiry], for the synthetic
+  /// derivative pricers. Never negative.
+  ///
+  /// One helper so the five places that used to inline
+  /// `expiry.difference(DateTime.now()).inHours / 24.0` cannot drift apart again —
+  /// they already had two different fallbacks (15 days and 7 days) for a missing
+  /// expiry.
+  static double daysToExpiry(
+    DateTime? expiry, {
+    String market = 'stock',
+    double fallback = 7.0,
+    DateTime? at,
+  }) {
+    if (expiry == null) return fallback;
+    final from = valuationTime(market, at: at);
+    final days = expiry.difference(from).inMinutes / 1440.0;
+    return days <= 0 ? 0.0 : days;
   }
 
   static String statusText(String market, {DateTime? at}) {

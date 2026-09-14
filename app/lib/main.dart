@@ -41,6 +41,10 @@ Future<void> main() async {
 /// `touch_login_streak()` is a no-op once it has already counted today.
 Future<void> _refreshSessionState() async {
   await AppFlagsService.instance.refresh();
+  // Before anything prices a derivative: an exchange holiday closes the Indian
+  // session, and a closed session is what stops synthetic F&O prices drifting
+  // against the wall clock.
+  await SupabaseService().refreshMarketHolidays();
   await CurrencyService.instance.refresh();
   // The plan drives the badge and the paid-feature gates. Refreshed here so a
   // renewal or a cancellation that happened on the web is picked up on the next
