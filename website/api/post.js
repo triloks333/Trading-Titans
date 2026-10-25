@@ -14,9 +14,14 @@
 // function asked for one. Using the service-role key here would remove that
 // protection and put the only safeguard in this file's own WHERE clause.
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  'https://bftvimnhpoiuoyryyiff.supabase.co';
 const SUPABASE_ANON =
-  process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak';
 
 const SITE = 'https://thetradingtitans.com';
 
@@ -141,8 +146,8 @@ function inline(text) {
 }
 
 function page({ post, html }) {
-  const title = `${post.title} — Trading Titans`;
-  const description = post.excerpt || `${post.title} on the Trading Titans blog.`;
+  const cleanExcerpt = (post.excerpt || '').replace(/^\[market:[^\]]+\]\s*/i, '');
+  const description = cleanExcerpt || `${post.title} on the Trading Titans blog.`;
   const url = `${SITE}/blog/${post.slug}`;
   const published = post.published_at
     ? new Date(post.published_at).toISOString()
@@ -153,7 +158,7 @@ function page({ post, html }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)}</title>
+<title>${esc(post.title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="article">

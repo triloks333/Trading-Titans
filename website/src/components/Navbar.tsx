@@ -4,12 +4,21 @@ import { Menu, X } from 'lucide-react';
 import { PLAY_STORE_URL } from '../lib/config';
 
 const LINKS = [
-  { label: 'Features', id: 'features' },
-  { label: 'How it works', id: 'how' },
-  { label: 'Rewards', id: 'rewards' },
+  { label: 'Features', id: 'features', href: '/#features' },
+  { label: 'How it works', id: 'how', href: '/#how' },
+  { label: 'About', id: 'about', href: '/about' },
+  { label: 'Contact', id: 'contact', href: '/contact' },
 ];
 
-const scrollTo = (id: string) => {
+const handleNavClick = (id: string, href?: string) => {
+  if (href && (href.startsWith('/about') || href.startsWith('/contact'))) {
+    window.location.href = href;
+    return;
+  }
+  if (window.location.pathname !== '/') {
+    window.location.href = href || '/';
+    return;
+  }
   if (id === 'top') {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
@@ -43,7 +52,7 @@ export const Navbar: React.FC = () => {
     <nav className="fixed top-0 left-0 right-0 z-[100] flex items-center justify-between p-4 sm:p-5">
       {/* Left: logo + wordmark */}
       <button
-        onClick={() => { scrollTo('top'); setActive('home'); }}
+        onClick={() => { handleNavClick('top'); setActive('home'); }}
         className="flex items-center gap-2.5 cursor-pointer select-none"
       >
         <img src="/logo.svg" className="w-7 h-7 rounded-md border border-white/15" alt="Trading Titans" />
@@ -55,8 +64,8 @@ export const Navbar: React.FC = () => {
         {LINKS.map((l) => (
           <button
             key={l.id}
-            onClick={() => { scrollTo(l.id); setActive(l.id); }}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            onClick={() => { handleNavClick(l.id, l.href); setActive(l.id); }}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
               active === l.id ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/20 hover:text-white'
             }`}
           >
@@ -104,7 +113,7 @@ export const Navbar: React.FC = () => {
               {LINKS.map((l) => (
                 <button
                   key={l.id}
-                  onClick={() => { scrollTo(l.id); setIsOpen(false); }}
+                  onClick={() => { handleNavClick(l.id, l.href); setIsOpen(false); }}
                   className="text-left px-4 py-2.5 rounded-xl text-sm font-medium text-white/85 hover:bg-white/10"
                 >
                   {l.label}

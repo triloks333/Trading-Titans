@@ -8,9 +8,14 @@
 // Anon key deliberately, so the published-only RLS policy is what gates the list
 // rather than this file's own query.
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_URL =
+  process.env.VITE_SUPABASE_URL ||
+  process.env.SUPABASE_URL ||
+  'https://bftvimnhpoiuoyryyiff.supabase.co';
 const SUPABASE_ANON =
-  process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJmdHZpbW5ocG9pdW95cnl5aWZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NzU1NDQsImV4cCI6MjA5NTQ1MTU0NH0.TJHsgNbsolYMx50EuQQmdgLMaznGdV11e8pVMQaQ2ak';
 
 const SITE = 'https://thetradingtitans.com';
 
@@ -28,6 +33,7 @@ function card(post) {
     ? new Date(post.published_at).toLocaleDateString('en-IN',
         { day: 'numeric', month: 'long', year: 'numeric' })
     : '';
+  const cleanExcerpt = (post.excerpt || '').replace(/^\[market:[^\]]+\]\s*/i, '');
   return `<li class="card">
 ${post.cover_url
       ? `<a href="/blog/${esc(post.slug)}"><img src="${esc(post.cover_url)}" alt="" loading="lazy"></a>`
@@ -35,7 +41,7 @@ ${post.cover_url
 <div>
 <h2><a href="/blog/${esc(post.slug)}">${esc(post.title)}</a></h2>
 <div class="meta">${esc(date)}</div>
-${post.excerpt ? `<p>${esc(post.excerpt)}</p>` : ''}
+${cleanExcerpt ? `<p>${esc(cleanExcerpt)}</p>` : ''}
 </div>
 </li>`;
 }

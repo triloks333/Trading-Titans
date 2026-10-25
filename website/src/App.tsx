@@ -13,12 +13,34 @@ import { PreregTermsPage } from './components/PreregTermsPage';
 import { PrivacyPage } from './components/PrivacyPage';
 import { RefundPage } from './components/RefundPage';
 import { DeleteAccountPage } from './components/DeleteAccountPage';
+import { AboutPage } from './components/AboutPage';
+import { ContactPage } from './components/ContactPage';
+import { BlogIndexPage } from './components/BlogIndexPage';
+import { BlogPostPage } from './components/BlogPostPage';
 
-type Route = 'home' | 'topup' | 'confirm' | 'terms' | 'prereg-terms' | 'privacy' | 'refund' | 'delete-account';
+type Route =
+  | 'home'
+  | 'topup'
+  | 'confirm'
+  | 'terms'
+  | 'prereg-terms'
+  | 'privacy'
+  | 'refund'
+  | 'delete-account'
+  | 'about'
+  | 'contact'
+  | 'blog-index'
+  | 'blog-post';
 
 function resolveRoute(path: string): Route {
   const p = path.replace(/\/+$/, '') || '/';
+  if (p === '/blog') return 'blog-index';
+  if (p.startsWith('/blog/')) return 'blog-post';
   switch (p) {
+    case '/about':
+    case '/about-us': return 'about';
+    case '/contact':
+    case '/contact-us': return 'contact';
     case '/topup': return 'topup';
     case '/confirm': return 'confirm';
     case '/terms': return 'terms';
@@ -39,6 +61,8 @@ function App() {
     setRoute(resolveRoute(window.location.pathname));
   }, []);
 
+  if (route === 'about') return <AboutPage />;
+  if (route === 'contact') return <ContactPage />;
   if (route === 'confirm') return <ConfirmPage />;
   if (route === 'topup') return <TopupPage />;
   if (route === 'terms') return <TermsPage />;
@@ -46,6 +70,8 @@ function App() {
   if (route === 'privacy') return <PrivacyPage />;
   if (route === 'refund') return <RefundPage />;
   if (route === 'delete-account') return <DeleteAccountPage />;
+  if (route === 'blog-index') return <BlogIndexPage />;
+  if (route === 'blog-post') return <BlogPostPage />;
 
   return (
     <div className="min-h-screen bg-black tracking-[-0.02em] selection:bg-[#e8702a] selection:text-white" style={{ fontFamily: "'Inter', sans-serif" }}>

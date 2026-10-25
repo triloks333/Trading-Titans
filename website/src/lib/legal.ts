@@ -36,15 +36,16 @@ export const TERMS: LegalDoc = {
   lastUpdated: LAST_UPDATED,
   noticeTitle: 'IMPORTANT NOTICE',
   notice:
-    'Trading Titans is a free virtual paper-trading simulation for educational purposes only.\n\n' +
+    'Trading Titans is an educational virtual paper-trading simulation operated by KashivWealth Management LLP.\n\n' +
     'We do not facilitate real-world trading, broker connectivity, real financial transactions or payouts, and we do not provide professional financial advice. Every portfolio, balance and profit figure in the app is fictional.',
   intro:
-    'By accessing, downloading, or using the Trading Titans mobile application or website (together, the "Platform"), you agree to these Terms & Conditions.',
+    'Trading Titans ("Platform", "we", "us", or "our") is a brand owned and operated by KashivWealth Management LLP, a Limited Liability Partnership incorporated in India. By accessing, downloading, or using the Platform, you agree to these Terms & Conditions.',
   sections: [
     {
-      heading: '1. Agreement to Terms',
+      heading: '1. Agreement to Terms and Legal Entity',
       paragraphs: [
-        'By accessing, downloading, or using the Trading Titans mobile application or website (together, the "Platform"), you agree to be bound by these Terms & Conditions. If you do not agree, you must stop using the Platform and uninstall the app.',
+        'These Terms & Conditions constitute a legally binding agreement between you and KashivWealth Management LLP ("Company", "we", "us", or "our") concerning your access to and use of Trading Titans (mobile applications, website, and associated simulation services).',
+        'If you do not agree to all of these Terms & Conditions, you are expressly prohibited from using the Platform and you must discontinue use immediately.',
       ],
     },
     {
@@ -112,10 +113,16 @@ export const PRIVACY: LegalDoc = {
   title: 'Privacy Policy',
   lastUpdated: LAST_UPDATED,
   intro:
-    'Trading Titans is a free virtual trading simulator. This policy explains what we collect, why, and what you can do about it. We do not sell your data, and we do not collect payment information at all.',
+    'Trading Titans is an educational market simulation service operated by KashivWealth Management LLP ("Company", "we", "us", or "our"). This privacy policy outlines how we handle and protect user information across our applications and websites. We do not sell user data.',
   sections: [
     {
-      heading: '1. Information We Collect',
+      heading: '1. Data Controller and Entity Details',
+      paragraphs: [
+        'KashivWealth Management LLP is the data controller responsible for personal information collected through Trading Titans. If you have questions regarding privacy, you can reach our data compliance team at support@thetradingtitans.com.',
+      ],
+    },
+    {
+      heading: '2. Information We Collect',
       paragraphs: ['When you create an account and use the app, we may collect:'],
       bullets: [
         'Account Information: your email address, display name, and a secure hash of your password. If you sign in with Google, we receive your email address and basic profile details from Google, not your Google password.',

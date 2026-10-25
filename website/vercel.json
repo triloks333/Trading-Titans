@@ -1,5 +1,4 @@
 {
-  "$comment": "ORDER MATTERS in rewrites: Vercel takes the first match. The two /blog rules must stay ABOVE the /(.*) catch-all. Moved below it, /blog would resolve to index.html and the posts would silently stop being server-rendered, leaving crawlers with an empty SPA shell. See website/api/post.js.",
   "rewrites": [
     {
       "source": "/app",
