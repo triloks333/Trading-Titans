@@ -71,8 +71,8 @@ export const ContactPage: React.FC = () => {
                   </div>
                   <div>
                     <span className="block text-xs uppercase tracking-wider text-white/50 font-semibold mb-0.5">Operated By</span>
-                    <p className="text-sm font-semibold text-white">KashivWealth Management LLP</p>
-                    <p className="text-xs text-white/50 mt-1">Registered Entity in India under the Limited Liability Partnership Act.</p>
+                    <p className="text-sm font-semibold text-white">Kashivwealth Management LLP</p>
+                    <p className="text-xs text-white/50 mt-1">Trading Titans is a software product owned &amp; operated by Kashivwealth Management LLP, incorporated under the LLP Act in India.</p>
                   </div>
                 </div>
               </div>

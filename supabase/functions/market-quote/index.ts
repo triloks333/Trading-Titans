@@ -3,8 +3,17 @@ import {
   US_MARKET,
   fromUsYahooSymbol,
   getUsdInrRate,
+  getPkrInrRate,
+  getEurInrRate,
   toUsYahooSymbol,
 } from "../_shared/us_market.ts";
+import {
+  parseDerivativeSymbol,
+  blackScholes,
+  calculateFuturePrice,
+  getDaysToExpiry,
+  ParsedDerivative,
+} from "../_shared/fo_pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,11 +112,30 @@ async function handleRequest(req: Request): Promise<Response> {
     // FX needs no symbol — there is only one pair — so answer before the
     // symbol guard below.
     if (market === "fx") {
-      const rate = await getUsdInrRate();
+      const symUpper = (rawSymbol || "").toUpperCase();
+      let rate = 0;
+      let sym = "USDINR";
+      let yfSym = "USDINR=X";
+      let name = "US Dollar / Indian Rupee";
+
+      if (symUpper.includes("EUR")) {
+        rate = await getEurInrRate();
+        sym = "EURINR";
+        yfSym = "EURINR=X";
+        name = "Euro / Indian Rupee";
+      } else if (symUpper.includes("PKR")) {
+        rate = await getPkrInrRate();
+        sym = "PKRINR";
+        yfSym = "PKRINR=X";
+        name = "Pakistani Rupee / Indian Rupee";
+      } else {
+        rate = await getUsdInrRate();
+      }
+
       return json({
-        symbol: "USDINR",
-        yf_symbol: "USDINR=X",
-        name: "US Dollar / Indian Rupee",
+        symbol: sym,
+        yf_symbol: yfSym,
+        name: name,
         price: round(rate, 4),
         previous_close: round(rate, 4),
         change: 0,
@@ -127,12 +155,20 @@ async function handleRequest(req: Request): Promise<Response> {
     const errors: Record<string, string> = {};
     let quote: Quote | null = null;
 
+    const derivative = market === "stock" ? (parseDerivativeSymbol(rawSymbol) ?? parseDerivativeSymbol(symbol)) : null;
+
     if (market === "crypto") {
       quote = await attempt(() => fetchCoinDcxQuote(symbol), errors, "coindcx");
       quote ??= await attempt(() => fetchBinanceQuote(symbol), errors, "binance");
       quote ??= await attempt(() => fetchCoinGeckoQuote(symbol), errors, "coingecko");
     } else if (market === US_MARKET) {
       quote = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
+    } else if (market === "pakistan_stock") {
+      quote = await attempt(() => fetchPakistanStockQuote(symbol), errors, "yahoo");
+    } else if (market === "italy_stock") {
+      quote = await attempt(() => fetchItalyStockQuote(symbol), errors, "yahoo");
+    } else if (derivative) {
+      quote = await attempt(() => fetchDerivativeQuote(derivative, rawSymbol), errors, "synthetic_fo");
     } else {
       quote = await attempt(() => fetchYahooStockQuote(symbol), errors, "yahoo");
     }
@@ -163,6 +199,127 @@ async function attempt<T>(
     errors[provider] = errorMessage(err);
     return null;
   }
+}
+
+async function fetchCachedStockQuote(symbol: string): Promise<Quote | null> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+    const cleanSym = symbol.replace(/^\^/, "").replace(/\.(NS|BO)$/i, "");
+    const res = await fetch(
+      `${supabaseUrl}/rest/v1/quotes_cache?symbol=eq.${encodeURIComponent(cleanSym)}&market=eq.stock&limit=1`,
+      {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const r = rows[0];
+    const price = Number(r.price ?? 0);
+    if (price <= 0) return null;
+    return {
+      symbol: cleanSym,
+      yf_symbol: `${cleanSym}.NS`,
+      name: r.name ?? cleanSym,
+      price: round(price, 2),
+      previous_close: round(Number(r.previous_close ?? price), 2),
+      change: round(Number(r.change ?? 0), 2),
+      change_pct: round(Number(r.change_pct ?? 0), 2),
+      currency: "INR",
+      market: "stock",
+      source: "quotes_cache",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDerivativeQuote(d: ParsedDerivative, originalSymbol: string): Promise<Quote> {
+  let spotQuote: Quote | null = null;
+  try {
+    spotQuote = await fetchYahooStockQuote(d.underlying);
+  } catch (err) {
+    spotQuote = await fetchCachedStockQuote(d.underlying);
+    if (!spotQuote) throw err;
+  }
+  const spotPrice = spotQuote.price;
+  const spotPrevClose = spotQuote.previous_close || spotPrice;
+
+  if (d.type === "OPTION" && d.strike && d.optionType && d.expiry) {
+    const daysLeft = getDaysToExpiry(d.expiry);
+    const T = daysLeft / 365.0;
+    const T_prev = (daysLeft + 1.0) / 365.0;
+
+    const price = blackScholes(spotPrice, d.strike, T, d.optionType);
+    const prevClose = blackScholes(spotPrevClose, d.strike, T_prev, d.optionType);
+    const change = round(price - prevClose, 2);
+    const changePct = prevClose > 0 ? round((change / prevClose) * 100, 2) : 0;
+
+    let dayHigh = price;
+    let dayLow = price;
+    if (spotQuote.day_high && spotQuote.day_low) {
+      if (d.optionType === "CE") {
+        dayHigh = blackScholes(spotQuote.day_high, d.strike, T, "CE");
+        dayLow = blackScholes(spotQuote.day_low, d.strike, T, "CE");
+      } else {
+        dayHigh = blackScholes(spotQuote.day_low, d.strike, T, "PE");
+        dayLow = blackScholes(spotQuote.day_high, d.strike, T, "PE");
+      }
+    }
+
+    const cleanUnderlying = d.underlying.replace(/^\^/, "");
+    const cleanName = `${cleanUnderlying} ${d.expiry} ${d.strike} ${d.optionType}`;
+
+    return {
+      symbol: originalSymbol,
+      yf_symbol: originalSymbol,
+      name: cleanName,
+      price: round(price, 2),
+      previous_close: round(prevClose, 2),
+      change: round(change, 2),
+      change_pct: round(changePct, 2),
+      currency: "INR",
+      market: "stock",
+      source: "synthetic_fo",
+      day_low: optionalRound(dayLow, 2),
+      day_high: optionalRound(dayHigh, 2),
+      open: optionalRound(prevClose, 2),
+      volume: 25000,
+    };
+  } else if (d.type === "FUTURE") {
+    const daysLeft = d.expiry ? getDaysToExpiry(d.expiry) : 30;
+    const price = calculateFuturePrice(spotPrice, daysLeft);
+    const prevClose = calculateFuturePrice(spotPrevClose, daysLeft + 1);
+    const change = round(price - prevClose, 2);
+    const changePct = prevClose > 0 ? round((change / prevClose) * 100, 2) : 0;
+
+    const cleanUnderlying = d.underlying.replace(/^\^/, "");
+    const cleanName = `${cleanUnderlying} ${d.month ?? "FUT"} FUTURES`;
+
+    return {
+      symbol: originalSymbol,
+      yf_symbol: originalSymbol,
+      name: cleanName,
+      price: round(price, 2),
+      previous_close: round(prevClose, 2),
+      change: round(change, 2),
+      change_pct: round(changePct, 2),
+      currency: "INR",
+      market: "stock",
+      source: "synthetic_fo",
+      day_low: optionalRound(price * 0.985, 2),
+      day_high: optionalRound(price * 1.015, 2),
+      open: optionalRound(prevClose, 2),
+      volume: 50000,
+    };
+  }
+
+  throw new Error(`Unsupported derivative: ${originalSymbol}`);
 }
 
 /**
@@ -208,6 +365,76 @@ async function fetchUsStockQuote(symbol: string): Promise<Quote> {
     volume: optionalInt(summary.volume ?? meta.regularMarketVolume),
     // Indicative only. The binding rate is the one the engine records at fill.
     fx_rate: round(await getUsdInrRate(), 4),
+  };
+}
+
+async function fetchPakistanStockQuote(symbol: string): Promise<Quote> {
+  const yfSymbol = symbol.toUpperCase().endsWith(".KA") ? symbol.toUpperCase() : `${symbol.toUpperCase()}.KA`;
+  const chartUrl = `${YAHOO_CHART}/${encodeURIComponent(yfSymbol)}?range=2d&interval=1d`;
+  const chartRes = await fetch(chartUrl, { headers: { "User-Agent": USER_AGENT } });
+  if (!chartRes.ok) throw new Error(`Yahoo chart ${chartRes.status} for ${yfSymbol}`);
+  const chart = await chartRes.json();
+  const result = chart?.chart?.result?.[0];
+  const meta = result?.meta;
+  if (!meta) throw new Error(`No chart meta for ${yfSymbol}`);
+
+  const price = Number(meta.regularMarketPrice ?? 0);
+  if (!(price > 0)) throw new Error(`No price for ${yfSymbol}`);
+  const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? price);
+  const change = price - previousClose;
+  const cleanSymbol = symbol.toUpperCase().replace(/\.KA$/i, "");
+
+  return {
+    symbol: cleanSymbol,
+    yf_symbol: yfSymbol,
+    name: (meta.shortName as string | undefined) ?? meta.longName ?? cleanSymbol,
+    price: round(price, 2),
+    previous_close: round(previousClose, 2),
+    change: round(change, 2),
+    change_pct: round(previousClose ? (change / previousClose) * 100 : 0, 2),
+    currency: "PKR",
+    market: "pakistan_stock",
+    source: "yahoo",
+    day_low: optionalRound(meta.regularMarketDayLow, 2),
+    day_high: optionalRound(meta.regularMarketDayHigh, 2),
+    open: optionalRound(meta.regularMarketOpen, 2),
+    volume: optionalInt(meta.regularMarketVolume),
+    fx_rate: 0.342,
+  };
+}
+
+async function fetchItalyStockQuote(symbol: string): Promise<Quote> {
+  const yfSymbol = symbol.toUpperCase().endsWith(".MI") ? symbol.toUpperCase() : `${symbol.toUpperCase()}.MI`;
+  const chartUrl = `${YAHOO_CHART}/${encodeURIComponent(yfSymbol)}?range=2d&interval=1d`;
+  const chartRes = await fetch(chartUrl, { headers: { "User-Agent": USER_AGENT } });
+  if (!chartRes.ok) throw new Error(`Yahoo chart ${chartRes.status} for ${yfSymbol}`);
+  const chart = await chartRes.json();
+  const result = chart?.chart?.result?.[0];
+  const meta = result?.meta;
+  if (!meta) throw new Error(`No chart meta for ${yfSymbol}`);
+
+  const price = Number(meta.regularMarketPrice ?? 0);
+  if (!(price > 0)) throw new Error(`No price for ${yfSymbol}`);
+  const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? price);
+  const change = price - previousClose;
+  const cleanSymbol = symbol.toUpperCase().replace(/\.MI$/i, "");
+
+  return {
+    symbol: cleanSymbol,
+    yf_symbol: yfSymbol,
+    name: (meta.shortName as string | undefined) ?? meta.longName ?? cleanSymbol,
+    price: round(price, 2),
+    previous_close: round(previousClose, 2),
+    change: round(change, 2),
+    change_pct: round(previousClose ? (change / previousClose) * 100 : 0, 2),
+    currency: "EUR",
+    market: "italy_stock",
+    source: "yahoo",
+    day_low: optionalRound(meta.regularMarketDayLow, 2),
+    day_high: optionalRound(meta.regularMarketDayHigh, 2),
+    open: optionalRound(meta.regularMarketOpen, 2),
+    volume: optionalInt(meta.regularMarketVolume),
+    fx_rate: 106.34,
   };
 }
 

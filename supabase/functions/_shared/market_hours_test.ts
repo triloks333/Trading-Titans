@@ -34,3 +34,9 @@ Deno.test("the window constants are the NSE session", () => {
   assertEquals(IST_OPEN_MINUTES, 9 * 60 + 15);
   assertEquals(IST_CLOSE_MINUTES, 15 * 60 + 30);
 });
+
+Deno.test("closed on exchange holidays like Dussehra", () => {
+  // 2026-10-20 is a Tuesday (Dussehra), within session hours (11:00 AM IST)
+  assertEquals(isStockOpen(utcForIst(2026, 10, 20, 11, 0)), false);
+});
+

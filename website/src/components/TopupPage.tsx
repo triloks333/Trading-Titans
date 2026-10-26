@@ -5,35 +5,37 @@ import { PLAY_STORE_URL } from '../lib/config'
 /**
  * Public route: /topup
  *
- * This page used to sell virtual-cash packs through Razorpay (Starter Boost,
- * Titan Plus, Pro Launch). Trading Titans is now completely free and paid
- * surfaces are switched off in the app (`app_flags.monetization_enabled` is
- * false), so leaving a live checkout here would contradict the app, the Terms and
- * the store listing — and could take money for something that is free.
- *
- * The route is kept so older links do not 404. If monetisation ever returns, the
- * previous implementation is in git history.
+ * Details the available virtual demo cash packs and VIP subscriptions
+ * available in the Trading Titans educational simulator.
  */
 export const TopupPage: React.FC = () => (
   <NoticePage
-    title="Top-ups are no longer needed"
-    lead="Trading Titans is completely free. Demo cash is included, and there is nothing to purchase."
+    title="Virtual Top-Ups &amp; Plans"
+    lead="Trading Titans is an educational simulator operated by Kashivwealth Management LLP. Core simulation features and starting demo cash (₹1,100) are free."
     points={[
-      'The paid boost packs have been withdrawn. No payment is taken anywhere in the app or on this site.',
-      'Every account starts with virtual practice cash, and you can earn more by completing challenges, keeping a login streak or referring a friend.',
-      'All of it is demo cash: fictional, with zero real-world value, and not withdrawable.',
-      'If anyone asks you to pay for demo cash, it is not us. Please report it to our support email.',
+      'Boost Pack: ₹199 for an instant ₹1,00,000 non-expiring virtual demo cash grant.',
+      'Plus Pack: ₹599 for an instant ₹5,00,000 non-expiring virtual demo cash grant.',
+      'Max Pack: ₹999 for an instant ₹10,00,000 non-expiring virtual demo cash grant.',
+      'Pro Subscription: ₹149/mo (or ₹1,199/yr) with PRO badge, advanced analytics, and ₹50,000 monthly virtual demo stipend.',
+      'Titan Subscription: ₹799/mo (or ₹5,999/yr) with TITAN badge, 1-on-1 VIP Founder Mentorship, and ₹5,00,000 monthly virtual demo stipend.',
+      'Zero Real-World Value: All top-up packs provide fictional demo simulation currency only. Demo cash cannot be redeemed, withdrawn, or exchanged for real money under any circumstances.',
     ]}
   >
-    <p>
+    <div className="flex flex-wrap gap-4 pt-2">
+      <a
+        href="/app"
+        className="inline-block bg-[#2563eb] text-white font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shadow"
+      >
+        View Plans &amp; Top-Ups in Web App
+      </a>
       <a
         href={PLAY_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[#2563eb] hover:underline font-semibold"
+        className="inline-block bg-zinc-900 text-white font-semibold text-sm px-6 py-2.5 rounded-xl hover:bg-zinc-800 transition-colors border border-zinc-700"
       >
-        Download Trading Titans free on Google Play
+        Get the Android App
       </a>
-    </p>
+    </div>
   </NoticePage>
 )

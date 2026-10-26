@@ -285,6 +285,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             InstrumentChart(
               symbol: widget.symbol,
               market: widget.market,
+              livePrice: q.price,
             ),
             Positioned(
               top: 12,

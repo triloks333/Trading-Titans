@@ -38,12 +38,40 @@ export function istNow(at: Date = new Date()): Date {
   return new Date(at.getTime() + 5.5 * 3600 * 1000);
 }
 
+/// Known official NSE/BSE holidays for 2026.
+export const INDIAN_HOLIDAYS_2026 = new Set([
+  "2026-01-26", // Republic Day
+  "2026-03-03", // Holi
+  "2026-03-26", // Shri Ram Navami
+  "2026-03-31", // Shri Mahavir Jayanti
+  "2026-04-03", // Good Friday
+  "2026-04-14", // Dr. Baba Saheb Ambedkar Jayanti
+  "2026-05-01", // Maharashtra Day
+  "2026-05-28", // Bakri Id
+  "2026-06-26", // Muharram
+  "2026-09-14", // Ganesh Chaturthi
+  "2026-10-02", // Mahatma Gandhi Jayanti
+  "2026-10-20", // Dussehra (Vijayadashami)
+  "2026-11-10", // Diwali-Balipratipada
+  "2026-11-24", // Prakash Gurpurb Sri Guru Nanak Dev
+  "2026-12-25", // Christmas
+]);
+
+export function isIndianStockHoliday(at: Date = new Date()): boolean {
+  const ist = istNow(at);
+  const y = ist.getUTCFullYear();
+  const m = String(ist.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(ist.getUTCDate()).padStart(2, "0");
+  return INDIAN_HOLIDAYS_2026.has(`${y}-${m}-${d}`);
+}
+
 /// True during the Indian equity session: Mon-Fri, 09:15 (inclusive) to 15:30
-/// (exclusive) IST.
+/// (exclusive) IST, and not on an exchange trading holiday.
 export function isStockOpen(at: Date = new Date()): boolean {
   const ist = istNow(at);
   const day = ist.getUTCDay();
   if (day === 0 || day === 6) return false;
+  if (isIndianStockHoliday(at)) return false;
   const minutes = ist.getUTCHours() * 60 + ist.getUTCMinutes();
   return minutes >= IST_OPEN_MINUTES && minutes < IST_CLOSE_MINUTES;
 }

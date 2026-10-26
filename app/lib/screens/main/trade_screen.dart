@@ -13,6 +13,7 @@ import '../../widgets/market_nav_bar.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/currency_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TradeScreen extends StatefulWidget {
   const TradeScreen({super.key});
@@ -82,6 +83,28 @@ class _TradeScreenState extends State<TradeScreen> {
     {'symbol': 'NFLX', 'name': 'Netflix'},
   ];
 
+  final List<Map<String, String>> _popularPakistanStocks = [
+    {'symbol': 'OGDC.KA', 'name': 'Oil & Gas Development Company', 'display_symbol': 'OGDC'},
+    {'symbol': 'LUCK.KA', 'name': 'Lucky Cement Ltd', 'display_symbol': 'LUCK'},
+    {'symbol': 'MCB.KA', 'name': 'MCB Bank Ltd', 'display_symbol': 'MCB'},
+    {'symbol': 'SYS.KA', 'name': 'Systems Ltd', 'display_symbol': 'SYS'},
+    {'symbol': 'HBL.KA', 'name': 'Habib Bank Ltd', 'display_symbol': 'HBL'},
+    {'symbol': 'EFERT.KA', 'name': 'Engro Fertilizers Ltd', 'display_symbol': 'EFERT'},
+    {'symbol': 'HUBC.KA', 'name': 'Hub Power Company', 'display_symbol': 'HUBC'},
+    {'symbol': 'FFC.KA', 'name': 'Fauji Fertilizer Company', 'display_symbol': 'FFC'},
+  ];
+
+  final List<Map<String, String>> _popularItalyStocks = [
+    {'symbol': 'ENI.MI', 'name': 'Eni S.p.A.', 'display_symbol': 'ENI'},
+    {'symbol': 'RACE.MI', 'name': 'Ferrari N.V.', 'display_symbol': 'RACE'},
+    {'symbol': 'ISP.MI', 'name': 'Intesa Sanpaolo', 'display_symbol': 'ISP'},
+    {'symbol': 'UCG.MI', 'name': 'UniCredit S.p.A.', 'display_symbol': 'UCG'},
+    {'symbol': 'STLAM.MI', 'name': 'Stellantis N.V.', 'display_symbol': 'STLAM'},
+    {'symbol': 'ENEL.MI', 'name': 'Enel S.p.A.', 'display_symbol': 'ENEL'},
+    {'symbol': 'G.MI', 'name': 'Assicurazioni Generali', 'display_symbol': 'GENERALI'},
+    {'symbol': 'PRY.MI', 'name': 'Prysmian S.p.A.', 'display_symbol': 'PRY'},
+  ];
+
   /// Markets that are visible in the bar but not wired to live quotes yet.
   /// Driven by the `us_stocks_enabled` flag in the `app_flags` table, so US
   /// stocks can be switched on from the backend without a release.
@@ -93,11 +116,22 @@ class _TradeScreenState extends State<TradeScreen> {
   @override
   void initState() {
     super.initState();
+    _checkFirstRunPreferences();
     _refreshPrices();
     _priceTimer = Timer.periodic(
       AppConstants.dashboardPricePoll,
       (_) => _refreshPrices(),
     );
+  }
+
+  Future<void> _checkFirstRunPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final configured = prefs.getBool('market_preferences_configured') ?? false;
+    if (!configured && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showMarketPreferencesDialog();
+      });
+    }
   }
 
   /// Fetches every visible row's price in one call.
@@ -135,6 +169,8 @@ class _TradeScreenState extends State<TradeScreen> {
   List<Map<String, dynamic>> _popularFor(String market) => switch (market) {
         'crypto' => _popularCrypto,
         'us_stock' => _popularUsStocks,
+        'pakistan_stock' => _popularPakistanStocks,
+        'italy_stock' => _popularItalyStocks,
         _ => _popularStocks,
       };
 
@@ -212,12 +248,47 @@ class _TradeScreenState extends State<TradeScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text('Trade', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
-                  const SizedBox(height: 2),
-                  Text('Real markets. Virtual stakes.', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Trade', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      const SizedBox(height: 2),
+                      Text('Real markets. Virtual stakes.', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                    ],
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert, color: AppColors.ink),
+                    color: AppColors.pureWhite,
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      side: BorderSide(color: AppColors.birch),
+                    ),
+                    onSelected: (val) {
+                      if (val == 'preferences') {
+                        _showMarketPreferencesDialog();
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem(
+                        value: 'preferences',
+                        child: Row(
+                          children: [
+                            Icon(Icons.tune_rounded, size: 18, color: AppColors.ink),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              'Change Market Preferences',
+                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -226,9 +297,8 @@ class _TradeScreenState extends State<TradeScreen> {
               child: MarketNavBar(
                 selectedKey: _market,
                 comingSoonKeys: _comingSoonMarkets,
-                // Preferred markets come first, but every market stays visible:
-                // hiding one would strand any position the user already holds.
                 preferredKeys: context.watch<CurrencyService>().preferredMarkets,
+                filterToPreferred: true,
                 onSelected: _selectMarket,
               ),
             ),
@@ -350,7 +420,175 @@ class _TradeScreenState extends State<TradeScreen> {
       ),
     );
   }
+
+  Future<void> _showMarketPreferencesDialog() async {
+    final current = CurrencyService.instance.preferredMarkets;
+    final selected = List<String>.from(current.isEmpty ? ['stock', 'us_stock', 'crypto'] : current);
+
+    const marketOptions = [
+      {'key': 'stock', 'title': 'Indian stock market', 'desc': 'NSE & BSE Equities, F&O'},
+      {'key': 'us_stock', 'title': 'US stocks', 'desc': 'NYSE & NASDAQ Equities'},
+      {'key': 'crypto', 'title': 'Cryptocurrency', 'desc': 'Major crypto pairs & perpetuals'},
+      {'key': 'pakistan_stock', 'title': 'Pakistan stocks', 'desc': 'Pakistan Stock Exchange (PSX)'},
+      {'key': 'italy_stock', 'title': 'Italy stocks', 'desc': 'Borsa Italiana (Milan)'},
+    ];
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.pureWhite,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                side: BorderSide(color: AppColors.birch),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldPale,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.tune_rounded, color: AppColors.goldDeep, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Market Preferences',
+                          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Choose up to 3 markets to trade. You can change your choice anytime from the 3 dots menu.',
+                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4, height: 1.4),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: marketOptions.map((opt) {
+                      final key = opt['key']!;
+                      final isChecked = selected.contains(key);
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: isChecked ? AppColors.goldPale.withValues(alpha: 0.4) : AppColors.cream,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isChecked ? AppColors.imperialGold : AppColors.birch,
+                            width: isChecked ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: CheckboxListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                          dense: true,
+                          activeColor: AppColors.imperialGold,
+                          checkColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          title: Text(
+                            opt['title']!,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.ink,
+                            ),
+                          ),
+                          subtitle: Text(
+                            opt['desc']!,
+                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                          ),
+                          value: isChecked,
+                          onChanged: (val) {
+                            setDialogState(() {
+                              if (val == true) {
+                                if (selected.length >= 3) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('You can select a maximum of 3 markets at a time.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                selected.add(key);
+                              } else {
+                                if (selected.length > 1) {
+                                  selected.remove(key);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Please select at least 1 market.'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              }
+                            });
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: selected.isNotEmpty
+                        ? () async {
+                            Navigator.of(ctx).pop();
+                            await CurrencyService.instance.setPreferredMarkets(selected);
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('market_preferences_configured', true);
+                            if (!selected.contains(_market)) {
+                              setState(() {
+                                _market = selected.first;
+                                _searchQuery = '';
+                                _results = [];
+                              });
+                            }
+                            _refreshPrices();
+                          }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.imperialGold,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      'Save Preferences (${selected.length}/3)',
+                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 }
+
 
 /// Renders one row's price. Stateless: the screen owns fetching, so there is no
 /// per-row timer to leak and every row on screen shows the same tick.

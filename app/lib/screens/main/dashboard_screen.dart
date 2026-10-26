@@ -10,6 +10,8 @@ import '../../core/app_constants.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/home_banner_carousel.dart';
+import '../../widgets/home_news_section.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../models/quote.dart';
@@ -17,12 +19,12 @@ import '../../models/portfolio.dart';
 import 'stock_detail_screen.dart';
 import 'analytics_screen.dart';
 import 'autopsy_screen.dart';
-import 'subscribe_screen.dart';
 import 'trade_screen.dart';
 import 'whatif_screen.dart';
 import 'orders_screen.dart';
 import 'notifications_screen.dart';
 import 'chat_screen.dart';
+import 'subscribe_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -387,7 +389,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('TOTAL PORTFOLIO VALUE', style: AppText.sectionLabel),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('TOTAL PORTFOLIO VALUE', style: AppText.sectionLabel),
+                                  GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SubscribeScreen(initialTabIndex: 1),
+                                      ),
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFFE5A93C), Color(0xFFC48818)],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFFE5A93C).withValues(alpha: 0.35),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.bolt_rounded, size: 14, color: Colors.white),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            'TOP UP',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 4),
                               Text(_formatValue(totalValue), style: AppText.valueLarge),
                               const SizedBox(height: AppSpacing.sm),
@@ -409,7 +458,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               const SizedBox(height: AppSpacing.lg),
                               Row(
                                 children: [
-                                  _buildStatBox('Wallet', _formatValue(user?.walletBalance ?? 0.0)),
+                                  _buildStatBox(
+                                    'Wallet',
+                                    _formatValue(user?.walletBalance ?? 0.0),
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SubscribeScreen(initialTabIndex: 1),
+                                      ),
+                                    ),
+                                    showTopUpAction: true,
+                                  ),
                                   const SizedBox(width: AppSpacing.sm),
                                   _buildStatBox('Invested', _formatValue(investedValue)),
                                   const SizedBox(width: AppSpacing.sm),
@@ -421,29 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      if ((user?.walletBalance ?? 0) < 200000)
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen())),
-                          child: Container(
-                            padding: const EdgeInsets.all(AppSpacing.lg),
-                            decoration: AppCard.darkCta,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Need more demo capital?', style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
-                                      const SizedBox(height: 2),
-                                      Text('See plans and one-time top-ups', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFFBBD7F8))),
-                                    ],
-                                  ),
-                                ),
-                                const Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                              ],
-                            ),
-                          ),
-                        ),
+                      const HomeBannerCarousel(),
                       const SizedBox(height: AppSpacing.lg),
                       TitanShowcase(
                         showcaseKey: _actionsKey,
@@ -489,6 +525,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.xl),
+                      const HomeNewsSection(),
                       if (_holdings.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.xl),
                         Text('Your Holdings', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
@@ -568,20 +606,61 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatBox(String label, String value) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: AppCard.cream,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
-            const SizedBox(height: 2),
-            Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
-          ],
-        ),
+  Widget _buildStatBox(
+    String label,
+    String value, {
+    VoidCallback? onTap,
+    bool showTopUpAction = false,
+  }) {
+    final boxContent = Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: showTopUpAction
+          ? BoxDecoration(
+              color: AppColors.goldPale.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.goldBorder),
+            )
+          : AppCard.cream,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
+              if (showTopUpAction)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldDeep,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    '+ ADD',
+                    style: GoogleFonts.inter(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+        ],
       ),
+    );
+
+    return Expanded(
+      child: onTap != null
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: boxContent,
+            )
+          : boxContent,
     );
   }
 

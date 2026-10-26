@@ -172,11 +172,32 @@ class FoInstrumentsService {
     }
   }
 
+  /// Standard exchange lot sizes for major index derivatives
+  static int defaultLotSizeForUnderlying(String underlying) {
+    final u = underlying.toUpperCase().trim();
+    switch (u) {
+      case 'NIFTY':
+        return 75;
+      case 'BANKNIFTY':
+        return 30;
+      case 'FINNIFTY':
+        return 65;
+      case 'MIDCPNIFTY':
+        return 120;
+      case 'SENSEX':
+        return 20;
+      case 'BANKEX':
+        return 15;
+      default:
+        return 1;
+    }
+  }
+
   /// Get lot size for a given symbol (which could be a contract symbol or underlying symbol)
   Future<int> getLotSize(String symbol) async {
     final underlying = extractUnderlying(symbol);
     final instruments = await _getInstrumentsForUnderlying(underlying);
-    if (instruments.isEmpty) return 1; // Default fallback to 1
+    if (instruments.isEmpty) return defaultLotSizeForUnderlying(underlying);
 
     var cleanSymbol = symbol.toUpperCase().trim();
     if (cleanSymbol.startsWith('NSE:')) {
@@ -190,7 +211,7 @@ class FoInstrumentsService {
       if (parts.length >= 4) {
         final expiryStr = '${parts[1]}-${parts[2].padLeft(2, '0')}-${parts[3].padLeft(2, '0')}';
         final match = instruments.where((e) => e.expiryDate.toIso8601String().startsWith(expiryStr));
-        if (match.isNotEmpty) {
+        if (match.isNotEmpty && match.first.lotSize > 1) {
           return match.first.lotSize;
         }
       }
@@ -202,14 +223,17 @@ class FoInstrumentsService {
       if (month != null) {
         final monthNum = _monthNumber(month);
         final match = instruments.where((e) => e.expiryDate.month == monthNum);
-        if (match.isNotEmpty) {
+        if (match.isNotEmpty && match.first.lotSize > 1) {
           return match.first.lotSize;
         }
       }
     }
 
     // Default to the first instrument's lot size (which is usually the current month/active contract)
-    return instruments.first.lotSize;
+    if (instruments.isNotEmpty && instruments.first.lotSize > 1) {
+      return instruments.first.lotSize;
+    }
+    return defaultLotSizeForUnderlying(underlying);
   }
 
   /// Get list of available expiry dates for a given underlying.

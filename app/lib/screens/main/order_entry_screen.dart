@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
 import '../../core/money.dart';
-import '../../core/currency.dart';
 import '../../models/quote.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
@@ -13,7 +12,7 @@ import '../../services/analytics_service.dart';
 import '../../services/fo_instruments_service.dart';
 import '../../widgets/swipe_button.dart';
 import '../../widgets/info_tooltip.dart';
-import 'wallet_screen.dart';
+import 'subscribe_screen.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   final Quote quote;
@@ -68,6 +67,22 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   int _foLotSize = 1;
 
   bool get _isCrypto => widget.quote.market == 'crypto';
+
+  String get _exchangeLabel {
+    switch (widget.quote.market) {
+      case 'crypto':
+        return 'CRYPTO';
+      case 'pakistan_stock':
+        return 'PSX';
+      case 'italy_stock':
+        return 'BORSA ITALIANA';
+      case 'us_stock':
+        return 'US';
+      case 'stock':
+      default:
+        return 'NSE';
+    }
+  }
 
   bool get _isDerivative =>
       widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE';
@@ -221,8 +236,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     }
 
     final orderQty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
-    final isDerivative = widget.instrumentType == 'OPTION' || widget.instrumentType == 'FUTURE';
-    final marginPct = isDerivative ? 0.15 : 1.0;
+    final isMarginDerivative = widget.instrumentType == 'FUTURE' || (widget.instrumentType == 'OPTION' && !widget.isBuy);
+    final marginPct = isMarginDerivative ? 0.15 : 1.0;
     
     final existingQty = _existingHolding != null 
         ? (_existingHolding!['quantity'] as num).toDouble() 
@@ -252,7 +267,25 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     return orderQty * _price * marginPct;
   }
 
+  bool get _isContractExpired {
+    if (widget.expiryDate == null || widget.expiryDate!.isEmpty) return false;
+    final exp = DateTime.tryParse(widget.expiryDate!);
+    if (exp == null) return false;
+    final cutoff = DateTime(exp.year, exp.month, exp.day, 15, 30);
+    return DateTime.now().isAfter(cutoff);
+  }
+
   Future<void> _submitOrder() async {
+    if (_isContractExpired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This contract has expired and cannot be traded.'),
+          backgroundColor: AppColors.bear,
+        ),
+      );
+      return;
+    }
+
     if (_quantityValue <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_inputByMoney && _isCrypto
@@ -468,7 +501,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   Map<String, double> get _chargesPreview {
     final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
-    if (qty <= 0) {
+    if (qty <= 0 || widget.quote.market != 'stock') {
       return {
         'brokerage': 0, 'stamp_duty': 0, 'stt': 0,
         'exchange_charges': 0, 'gst': 0, 'tax_charges': 0, 'total_charges': 0
@@ -601,7 +634,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(height: 4),
               _buildBillRow(
                 'Initial Margin Required (15%)',
-                Money.wallet(totalValue * 0.15, decimals: 2),
+                Money.instrument(totalValue * 0.15, market: widget.quote.market),
                 AppColors.ink3,
               ),
             ],
@@ -609,7 +642,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(height: 4),
               _buildBillRow(
                 'Margin Required (100%)',
-                Money.wallet(_marginRequired, decimals: 2),
+                Money.instrument(_marginRequired, market: widget.quote.market),
                 AppColors.ink3,
               ),
             ],
@@ -617,7 +650,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           const SizedBox(height: 6),
           Container(height: 0.5, color: AppColors.birch),
           const SizedBox(height: 6),
-          _buildBillRow('Charges & taxes', '+ ${Money.wallet(totalCharges, decimals: 2)}', AppColors.ink3),
+          _buildBillRow('Charges & taxes', '+ ${Money.instrument(totalCharges, market: widget.quote.market)}', AppColors.ink3),
           const SizedBox(height: 8),
           Container(height: 1.5, color: color.withValues(alpha: 0.25)),
           const SizedBox(height: 8),
@@ -657,12 +690,11 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   grandTotal.abs(),
                   market: widget.quote.market,
                 );
-                final rate = Money.rate;
+                final note = Money.conversionNote(market: widget.quote.market);
                 return Text(
-                  rate == null
+                  note == null
                       ? '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet'
-                      : '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet '
-                          '(1 \u0024 = \u20b9${rate.toStringAsFixed(2)})',
+                      : '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet $note',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -674,9 +706,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           ],
           const SizedBox(height: 4),
           Text(
-            Money.sourceFor(widget.quote.market) == Currency.usd
-                ? 'No brokerage or Indian taxes on US trades • Virtual cash only'
-                : 'Charges: ${Money.wallet(totalCharges, decimals: 2)} • Deducted from virtual cash only',
+            widget.quote.market != 'stock'
+                ? 'No brokerage or Indian taxes on non-domestic trades • Virtual cash only'
+                : 'Charges: ${Money.instrument(totalCharges, market: widget.quote.market)} • Deducted from virtual cash only',
             style: GoogleFonts.inter(
               fontSize: 10,
               color: AppColors.ink5,
@@ -775,7 +807,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_isCrypto ? "CRYPTO" : "NSE"}  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
+                  '$_exchangeLabel  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
                   style: GoogleFonts.inter(
                     color: AppColors.ink,
                     fontWeight: FontWeight.w600,
@@ -1251,124 +1283,160 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   // Live charges breakdown — shown when quantity > 0
                   if (_quantityValue > 0)
                     _buildChargeBreakdownPanel(color),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Text(_inputByMoney && _isCrypto ? 'Amount ' : 'Margin ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
-                            Flexible(
-                              child: Text(AppFormat.formatINR(_marginRequired), style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
-                            ),
-                            Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
-                            Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
-                            Flexible(
-                              child: Text(AppFormat.formatINR(walletBalance), style: GoogleFonts.inter(color: _marginRequired > walletBalance ? AppColors.bear : color, fontSize: 12, fontWeight: _marginRequired > walletBalance ? FontWeight.bold : FontWeight.normal)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.birch),
-                        ),
-                        child: Icon(Icons.show_chart, size: 16, color: AppColors.ink),
-                      )
-                    ],
-                  ),
-                  if (_inputByMoney && _isCrypto && _quantityValue > 0) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.info_outline, size: 14, color: AppColors.ink4),
-                        const SizedBox(width: 4),
-                        Text(
-                          'You will receive ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                          style: GoogleFonts.inter(color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  // Show insufficient balance warning + top up button
-                  if (_marginRequired > walletBalance && _quantityValue > 0) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.bear.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.bear.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
+                  Builder(
+                    builder: (context) {
+                      final marginRequiredInr = Money.inrValueOf(_marginRequired, market: widget.quote.market);
+                      final hasInsufficientBalance = marginRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.account_balance_wallet_outlined, color: AppColors.bear, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Insufficient Balance',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.bear,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                  ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                                    Flexible(
+                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    ),
+                                    Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
+                                    Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                                    Flexible(
+                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.inter(color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
+                              ),
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.birch),
+                                ),
+                                child: Icon(Icons.show_chart, size: 16, color: AppColors.ink),
+                              )
+                            ],
+                          ),
+                          if (_inputByMoney && _isCrypto && _quantityValue > 0) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline, size: 14, color: AppColors.ink4),
+                                const SizedBox(width: 4),
                                 Text(
-                                  'You need ${AppFormat.formatINR(_marginRequired - walletBalance)} more to place this order.',
-                                  style: GoogleFonts.inter(
-                                    color: AppColors.ink3,
-                                    fontSize: 11,
-                                  ),
+                                  'You will receive ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
+                                  style: GoogleFonts.inter(color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              // Navigate to wallet screen
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) => const WalletScreen(),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.bull,
-                              foregroundColor: AppColors.pureWhite,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              'TOP UP',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                                letterSpacing: 0.5,
+                          ],
+                          const SizedBox(height: 12),
+                          // Show expired notice OR insufficient balance warning OR swipe button
+                          if (_isContractExpired) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.bear.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.bear.withValues(alpha: 0.25)),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'CONTRACT EXPIRED',
+                                    style: GoogleFonts.inter(
+                                      color: AppColors.bear,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ),
+                          ] else if (hasInsufficientBalance) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: AppColors.bear.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.bear.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.account_balance_wallet_outlined, color: AppColors.bear, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Insufficient Balance',
+                                          style: GoogleFonts.inter(
+                                            color: AppColors.bear,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'You need ${Money.wallet(marginRequiredInr - walletBalance)} more to place this order.',
+                                          style: GoogleFonts.inter(
+                                            color: AppColors.ink3,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (context) => const SubscribeScreen(initialTabIndex: 1),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.bull,
+                                      foregroundColor: AppColors.pureWhite,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      elevation: 0,
+                                    ),
+                                    child: Text(
+                                      'TOP UP',
+                                      style: GoogleFonts.inter(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ] else ...[
+                            SwipeButton(
+                              text: widget.isBuy ? 'SWIPE TO BUY' : 'SWIPE TO SELL',
+                              color: color,
+                              isLoading: _isLoading,
+                              onSwipeComplete: _submitOrder,
+                            ),
+                          ],
                         ],
-                      ),
-                    ),
-                  ] else ...[
-                    SwipeButton(
-                      text: widget.isBuy ? 'SWIPE TO BUY' : 'SWIPE TO SELL',
-                      color: color,
-                      isLoading: _isLoading,
-                      onSwipeComplete: _submitOrder,
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                   const SizedBox(height: 8),
                 ],
               ),

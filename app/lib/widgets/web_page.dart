@@ -60,7 +60,7 @@ class _BrandPanel extends StatelessWidget {
 
   static const _points = [
     ('Real market prices', 'NSE, BSE, US stocks and crypto, live.'),
-    ('Virtual money only', 'Start with ₹11,000 in demo cash. Nothing to lose.'),
+    ('Virtual money only', 'Start with ₹1,100 in demo cash. Nothing to lose.'),
     ('Earn by playing', 'Complete challenges to unlock more demo capital.'),
   ];
 

@@ -40,8 +40,10 @@ class CurrencyService extends ChangeNotifier {
   TradingLocation? _location;
   String? _countryCode;
   String? _state;
-  List<String> _preferredMarkets = const ['stock', 'crypto'];
-  double _usdInr = 0;
+  List<String> _preferredMarkets = const ['stock', 'us_stock', 'crypto'];
+  double _usdInr = 83.5;
+  double _eurInr = 106.34;
+  double _pkrInr = 0.342;
   DateTime? _rateFetchedAt;
   bool _onboardingComplete = false;
   bool _loaded = false;
@@ -60,6 +62,8 @@ class CurrencyService extends ChangeNotifier {
   String? get state => _state;
   List<String> get preferredMarkets => List.unmodifiable(_preferredMarkets);
   double get usdInr => _usdInr;
+  double get eurInr => _eurInr;
+  double get pkrInr => _pkrInr;
   bool get onboardingComplete => _onboardingComplete;
   bool get isLoaded => _loaded;
 
@@ -68,7 +72,11 @@ class CurrencyService extends ChangeNotifier {
 
   // Reads the public getter, not the private field, so a test subclass that
   // overrides `usdInr` actually changes what gets converted.
-  FxConverter get converter => FxConverter(usdInr: usdInr);
+  FxConverter get converter => FxConverter(
+        usdInr: usdInr,
+        eurInr: eurInr,
+        pkrInr: pkrInr,
+      );
 
   /// True when showing a currency that needs conversion from stored INR.
   bool get needsConversion => _display != Currency.inr;
@@ -122,14 +130,25 @@ class CurrencyService extends ChangeNotifier {
     try {
       final prefs = await SupabaseService().getUserPreferences();
       if (prefs == null) return;
-      _display = Currency.fromCode(prefs['display_currency'] as String?);
+      final displayCode = prefs['display_currency'] as String?;
+      if (displayCode != null && displayCode.isNotEmpty) {
+        _display = Currency.fromCode(displayCode);
+      }
       final markets = prefs['preferred_markets'];
       if (markets is List && markets.isNotEmpty) {
-        _preferredMarkets = markets.map((e) => '$e').toList();
+        final allowed = MarketTabOrder.canonical;
+        final valid = markets
+            .map((e) => '$e')
+            .where((m) => allowed.contains(m))
+            .take(3)
+            .toList();
+        if (valid.isNotEmpty) {
+          _preferredMarkets = valid;
+        }
       }
-      _location = TradingLocation.fromCode(prefs['location'] as String?);
-      _countryCode = prefs['country_code'] as String?;
-      _state = prefs['state'] as String?;
+      _location = TradingLocation.fromCode(prefs['location'] as String?) ?? _location;
+      _countryCode = (prefs['country_code'] as String?) ?? _countryCode;
+      _state = (prefs['state'] as String?) ?? _state;
       _onboardingComplete = prefs['onboarding_completed_at'] != null;
       await _persist();
       notifyListeners();
@@ -138,20 +157,28 @@ class CurrencyService extends ChangeNotifier {
     }
   }
 
-  /// Fetches USD/INR unless the cached value is still fresh.
+  /// Fetches FX rates (USD, EUR, PKR) unless the cached value is still fresh.
   Future<void> refreshRate({bool force = false}) async {
     final age = _rateFetchedAt == null
         ? null
         : DateTime.now().difference(_rateFetchedAt!);
     if (!force && _usdInr > 0 && age != null && age < _rateTtl) return;
     try {
-      final rate = await MarketService.fetchUsdInrRate();
-      if (rate != null && rate > 0) {
-        _usdInr = rate;
-        _rateFetchedAt = DateTime.now();
-        await _persist();
-        notifyListeners();
-      }
+      final futures = await Future.wait([
+        MarketService.fetchUsdInrRate(),
+        MarketService.fetchEurInrRate(),
+        MarketService.fetchPkrInrRate(),
+      ]);
+      final u = futures[0];
+      final e = futures[1];
+      final p = futures[2];
+      if (u != null && u > 0) _usdInr = u;
+      if (e != null && e > 0) _eurInr = e;
+      if (p != null && p > 0) _pkrInr = p;
+
+      _rateFetchedAt = DateTime.now();
+      await _persist();
+      notifyListeners();
     } catch (e) {
       debugPrint('CurrencyService.refreshRate failed: $e');
     }
@@ -167,8 +194,7 @@ class CurrencyService extends ChangeNotifier {
     _display = currency;
     await _persist();
     notifyListeners();
-    // A USD view is useless without a rate, so make sure we have one.
-    if (currency == Currency.usd && _usdInr <= 0) {
+    if (currency != Currency.inr) {
       await refreshRate(force: true);
     }
     await SupabaseService().saveUserPreferences(displayCurrency: currency.code);
@@ -206,9 +232,17 @@ class CurrencyService extends ChangeNotifier {
   }
 
   Future<void> setPreferredMarkets(List<String> markets) async {
+    final allowed = [
+      'stock',
+      MarketHours.usStock,
+      'crypto',
+      MarketHours.pakistanStock,
+      MarketHours.italyStock,
+    ];
     final cleaned = markets
-        .where((m) => const ['stock', 'us_stock', 'crypto'].contains(m))
+        .where((m) => allowed.contains(m))
         .toSet()
+        .take(3)
         .toList();
     if (cleaned.isEmpty) return;
     _preferredMarkets = cleaned;
@@ -217,17 +251,27 @@ class CurrencyService extends ChangeNotifier {
     await SupabaseService().saveUserPreferences(preferredMarkets: cleaned);
   }
 
-  /// Records both answers and marks onboarding done, in one server round trip.
+  /// Records answers and marks onboarding done.
   Future<void> completeOnboarding({
     required Currency currency,
     required List<String> markets,
     TradingLocation? location,
+    String? countryCode,
   }) async {
     _display = currency;
     if (location != null) _location = location;
+    if (countryCode != null) _countryCode = countryCode.trim().toUpperCase();
+    final allowed = [
+      'stock',
+      MarketHours.usStock,
+      'crypto',
+      MarketHours.pakistanStock,
+      MarketHours.italyStock,
+    ];
     final cleaned = markets
-        .where((m) => const ['stock', 'us_stock', 'crypto'].contains(m))
+        .where((m) => allowed.contains(m))
         .toSet()
+        .take(3)
         .toList();
     if (cleaned.isNotEmpty) _preferredMarkets = cleaned;
     _onboardingComplete = true;
@@ -240,6 +284,7 @@ class CurrencyService extends ChangeNotifier {
       displayCurrency: currency.code,
       preferredMarkets: _preferredMarkets,
       location: _location?.code,
+      countryCode: _countryCode,
       completeOnboarding: true,
     );
   }
@@ -247,7 +292,7 @@ class CurrencyService extends ChangeNotifier {
   /// Clears per-user state on sign-out so the next account starts clean.
   Future<void> reset() async {
     _display = Currency.inr;
-    _preferredMarkets = const ['stock', 'crypto'];
+    _preferredMarkets = const ['stock', 'us_stock', 'crypto'];
     _location = null;
     _countryCode = null;
     _state = null;
@@ -296,5 +341,11 @@ class CurrencyService extends ChangeNotifier {
 /// Canonical market ordering, shared by the nav bar and the default-tab choice.
 class MarketTabOrder {
   MarketTabOrder._();
-  static const List<String> canonical = ['stock', MarketHours.usStock, 'crypto'];
+  static const List<String> canonical = [
+    'stock',
+    MarketHours.usStock,
+    'crypto',
+    MarketHours.pakistanStock,
+    MarketHours.italyStock,
+  ];
 }

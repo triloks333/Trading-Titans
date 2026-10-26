@@ -177,6 +177,32 @@ void main() {
       expect(m.isVoice, isTrue);
       expect(m.durationMs, 12000);
     });
+
+    test('edited_at is read from the feed', () {
+      final m = ChatMessage.fromRow({
+        'id': 'abc',
+        'user_id': 'u',
+        'kind': 'text',
+        'body': 'updated text',
+        'created_at': '2026-09-14T10:00:00Z',
+        'edited_at': '2026-09-14T10:05:00Z',
+      });
+      expect(m.isEdited, isTrue);
+      expect(m.editedAt, isNotNull);
+    });
+
+    test('null edited_at leaves isEdited false', () {
+      final m = ChatMessage.fromRow({
+        'id': 'abc',
+        'user_id': 'u',
+        'kind': 'text',
+        'body': 'regular text',
+        'created_at': '2026-09-14T10:00:00Z',
+        'edited_at': null,
+      });
+      expect(m.isEdited, isFalse);
+      expect(m.editedAt, isNull);
+    });
   });
 
   group('contentTypeFor', () {

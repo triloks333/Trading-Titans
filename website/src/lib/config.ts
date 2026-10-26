@@ -12,13 +12,19 @@ export const PLAY_STORE_URL =
 /**
  * Virtual practice cash every new account starts with. Demo cash only.
  *
- * ₹11,000 is the real figure, not marketing: `initial_bal NUMERIC := 11000.0`
- * in the signup trigger, and `challenge_baseline_capital DEFAULT 11000` which
- * percentage-return challenges are measured against. The site previously
- * advertised ₹50,000 as a pre-registration gift, which a normal signup never
- * received.
+ * ₹1,100 is the real figure: `initial_bal NUMERIC := 1100.0`
+ * in the signup trigger, and `challenge_baseline_capital DEFAULT 1100` which
+ * percentage-return challenges are measured against. Guest accounts start with ₹500.
  */
-export const STARTING_CASH = '₹11,000'
+export const STARTING_CASH = '₹1,100';
+export const GUEST_STARTING_CASH = '₹500';
+
+/** Legal entity owning and operating the brand and platform. */
+export const COMPANY_NAME = 'Kashivwealth Management LLP';
+export const BRAND_NAME = 'Trading Titans';
+export const SUPPORT_EMAIL = 'support@thetradingtitans.com';
+export const OFFICIAL_ENTITY_STATEMENT =
+  'Trading Titans is an official software product wholly owned, developed, and operated by Kashivwealth Management LLP.';
 
 /** The one-line pitch. Used in the hero, the closing CTA and the page meta. */
 export const MOTTO =

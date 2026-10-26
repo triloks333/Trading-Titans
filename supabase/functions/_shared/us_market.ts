@@ -118,6 +118,57 @@ export async function getUsdInrRate(): Promise<number> {
   return 88.0;
 }
 
+let _cachedPkrRate = 0;
+let _cachedPkrAt = 0;
+export async function getPkrInrRate(): Promise<number> {
+  const now = Date.now();
+  if (_cachedPkrRate > 0 && now - _cachedPkrAt < RATE_TTL_MS) return _cachedPkrRate;
+  try {
+    const res = await fetch(`${YAHOO_CHART}/PKRINR=X?range=2d&interval=1d`, {
+      headers: { "User-Agent": UA },
+    });
+    if (res.ok) {
+      const body = await res.json();
+      const price = body?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (typeof price === "number" && price > 0) {
+        _cachedPkrRate = price;
+        _cachedPkrAt = now;
+        return price;
+      }
+    }
+  } catch (_) {
+    // fall through
+  }
+  if (_cachedPkrRate > 0) return _cachedPkrRate;
+  return 0.34;
+}
+
+let _cachedEurRate = 0;
+let _cachedEurAt = 0;
+export async function getEurInrRate(): Promise<number> {
+  const now = Date.now();
+  if (_cachedEurRate > 0 && now - _cachedEurAt < RATE_TTL_MS) return _cachedEurRate;
+  try {
+    const res = await fetch(`${YAHOO_CHART}/EURINR=X?range=2d&interval=1d`, {
+      headers: { "User-Agent": UA },
+    });
+    if (res.ok) {
+      const body = await res.json();
+      const price = body?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (typeof price === "number" && price > 0) {
+        _cachedEurRate = price;
+        _cachedEurAt = now;
+        return price;
+      }
+    }
+  } catch (_) {
+    // fall through
+  }
+  if (_cachedEurRate > 0) return _cachedEurRate;
+  return 106.0;
+}
+
+
 /**
  * Yahoo symbol for a US equity. US tickers are used as-is; only the exchange
  * prefix and any Indian suffix that slipped through are stripped.

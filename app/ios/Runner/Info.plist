@@ -45,5 +45,46 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Privacy Permissions for image_picker and chat attachments -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Trading Titans needs access to your photo library to let you upload custom profile avatars and share chart screenshots in the community chat.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Trading Titans needs access to your camera to let you take photos for your profile avatar.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Trading Titans requires microphone access for audio functionality if used in chat.</string>
+
+	<!-- Deep Linking and OAuth Redirects -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.kwm.tradingtitans</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tradingtitans</string>
+				<string>com.kwm.tradingtitans</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Allowed URL Schemes for url_launcher -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>mailto</string>
+		<string>tel</string>
+		<string>whatsapp</string>
+	</array>
+
+	<!-- Push Notification Background Execution -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

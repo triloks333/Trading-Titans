@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { US_MARKET, getUsdInrRate, isUsMarketOpen } from "../_shared/us_market.ts";
+import { US_MARKET, getUsdInrRate, getPkrInrRate, getEurInrRate, isUsMarketOpen } from "../_shared/us_market.ts";
 import { isRestingLimit, resolveFillPrice } from "../_shared/fill_price.ts";
 import { pickLotSize } from "../_shared/lot_size.ts";
 import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
@@ -27,9 +27,28 @@ const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const MAX_QUOTE_AGE_MS = 10 * 60 * 1000;
 
 function json(b: unknown, s = 200) { return new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } }); }
+
+function isPakistanMarketOpen(): boolean {
+  const pkt = new Date(Date.now() + 5 * 3600 * 1000);
+  const day = pkt.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const minutes = pkt.getUTCHours() * 60 + pkt.getUTCMinutes();
+  return minutes >= 555 && minutes < 930;
+}
+
+function isItalyMarketOpen(): boolean {
+  const cet = new Date(Date.now() + 2 * 3600 * 1000);
+  const day = cet.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const minutes = cet.getUTCHours() * 60 + cet.getUTCMinutes();
+  return minutes >= 540 && minutes < 1050;
+}
+
 function isMarketOpen(market: string): boolean {
   if (market === "crypto") return true;
   if (market === US_MARKET) return isUsMarketOpen();
+  if (market === "pakistan_stock") return isPakistanMarketOpen();
+  if (market === "italy_stock") return isItalyMarketOpen();
   return isStockOpen();
 }
 
@@ -49,10 +68,27 @@ function extractUnderlying(symbolRaw: string): string {
 }
 
 function nCDF(x: number): number { const t = 1 / (1 + 0.2316419 * Math.abs(x)); const d = 0.3989422804 * Math.exp(-x * x / 2); const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429)))); return x >= 0 ? 1 - p : p; }
-function bs(opt: string, spot: number, strike: number, T: number): number { if (spot <= 0 || strike <= 0) return 0.05; if (T <= 0) return opt === "CE" ? Math.max(0, spot - strike) : Math.max(0, strike - spot); const r = 0.065, sig = 0.25; const d1 = (Math.log(spot / strike) + (r + 0.5 * sig * sig) * T) / (sig * Math.sqrt(T)); const d2 = d1 - sig * Math.sqrt(T); let p; if (opt === "CE") p = spot * nCDF(d1) - strike * Math.exp(-r * T) * nCDF(d2); else p = strike * Math.exp(-r * T) * nCDF(-d2) - spot * nCDF(-d1); return Math.max(0.05, Math.round(p * 100) / 100); }
+function bs(opt: string, spot: number, strike: number, T: number): number {
+  if (spot <= 0 || strike <= 0) return 0.05;
+  const intrinsic = opt === "CE" ? Math.max(0, spot - strike) : Math.max(0, strike - spot);
+  if (T <= 0) return Math.max(0.05, Math.round(intrinsic * 100) / 100);
+  const r = 0.065, sig = 0.25;
+  const d1 = (Math.log(spot / strike) + (r + 0.5 * sig * sig) * T) / (sig * Math.sqrt(T));
+  const d2 = d1 - sig * Math.sqrt(T);
+  let p;
+  if (opt === "CE") p = spot * nCDF(d1) - strike * Math.exp(-r * T) * nCDF(d2);
+  else p = strike * Math.exp(-r * T) * nCDF(-d2) - spot * nCDF(-d1);
+  return Math.max(0.05, Math.max(intrinsic, Math.round(p * 100) / 100));
+}
 function optionPremium(opt: string, spot: number, strike: number, days: number): number { return bs(opt, spot, strike, Math.max(0.0001, days) / 365); }
 function futurePrice(spot: number, days: number): number { if (spot <= 0 || days <= 0) return spot; return spot * (1 + 0.065 * (days / 365)); }
-function daysToExpiry(e: string | null): number | null { if (!e || e === "PERPETUAL") return null; const ms = new Date(e).getTime() - Date.now(); return Number.isNaN(ms) ? null : ms / 86400000; }
+function daysToExpiry(e: string | null): number | null {
+  if (!e || e === "PERPETUAL") return null;
+  // If e is "YYYY-MM-DD", treat expiry at 15:30 IST (10:00 UTC) market close
+  const isoStr = e.includes("T") ? e : `${e}T15:30:00+05:30`;
+  const ms = new Date(isoStr).getTime() - Date.now();
+  return Number.isNaN(ms) ? null : ms / 86400000;
+}
 
 function computeCharges(cfg: Record<string, number>, itype: string, side: string, quantity: number, price: number) {
   const g = (k: string, d: number) => (cfg && cfg[k] != null ? Number(cfg[k]) : d);
@@ -190,6 +226,10 @@ serve(async (req) => {
       const itype = o.instrument_type || "EQUITY";
       const side = o.side;
       const quantity = Number(o.quantity);
+      if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 10000000) {
+        report.push({ id: o.id, skipped: "invalid_quantity", quantity });
+        continue;
+      }
       const orderType = o.order_type || "market";
       // Prefer the dedicated column now that it exists; `price` is only the limit
       // while a row is pending, so reading it is correct here but ambiguous.
@@ -207,9 +247,10 @@ serve(async (req) => {
       // while the quote feed is keyed by the coin (`BTC`), so the raw symbol
       // matched nothing and the order was skipped on every run -- one had been
       // pending for six days. US symbols need no such mapping.
+      const isForeign = isUs || market === "pakistan_stock" || market === "italy_stock";
       const underlyingKey = market === "crypto"
         ? cryptoUnderlying(String(o.symbol))
-        : isUs
+        : isForeign
           ? String(o.symbol).toUpperCase()
           : extractUnderlying(o.symbol);
       const quoteKey = `${underlyingKey}\u001f${market}`;
@@ -273,25 +314,29 @@ serve(async (req) => {
       const restingFill = isRestingLimit(side, orderType, limit, refExec);
       execPrice = resolveFillPrice(side, orderType, limit, execPrice, refExec);
 
-      // US equities are quoted and displayed in USD, but the wallet is a single
-      // INR balance. Convert exactly once, here, so every downstream number
+      // Foreign equities are quoted and displayed in their native currencies (USD, PKR, EUR),
+      // but the wallet is a single INR balance. Convert exactly once, here, so every downstream number
       // (total, margin, charges, realized P&L, wallet debit/credit) stays INR
       // and the money logic below is untouched. The rate is stored on the order
       // so the trade can be reconciled later.
-      const nativePrice = isUs ? execPrice : null;
-      const fxRate = isUs ? await getUsdInrRate() : null;
-      if (isUs) {
+      const nativeCurrency = isUs ? "USD" : market === "pakistan_stock" ? "PKR" : market === "italy_stock" ? "EUR" : null;
+      const nativePrice = isForeign ? execPrice : null;
+      let fxRate: number | null = null;
+      if (isUs) fxRate = await getUsdInrRate();
+      else if (market === "pakistan_stock") fxRate = await getPkrInrRate();
+      else if (market === "italy_stock") fxRate = await getEurInrRate();
+
+      if (isForeign) {
         if (!(fxRate! > 0)) { report.push({ id: o.id, skipped: "no_fx_rate" }); continue; }
         execPrice = execPrice * fxRate!;
       }
-      const nativeCols = isUs
-        ? { native_price: nativePrice, native_currency: "USD", fx_rate: fxRate }
+      const nativeCols = isForeign
+        ? { native_price: nativePrice, native_currency: nativeCurrency, fx_rate: fxRate }
         : {};
-      // Holdings keep a parallel USD average purely so the app can show a US
-      // position's cost basis in dollars. Wallet math never reads it. Returns an
-      // empty object for INR markets, so those writes are unchanged.
+      // Holdings keep a parallel foreign average purely so the app can show a
+      // position's cost basis in native currency. Wallet math never reads it.
       const nativeAvg = (px: number | null) =>
-        isUs ? { native_avg_price: px, native_currency: "USD" } : {};
+        isForeign ? { native_avg_price: px, native_currency: nativeCurrency } : {};
 
       const total = execPrice * quantity;
       const marginPct = isDerivative ? 0.15 : 1.0;
@@ -336,7 +381,7 @@ serve(async (req) => {
             else if (itype === "OPTION" && newNetQty < 0) { marginBlocked = newAvg * Math.abs(newNetQty) * lotSize * 0.15; const delta = marginBlocked - oldMargin; const prem = execPrice * quantity; if (prem >= delta) walletCredit = prem - delta; else walletDebit = delta - prem; }
             else { marginBlocked = newAvg * Math.abs(newNetQty) * lotSize * 0.15; walletDebit = marginBlocked - oldMargin; }
             const requiredCapital = (itype === "OPTION" && newNetQty > 0) ? execPrice * quantity : execPrice * tradeQtyLots * lotSize * 0.15;
-            if (!isExit && walletBalance < requiredCapital + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (walletBalance < requiredCapital + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
           } else {
             newAvg = existingAvg;
             const closedQtyLots = Math.abs(tradeQtyLots) > Math.abs(existingQty) ? Math.abs(existingQty) : Math.abs(tradeQtyLots);
@@ -367,7 +412,7 @@ serve(async (req) => {
 
           let finalDebit = walletDebit, finalCredit = walletCredit;
           if (totalCharges > 0) { if (walletCredit >= totalCharges) finalCredit = walletCredit - totalCharges; else { finalCredit = 0; finalDebit = walletDebit + (totalCharges - walletCredit); } }
-          if (!isExit && walletBalance + finalCredit - finalDebit < 0) { report.push({ id: o.id, skipped: "insufficient_net" }); continue; }
+          if (finalDebit > finalCredit && walletBalance + finalCredit - finalDebit < 0) { report.push({ id: o.id, skipped: "insufficient_net" }); continue; }
 
           const positionData = { symbol: o.symbol, instrument_type: itype, option_type: o.option_type ?? "", strike_price: o.strike_price ?? 0, expiry_date: o.expiry_date ?? "", lot_size: lotSize, net_qty: newNetQty, avg_entry_price: newAvg };
           // `limit_price` is carried across explicitly: this path DELETES the
@@ -388,7 +433,7 @@ serve(async (req) => {
         const ex = exRes.data;
         if (side === "buy") {
           if (!ex) {
-            if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (walletBalance < total + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_BUY_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
             await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
@@ -414,7 +459,7 @@ serve(async (req) => {
                 if (upBal >= remTotal + totalCharges) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: remainingBuyQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) }); }
               }
             } else {
-              if (!isExit && walletBalance < total + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+              if (walletBalance < total + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_ADD_LONG" }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
               await supabase.from("profiles").update({ wallet_balance: walletBalance - total - totalCharges }).eq("id", userId);
@@ -425,7 +470,7 @@ serve(async (req) => {
           }
         } else {
           if (!ex) {
-            if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+            if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
             if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_SHORT_NEW" }); executed++; continue; }
             if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
             await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);
@@ -450,7 +495,7 @@ serve(async (req) => {
                 if (upBal >= remTotal) { await supabase.from("profiles").update({ wallet_balance: upBal - remTotal }).eq("id", userId); await supabase.from("holdings").insert({ user_id: userId, symbol: o.symbol, market, quantity: -remainingSellQty, avg_price: execPrice, name, instrument_type: itype, strike_price: o.strike_price, option_type: o.option_type, expiry_date: o.expiry_date, ...nativeAvg(nativePrice) }); }
               }
             } else {
-              if (!isExit && walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
+              if (walletBalance < marginRequired + totalCharges) { report.push({ id: o.id, skipped: "insufficient_funds" }); continue; }
               if (!commit) { report.push({ id: o.id, wouldExecute: true, kind: "EQ_ADD_SHORT" }); executed++; continue; }
               if (!(await claim())) { report.push({ id: o.id, skipped: "claim_lost" }); continue; }
               await supabase.from("profiles").update({ wallet_balance: walletBalance - marginRequired - totalCharges }).eq("id", userId);

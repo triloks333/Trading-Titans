@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { isUsDst, isUsMarketOpen } from "../_shared/us_market.ts";
+import { isStockOpen, isIndianStockHoliday } from "../_shared/market_hours.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,15 +20,8 @@ serve((req) => {
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istTime = new Date(utcTime + istOffset);
 
-    const day = istTime.getUTCDay(); // 0 is Sunday, 6 is Saturday
-    const hours = istTime.getUTCHours();
-    const minutes = istTime.getUTCMinutes();
-    const timeAsMinutes = hours * 60 + minutes;
-
-    // Indian Stock Market hours: 9:15 AM (555 mins) to 3:30 PM (930 mins), Monday to Friday (1 to 5)
-    const isWeekDay = day >= 1 && day <= 5;
-    const isMarketHours = timeAsMinutes >= 555 && timeAsMinutes <= 930;
-    const nseOpen = isWeekDay && isMarketHours;
+    const isHoliday = isIndianStockHoliday(new Date(utcTime));
+    const nseOpen = isStockOpen(new Date(utcTime));
 
     return new Response(
       JSON.stringify({

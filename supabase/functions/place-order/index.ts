@@ -4,6 +4,7 @@ import { US_MARKET } from "../_shared/us_market.ts";
 // Shared session window: the old inline copy closed at 15:15, so orders placed in
 // the last 15 minutes of the session were routed to pending instead of filling.
 import { isStockOpen } from "../_shared/market_hours.ts";
+import { blackScholes, calculateFuturePrice, getDaysToExpiry } from "../_shared/fo_pricing.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -73,12 +74,12 @@ serve(async (req) => {
     if (!symbol) return json({ error: "symbol required" }, 400);
     if (side !== "buy" && side !== "sell") return json({ error: "side must be buy or sell" }, 400);
     if (!Number.isFinite(qty) || qty <= 0) return json({ error: "quantity must be > 0" }, 400);
+    if (qty > 10000000) return json({ error: "Quantity exceeds maximum allowable order size (10,000,000)" }, 400);
     if (!["EQUITY", "FUTURE", "OPTION"].includes(instrumentType)) return json({ error: "invalid instrumentType" }, 400);
-    if (!["stock", "crypto", US_MARKET].includes(market)) return json({ error: "invalid market" }, 400);
-    // There is no US derivatives support: no contract master, no lot sizes, and
-    // the option pricing model assumes an Indian risk-free rate.
-    if (market === US_MARKET && instrumentType !== "EQUITY") {
-      return json({ error: "US derivatives are not supported yet" }, 400);
+    if (!["stock", "crypto", US_MARKET, "pakistan_stock", "italy_stock"].includes(market)) return json({ error: "invalid market" }, 400);
+    // There is no international derivatives support: no contract master, no lot sizes.
+    if ((market === US_MARKET || market === "pakistan_stock" || market === "italy_stock") && instrumentType !== "EQUITY") {
+      return json({ error: `${market} derivatives are not supported yet` }, 400);
     }
     if (!isMarket && (!Number.isFinite(limitPrice) || limitPrice <= 0)) return json({ error: "limit price must be > 0" }, 400);
     if (instrumentType === "OPTION") {
@@ -87,6 +88,61 @@ serve(async (req) => {
       if (!expiryDate) return json({ error: "expiryDate required" }, 400);
     }
     if (instrumentType === "FUTURE" && !expiryDate) return json({ error: "expiryDate required" }, 400);
+
+    // --- Validate exit orders against real positions ---
+    if (isExitOrder) {
+      if (instrumentType === "EQUITY") {
+        const { data: held } = await supabase
+          .from("holdings")
+          .select("quantity")
+          .eq("user_id", userId)
+          .eq("symbol", symbol)
+          .eq("market", market)
+          .maybeSingle();
+        if (!held || Number(held.quantity) === 0) {
+          return json({ error: `No open position in ${symbol} to exit` }, 400);
+        }
+        const openQty = Number(held.quantity);
+        const maxExitQty = Math.abs(openQty);
+        if (qty > maxExitQty + 1e-6) {
+          return json({ error: `Exit quantity (${qty}) exceeds your open position size of ${maxExitQty}` }, 400);
+        }
+        if (openQty > 0 && side !== "sell") {
+          return json({ error: "Cannot buy to exit a long position; side must be sell" }, 400);
+        }
+        if (openQty < 0 && side !== "buy") {
+          return json({ error: "Cannot sell to exit a short position; side must be buy" }, 400);
+        }
+      } else {
+        const { data: foPos } = await supabase
+          .from("fo_positions")
+          .select("net_qty, lot_size")
+          .eq("user_id", userId)
+          .eq("symbol", symbol)
+          .eq("instrument_type", instrumentType)
+          .eq("option_type", optionType ?? "")
+          .eq("strike_price", strikePrice ?? 0)
+          .eq("expiry_date", expiryDate ?? "")
+          .eq("is_settled", false)
+          .maybeSingle();
+        if (!foPos || Number(foPos.net_qty) === 0) {
+          return json({ error: `No open derivative position in ${symbol} to exit` }, 400);
+        }
+        const netLots = Number(foPos.net_qty);
+        const lotSize = (Number(foPos.lot_size) > 0) ? Number(foPos.lot_size) : 1;
+        const maxExitLots = Math.abs(netLots);
+        const orderLots = Math.trunc(qty / lotSize);
+        if (orderLots > maxExitLots) {
+          return json({ error: `Exit quantity (${orderLots} lots) exceeds open position of ${maxExitLots} lots` }, 400);
+        }
+        if (netLots > 0 && side !== "sell") {
+          return json({ error: "Cannot buy to exit a long position; side must be sell" }, 400);
+        }
+        if (netLots < 0 && side !== "buy") {
+          return json({ error: "Cannot sell to exit a short position; side must be buy" }, 400);
+        }
+      }
+    }
 
     // --- Derivatives are free for everyone ----------------------------------
     // A plan check used to sit here, refusing F&O to the free tier once
@@ -105,7 +161,7 @@ serve(async (req) => {
     // --- Warm a trusted price into quotes_cache so the engine can price immediately ---
     // US tickers are already bare (AAPL), so extractUnderlying would only ever
     // damage them — it truncates at the first digit and splits on "-".
-    const underlyingKey = (market === "crypto" || market === US_MARKET) ? symbol.toUpperCase() : extractUnderlying(symbol);
+    const underlyingKey = (market === "crypto" || market === US_MARKET || market === "pakistan_stock" || market === "italy_stock") ? symbol.toUpperCase() : extractUnderlying(symbol);
     let refPrice = 0;
     try {
       const qurl = `${SUPABASE_URL}/functions/v1/market-quote?symbol=${encodeURIComponent(underlyingKey)}&market=${encodeURIComponent(market)}`;
@@ -119,10 +175,66 @@ serve(async (req) => {
       }
     } catch (_) { /* ignore */ }
 
-    // Stored price on the pending row: limit -> trigger threshold; market -> informational (engine reprices from cache).
-    const storedPrice = isMarket ? (refPrice > 0 ? refPrice : limitPrice) : limitPrice;
+    // Stored price on the pending row:
+    // - For an OPTION: the contract price is the option premium (NOT the underlying stock price).
+    //   If limitPrice is passed (client LTP or requested limit), use it. Otherwise, compute from refPrice via Black-Scholes.
+    // - For a FUTURE: futurePrice with cost of carry (or limitPrice).
+    // - For EQUITY: limitPrice (limit) or refPrice (market).
+    let storedPrice = 0;
+    if (instrumentType === "OPTION") {
+      if (limitPrice > 0) {
+        storedPrice = limitPrice;
+      } else if (refPrice > 0 && strikePrice && optionType && expiryDate) {
+        const days = getDaysToExpiry(expiryDate);
+        storedPrice = blackScholes(refPrice, strikePrice, days / 365, optionType as "CE" | "PE");
+      }
+    } else if (instrumentType === "FUTURE") {
+      if (limitPrice > 0) {
+        storedPrice = limitPrice;
+      } else if (refPrice > 0 && expiryDate) {
+        storedPrice = calculateFuturePrice(refPrice, getDaysToExpiry(expiryDate));
+      } else if (refPrice > 0) {
+        storedPrice = refPrice;
+      }
+    } else {
+      storedPrice = isMarket ? (refPrice > 0 ? refPrice : limitPrice) : limitPrice;
+    }
+
     if (!Number.isFinite(storedPrice) || storedPrice <= 0) {
       return json({ error: "Could not determine a price; quote unavailable. Please try again." }, 422);
+    }
+
+    // --- Wallet balance pre-check for non-exit orders ---
+    if (!isExitOrder) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("wallet_balance")
+        .eq("id", userId)
+        .maybeSingle();
+      const currentWallet = Number(prof?.wallet_balance ?? 0);
+
+      let requiredCapital = 0;
+      if (instrumentType === "OPTION") {
+        if (side === "buy") {
+          // Option BUY: buyer pays 100% of the option premium. Risk is capped at premium.
+          requiredCapital = storedPrice * qty;
+        } else {
+          // Option SELL (Writing): requires initial margin (~15%).
+          requiredCapital = storedPrice * qty * 0.15;
+        }
+      } else if (instrumentType === "FUTURE") {
+        // Futures: 15% initial margin.
+        requiredCapital = storedPrice * qty * 0.15;
+      } else {
+        // Equity: 100% full value (or short intraday).
+        requiredCapital = storedPrice * qty;
+      }
+
+      if (currentWallet < requiredCapital) {
+        return json({
+          error: `Insufficient wallet balance. Required: ₹${requiredCapital.toFixed(2)}, Available: ₹${currentWallet.toFixed(2)}`,
+        }, 400);
+      }
     }
 
     const nseContractDate = new Date().toISOString().split("T")[0];
@@ -135,6 +247,10 @@ serve(async (req) => {
     // both stages instead of guessing from the market alone.
     const nativeCols = market === US_MARKET
       ? { native_price: storedPrice, native_currency: "USD" }
+      : market === "pakistan_stock"
+      ? { native_price: storedPrice, native_currency: "PKR" }
+      : market === "italy_stock"
+      ? { native_price: storedPrice, native_currency: "EUR" }
       : {};
 
     const ins = await supabase.from("orders").insert({
@@ -168,8 +284,8 @@ serve(async (req) => {
     // Pending-notification parity with the client placeOrder.
     if (resultStatus === "pending") {
       try {
-        // US prices are quoted in USD, so the notification must not say "₹".
-        const ccy = market === US_MARKET ? "$" : "\u20b9";
+        // International prices are quoted in their native currency.
+        const ccy = market === US_MARKET ? "$" : market === "pakistan_stock" ? "Rs " : market === "italy_stock" ? "€" : "\u20b9";
         // action_type "order_pending" (not "order"): channelFor() in
         // push-notification maps "order" to the ORDER EXECUTED channel, so a
         // pending order was arriving with the executed sound. The app's

@@ -8,6 +8,9 @@ import '../core/app_constants.dart';
 import '../core/legal.dart';
 import '../models/user.dart' as app_models;
 import 'dart:async';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'notification_service.dart';
 import 'firebase_service.dart';
 import 'analytics_service.dart';
@@ -581,6 +584,77 @@ class AuthService extends ChangeNotifier {
     } catch (e, st) {
       unawaited(DiagnosticsService.logLoginFailure('google_oauth', e, st));
       throw Exception(mapAuthException(e));
+    }
+  }
+
+  /// Native Sign in with Apple for iOS devices.
+  /// Mandated by Apple App Store Review Guideline 4.8 when third-party sign-in
+  /// (e.g. Google) is supported.
+  Future<void> signInWithApple({String? referralCode}) async {
+    try {
+      final code = referralCode?.trim();
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (code != null && code.isNotEmpty) {
+          await prefs.setString('pending_referral_code', code);
+        } else {
+          await prefs.remove('pending_referral_code');
+        }
+        await prefs.setString('pending_signup_method', 'apple');
+        await prefs.setString('pending_terms_version', LegalDocs.termsVersion);
+      } catch (_) {}
+
+      final rawNonce = _supabase.client.auth.generateRawNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        throw Exception('Could not authenticate with Apple: missing identity token.');
+      }
+
+      await _supabase.client.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+    } catch (e, st) {
+      if (e is SignInWithAppleAuthorizationException &&
+          e.code == AuthorizationErrorCode.canceled) {
+        return; // User canceled Apple Sign-In sheet
+      }
+      unawaited(DiagnosticsService.logLoginFailure('apple_auth', e, st));
+      throw Exception(mapAuthException(e));
+    }
+  }
+
+  /// Deletes the currently authenticated user's account and all associated data.
+  /// Mandated by Apple App Store Review Guideline 5.1.1(v).
+  Future<void> deleteAccount() async {
+    try {
+      final user = _supabase.client.auth.currentUser;
+      if (user == null) return;
+
+      // Invoke server RPC which cascades deletion
+      await _supabase.client.rpc('delete_user_account');
+
+      // Clear local preferences and state
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      await _supabase.client.auth.signOut(scope: SignOutScope.local);
+      _user = null;
+      notifyListeners();
+    } catch (e, st) {
+      unawaited(DiagnosticsService.logLoginFailure('delete_account', e, st));
+      throw Exception('Could not delete your account. Please try again or contact support.');
     }
   }
 

@@ -2,7 +2,7 @@ import React from 'react'
 import { motion } from 'motion/react'
 import { Sparkles } from 'lucide-react'
 import { PlayStoreButton } from './PlayStoreButton'
-import { STARTING_CASH } from '../lib/config'
+import { GUEST_STARTING_CASH, STARTING_CASH } from '../lib/config'
 
 /**
  * Closing download CTA. Replaces the old PreRegSection: the app is live and free,
@@ -44,7 +44,7 @@ export const DownloadSection: React.FC = () => {
               Download today. It&apos;s free.
             </h2>
             <p className="mt-4 max-w-xl text-white/75 text-base leading-relaxed">
-              Start with {STARTING_CASH} in virtual cash, then earn more by clearing
+              Start with {STARTING_CASH} in virtual cash on signup (or {GUEST_STARTING_CASH} as guest), then earn more by clearing
               challenges and keeping your streak alive. Spend it learning on real Indian
               stocks, US stocks, F&amp;O and crypto — with none of your own money at risk.
             </p>
@@ -52,7 +52,7 @@ export const DownloadSection: React.FC = () => {
             <div className="mt-10 flex flex-col items-center gap-3">
               <PlayStoreButton />
               <p className="text-[11px] text-white/55 font-medium">
-                Virtual money only. No purchases, ever.{' '}
+                Simulated market trading only. Demo cash holds zero monetary value.{' '}
                 <a
                   href="/terms"
                   className="hover:text-white underline underline-offset-2"

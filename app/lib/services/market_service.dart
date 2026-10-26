@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
+import '../core/option_pricing.dart';
+import '../core/market_hours.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
 import 'diagnostics_service.dart';
@@ -47,6 +49,116 @@ class MarketService {
   /// realtime subscription on `quotes_cache` rather than a longer window, since
   /// a longer window is what caused this.
   static const Duration _serverCacheMaxAge = Duration(seconds: 10);
+
+  static ({bool isDerivative, String type, String underlying, String? expiryDate, double? strikePrice, String? optionType})? parseDerivative(String rawSymbol) {
+    var s = rawSymbol.trim();
+    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
+      s = s.substring(4);
+    }
+    s = s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
+
+    // 1. Compact NSE Future: RELIANCE26DECFUT, NIFTY26OCTFUT
+    final compactFut = RegExp(r'^([A-Za-z&-]+)(\d{2})([A-Za-z]{3})FUT$', caseSensitive: false).firstMatch(s);
+    if (compactFut != null) {
+      final und = compactFut.group(1)!.toUpperCase();
+      final yr = int.tryParse(compactFut.group(2)!) ?? 26;
+      final mon = compactFut.group(3)!.toUpperCase();
+      final expiry = _expiryDateFromMonth(2000 + yr, mon);
+      return (
+        isDerivative: true,
+        type: 'FUTURE',
+        underlying: und,
+        expiryDate: expiry,
+        strikePrice: null,
+        optionType: null,
+      );
+    }
+
+    // 2. Compact NSE Option: RELIANCE26DEC640CE, NIFTY26OCT24500PE
+    final compactOpt = RegExp(r'^([A-Za-z&-]+)(\d{2})([A-Za-z]{3})(\d+(?:\.\d+)?)(CE|PE)$', caseSensitive: false).firstMatch(s);
+    if (compactOpt != null) {
+      final und = compactOpt.group(1)!.toUpperCase();
+      final yr = int.tryParse(compactOpt.group(2)!) ?? 26;
+      final mon = compactOpt.group(3)!.toUpperCase();
+      final strike = double.tryParse(compactOpt.group(4)!) ?? 0.0;
+      final optType = compactOpt.group(5)!.toUpperCase();
+      final expiry = _expiryDateFromMonth(2000 + yr, mon);
+      return (
+        isDerivative: true,
+        type: 'OPTION',
+        underlying: und,
+        expiryDate: expiry,
+        strikePrice: strike,
+        optionType: optType,
+      );
+    }
+
+    // 3. Hyphenated Option: RELIANCE-2026-10-27-3125-CE
+    final hypOpt = RegExp(r'^([A-Za-z&-]+)-(\d{4})-(\d{1,2})-(\d{1,2})-(\d+(?:\.\d+)?)-(CE|PE)$', caseSensitive: false).firstMatch(s);
+    if (hypOpt != null) {
+      final und = hypOpt.group(1)!.toUpperCase();
+      final yyyy = hypOpt.group(2)!;
+      final mm = hypOpt.group(3)!.padLeft(2, '0');
+      final dd = hypOpt.group(4)!.padLeft(2, '0');
+      final strike = double.tryParse(hypOpt.group(5)!) ?? 0.0;
+      final optType = hypOpt.group(6)!.toUpperCase();
+      return (
+        isDerivative: true,
+        type: 'OPTION',
+        underlying: und,
+        expiryDate: '$yyyy-$mm-$dd',
+        strikePrice: strike,
+        optionType: optType,
+      );
+    }
+
+    // 4. Space-separated Future: RELIANCE OCT FUT, RELIANCE 29 Dec 26 FUT
+    final spaceFut = RegExp(r'^([A-Za-z&-]+)\s+(?:(\d{1,2})\s+)?([A-Za-z]{3})(?:\s+(\d{2}))?\s+FUT$', caseSensitive: false).firstMatch(s);
+    if (spaceFut != null) {
+      final und = spaceFut.group(1)!.toUpperCase();
+      final mon = spaceFut.group(3)!.toUpperCase();
+      final yr = int.tryParse(spaceFut.group(4) ?? '') ?? DateTime.now().year;
+      final expiry = _expiryDateFromMonth(yr < 100 ? 2000 + yr : yr, mon);
+      return (
+        isDerivative: true,
+        type: 'FUTURE',
+        underlying: und,
+        expiryDate: expiry,
+        strikePrice: null,
+        optionType: null,
+      );
+    }
+
+    // 5. Simple Future: RELIANCE-FUT or RELIANCE FUT
+    if (s.endsWith('FUT') || s.endsWith('-FUT')) {
+      final und = s.replaceAll(RegExp(r'[- ]?FUT$', caseSensitive: false), '').trim().toUpperCase();
+      if (und.isNotEmpty) {
+        return (
+          isDerivative: true,
+          type: 'FUTURE',
+          underlying: und,
+          expiryDate: null,
+          strikePrice: null,
+          optionType: null,
+        );
+      }
+    }
+
+    return null;
+  }
+
+  static String _expiryDateFromMonth(int year, String monthStr) {
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    final mIndex = months.indexOf(monthStr.toUpperCase());
+    final month = mIndex >= 0 ? mIndex + 1 : 1;
+    final lastDay = DateTime(year, month + 1, 0);
+    var diff = lastDay.weekday - DateTime.thursday;
+    if (diff < 0) diff += 7;
+    final lastThu = lastDay.subtract(Duration(days: diff));
+    final mm = month.toString().padLeft(2, '0');
+    final dd = lastThu.day.toString().padLeft(2, '0');
+    return '$year-$mm-$dd';
+  }
 
   static String normalizeSymbol(String sym, String market) {
     var s = sym.toUpperCase().trim();
@@ -94,6 +206,69 @@ class MarketService {
       }
     }
 
+    // Derivative pricing fallback: if this is an F&O instrument, synthesize
+    // its price from the underlying spot so users see prices immediately.
+    if (market == 'stock') {
+      final deriv = parseDerivative(symbol);
+      if (deriv != null) {
+        final spotQuote = await quote(deriv.underlying, 'stock');
+        if (spotQuote != null && spotQuote.price > 0) {
+          final daysToExpiry = MarketHours.daysToExpiry(
+            deriv.expiryDate != null ? DateTime.tryParse(deriv.expiryDate!) : null,
+            fallback: 15.0,
+          );
+          final double price;
+          final double prevClose;
+          if (deriv.type == 'FUTURE') {
+            price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: daysToExpiry);
+            prevClose = OptionPricing.futurePrice(
+              spot: spotQuote.previousClose > 0 ? spotQuote.previousClose : spotQuote.price,
+              daysToExpiry: daysToExpiry + 1.0,
+            );
+          } else {
+            price = OptionPricing.optionPremium(
+              optionType: deriv.optionType ?? 'CE',
+              spot: spotQuote.price,
+              strike: deriv.strikePrice ?? spotQuote.price,
+              daysToExpiry: daysToExpiry,
+              symbol: deriv.underlying,
+            );
+            prevClose = OptionPricing.optionPremium(
+              optionType: deriv.optionType ?? 'CE',
+              spot: spotQuote.previousClose > 0 ? spotQuote.previousClose : spotQuote.price,
+              strike: deriv.strikePrice ?? spotQuote.price,
+              daysToExpiry: daysToExpiry + 1.0,
+              symbol: deriv.underlying,
+            );
+          }
+          final pRounded = (price * 100).round() / 100.0;
+          final pcRounded = (prevClose * 100).round() / 100.0;
+          final change = ((pRounded - pcRounded) * 100).round() / 100.0;
+          final changePct = pcRounded > 0 ? ((pRounded - pcRounded) / pcRounded) * 100.0 : 0.0;
+          final quoteVal = Quote(
+            symbol: symbol,
+            yfSymbol: symbol,
+            name: symbol,
+            price: pRounded,
+            previousClose: pcRounded,
+            change: change,
+            changePct: (changePct * 100).round() / 100.0,
+            currency: 'INR',
+            market: 'stock',
+            source: 'synthetic_fo',
+            dayLow: ((pRounded * 0.985) * 100).round() / 100.0,
+            dayHigh: ((pRounded * 1.015) * 100).round() / 100.0,
+            open: pcRounded,
+          );
+          _quoteCache[cacheKey] = {
+            'timestamp': now,
+            'quote': quoteVal,
+          };
+          return quoteVal;
+        }
+      }
+    }
+
     try {
       final response = await http
           .get(
@@ -133,6 +308,37 @@ class MarketService {
     }
   }
 
+  static Future<double?> fetchEurInrRate() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_functionsBase/market-quote?market=fx&symbol=EURINR'), headers: _headers)
+          .timeout(_timeout);
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body);
+      if (body is! Map) return null;
+      final rate = (body['price'] as num?)?.toDouble();
+      return (rate != null && rate > 0) ? rate : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<double?> fetchPkrInrRate() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_functionsBase/market-quote?market=fx&symbol=PKRINR'), headers: _headers)
+          .timeout(_timeout);
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body);
+      if (body is! Map) return null;
+      final rate = (body['price'] as num?)?.toDouble();
+      return (rate != null && rate > 0) ? rate : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+
   /// Batch variant of [quote]: resolves many symbols with a single server-cache
   /// read per market (collapsing an N-reads-per-list pattern into one), then
   /// falls back to the live per-symbol [quote] for anything not fresh in the
@@ -155,6 +361,13 @@ class MarketService {
     final byMarket = <String, List<({String symbol, String market})>>{};
     for (final p in unique.values) {
       byMarket.putIfAbsent(p.market, () => []).add(p);
+      // Pre-request underlying symbols for any Indian stock derivatives
+      if (p.market == 'stock') {
+        final d = parseDerivative(p.symbol);
+        if (d != null) {
+          byMarket['stock']!.add((symbol: d.underlying, market: 'stock'));
+        }
+      }
     }
 
     final resolved = <String>{};
@@ -210,16 +423,73 @@ class MarketService {
       }
     }
 
+    // Synthesize derivative quotes from underlying spot prices loaded in this batch
+    for (final p in unique.values) {
+      final reqKey = '${p.symbol}\x1F${p.market}';
+      if (resolved.contains(reqKey) || p.market != 'stock') continue;
+      final d = parseDerivative(p.symbol);
+      if (d == null) continue;
+      final undKey = '${d.underlying}\x1Fstock';
+      final spotQuote = result[undKey] ?? _quoteCache[undKey]?['quote'] as Quote?;
+      if (spotQuote != null && spotQuote.price > 0) {
+        final daysToExpiry = MarketHours.daysToExpiry(
+          d.expiryDate != null ? DateTime.tryParse(d.expiryDate!) : null,
+          fallback: 15.0,
+        );
+        final double price;
+        final double prevClose;
+        if (d.type == 'FUTURE') {
+          price = OptionPricing.futurePrice(spot: spotQuote.price, daysToExpiry: daysToExpiry);
+          prevClose = OptionPricing.futurePrice(
+            spot: spotQuote.previousClose > 0 ? spotQuote.previousClose : spotQuote.price,
+            daysToExpiry: daysToExpiry + 1.0,
+          );
+        } else {
+          price = OptionPricing.optionPremium(
+            optionType: d.optionType ?? 'CE',
+            spot: spotQuote.price,
+            strike: d.strikePrice ?? spotQuote.price,
+            daysToExpiry: daysToExpiry,
+            symbol: d.underlying,
+          );
+          prevClose = OptionPricing.optionPremium(
+            optionType: d.optionType ?? 'CE',
+            spot: spotQuote.previousClose > 0 ? spotQuote.previousClose : spotQuote.price,
+            strike: d.strikePrice ?? spotQuote.price,
+            daysToExpiry: daysToExpiry + 1.0,
+            symbol: d.underlying,
+          );
+        }
+        final pRounded = (price * 100).round() / 100.0;
+        final pcRounded = (prevClose * 100).round() / 100.0;
+        final change = ((pRounded - pcRounded) * 100).round() / 100.0;
+        final changePct = pcRounded > 0 ? ((pRounded - pcRounded) / pcRounded) * 100.0 : 0.0;
+        final q = Quote(
+          symbol: p.symbol,
+          yfSymbol: p.symbol,
+          name: p.symbol,
+          price: pRounded,
+          previousClose: pcRounded,
+          change: change,
+          changePct: (changePct * 100).round() / 100.0,
+          currency: 'INR',
+          market: 'stock',
+          source: 'synthetic_fo',
+          dayLow: ((pRounded * 0.985) * 100).round() / 100.0,
+          dayHigh: ((pRounded * 1.015) * 100).round() / 100.0,
+          open: pcRounded,
+        );
+        result[reqKey] = q;
+        resolved.add(reqKey);
+      }
+    }
+
     // Live fallback for anything not served fresh from cache (parallel — the
     // same behaviour as the previous per-symbol code path).
     final pending = unique.values
         .where((p) => !resolved.contains('${p.symbol}\x1F${p.market}'));
     await Future.wait(pending.map((p) async {
       try {
-        // forceRefresh because the batch read above already established there is
-        // no fresh cache row for this pair. Without it, quote() re-queries
-        // quotes_cache for a row we know is stale — one wasted round trip per
-        // miss, per poll.
         final q = await quote(p.symbol, p.market, forceRefresh: true);
         if (q != null) result['${p.symbol}\x1F${p.market}'] = q;
       } catch (_) {}

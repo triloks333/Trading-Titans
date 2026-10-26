@@ -43,11 +43,10 @@ function blackScholes(
   tYears: number,
 ): number {
   if (spot <= 0 || strike <= 0) return 0.05
+  const intrinsic = optionType === 'CE' ? Math.max(0, spot - strike) : Math.max(0, strike - spot)
   if (tYears <= 0) {
     // At or past expiry the premium is pure intrinsic value.
-    return optionType === 'CE'
-      ? Math.max(0, spot - strike)
-      : Math.max(0, strike - spot)
+    return Math.max(0.05, Math.round(intrinsic * 100) / 100)
   }
   const sqrtT = Math.sqrt(tYears)
   const d1 =
@@ -59,8 +58,8 @@ function blackScholes(
     optionType === 'CE'
       ? spot * normalCdf(d1) - discount * normalCdf(d2)
       : discount * normalCdf(-d2) - spot * normalCdf(-d1)
-  // Floored at 5 paise and rounded to paise, exactly as the Dart copy does.
-  return Math.max(0.05, Math.round(price * 100) / 100)
+  // Floored at 5 paise and intrinsic value, rounded to paise.
+  return Math.max(0.05, Math.max(intrinsic, Math.round(price * 100) / 100))
 }
 
 export function optionPremium({
@@ -92,6 +91,7 @@ export function futurePrice({
 /** Calendar days from now until [expiry]; negative once past. */
 export function daysToExpiry(expiry: string | null | undefined): number {
   if (!expiry) return 0
-  const ms = new Date(expiry).getTime() - Date.now()
+  const isoStr = expiry.includes('T') ? expiry : `${expiry}T15:30:00+05:30`
+  const ms = new Date(isoStr).getTime() - Date.now()
   return Number.isNaN(ms) ? 0 : ms / 86_400_000
 }

@@ -19,8 +19,8 @@ export const AboutPage: React.FC = () => {
             About <span className="font-playfair italic text-white">Trading Titans</span>
           </h1>
           <p className="text-lg text-white/70 leading-relaxed">
-            Trading Titans is a premier financial technology and gamified simulation platform operated by{' '}
-            <strong className="text-white">KashivWealth Management LLP</strong>.
+            Trading Titans is an official financial technology and gamified simulation platform developed and operated by{' '}
+            <strong className="text-white">Kashivwealth Management LLP</strong>.
           </p>
         </div>
 
@@ -33,15 +33,16 @@ export const AboutPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
               <span className="block text-xs uppercase tracking-wider text-white/50 mb-1 font-semibold">Legal Company Name</span>
-              <span className="text-base font-bold text-white">KashivWealth Management LLP</span>
+              <span className="text-base font-bold text-white">Kashivwealth Management LLP</span>
+              <span className="block text-[11px] text-white/40 mt-0.5">(KASHIVWEALTH MANAGEMENT LLP)</span>
             </div>
             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
               <span className="block text-xs uppercase tracking-wider text-white/50 mb-1 font-semibold">Brand &amp; Product</span>
-              <span className="text-base font-bold text-white">Trading Titans (Web &amp; Mobile App)</span>
+              <span className="text-base font-bold text-white">Trading Titans (Web &amp; Mobile Applications)</span>
             </div>
             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
               <span className="block text-xs uppercase tracking-wider text-white/50 mb-1 font-semibold">Business Nature</span>
-              <span className="text-white font-medium">Educational Technology &amp; Market Simulation Software</span>
+              <span className="text-white font-medium">Educational Market Simulation Software &amp; Financial Technology</span>
             </div>
             <div className="bg-white/5 p-4 rounded-xl border border-white/10">
               <span className="block text-xs uppercase tracking-wider text-white/50 mb-1 font-semibold">Official Contact Email</span>
@@ -83,13 +84,13 @@ export const AboutPage: React.FC = () => {
         <div className="prose prose-invert max-w-none text-white/70 space-y-4 text-sm leading-relaxed border-t border-white/10 pt-10">
           <h2 className="text-xl font-bold text-white mb-4">Operations &amp; Platform Transparency</h2>
           <p>
-            KashivWealth Management LLP builds software products that bring institutional-grade simulation tools to individual retail learners. Through Trading Titans, users have access to real-time quotes, technical charts, options chains, and order execution matching simulations without requiring real monetary deposits or brokerage accounts.
+            Kashivwealth Management LLP builds software products that bring institutional-grade simulation tools to individual retail learners. Through Trading Titans, users have access to real-time quotes, technical charts, options chains, and order execution matching simulations without requiring real monetary deposits or brokerage accounts.
           </p>
           <p>
             Every user is provided virtual simulated capital upon signup to practise trading responsibly. All metrics, leaderboards, and achievements within the application are strictly virtual game elements designed for educational feedback.
           </p>
           <p>
-            For any corporate, regulatory, or partnership inquiries, KashivWealth Management LLP can be reached directly at{' '}
+            For any corporate, regulatory, or partnership inquiries, Kashivwealth Management LLP can be reached directly at{' '}
             <a href="mailto:support@thetradingtitans.com" className="text-white underline">
               support@thetradingtitans.com
             </a>.

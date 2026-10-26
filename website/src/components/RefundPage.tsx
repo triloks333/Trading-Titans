@@ -1,32 +1,43 @@
 import React from 'react'
 import { NoticePage } from './NoticePage'
-import { LAST_UPDATED } from '../lib/legal'
+import { LAST_UPDATED, SUPPORT_EMAIL } from '../lib/legal'
 
 /**
  * Public route: /refund (also /refund-policy, /refunds).
  *
- * Trading Titans is free, so there is nothing to refund. The page is kept rather
- * than removed because the URL may still be referenced from the store listing or
- * older builds, and this states the position plainly instead of 404ing.
+ * Outlines our fair refund & cancellation policy for digital goods,
+ * subscriptions (Pro & Titan), and one-time top-ups operated by Kashivwealth Management LLP.
  */
 export const RefundPage: React.FC = () => (
   <NoticePage
-    title="Refund Policy"
-    lead="Trading Titans is completely free. There is nothing to buy, so there is nothing to refund."
+    title="Cancellation &amp; Refund Policy"
+    lead="Trading Titans is operated by Kashivwealth Management LLP. Digital services, simulator subscriptions, and virtual demo cash grants are provisioned immediately upon purchase."
     points={[
-      'There are no subscriptions, paid plans, wallet top-ups or in-app purchases.',
-      'We do not collect card details, bank details or UPI information.',
-      'Demo cash inside the app is fictional. It cannot be bought, withdrawn, redeemed or exchanged for real money, and no balance represents money you have paid.',
-      'If anyone asks you to pay for Trading Titans, for demo cash, or for an account, it is not us. Please report it to our support email.',
+      'Technical Failure / Non-Delivery: If an authorized payment succeeds but your plan or demo cash fails to credit to your account, we will activate it immediately upon verification or issue a 100% full refund.',
+      'Duplicate Charges: Erroneous duplicate charges for the same order or billing period are refunded in full.',
+      'Accidental Renewals: If an auto-renewal occurs unintentionally, contact us within 7 days. If the new period is substantially unused, we will process a complete refund for that billing cycle.',
+      'Subscriptions Cancellation: You can cancel monthly or annual subscriptions anytime via your receipt link, in-app billing settings, or Apple ID subscriptions settings. You will retain access until the end of the paid billing period without future charges.',
+      'Digital Goods & Demo Cash: Because virtual cash is fictional simulation currency delivered immediately, spent virtual balances or dissatisfaction with simulated market results are non-refundable.',
+      'Refund Processing Time: Approved refunds are returned directly to the original payment source (credit/debit card, UPI, or App Store account) within 5 to 7 business days.',
     ]}
   >
     <p>
-      If we ever introduce optional paid features, we will publish a refund policy
-      here and update our{' '}
+      To submit a refund request or billing inquiry, please email us directly at{' '}
+      <a href={`mailto:${SUPPORT_EMAIL}`} className="text-[#2563eb] hover:underline font-semibold">
+        {SUPPORT_EMAIL}
+      </a>{' '}
+      with your registered email and payment transaction reference ID.
+    </p>
+    <p>
+      For full details, please review our{' '}
       <a href="/terms" className="text-[#2563eb] hover:underline">
         Terms &amp; Conditions
       </a>{' '}
-      before anything can be charged.
+      and{' '}
+      <a href="/privacy" className="text-[#2563eb] hover:underline">
+        Privacy Policy
+      </a>
+      .
     </p>
     <p className="text-xs text-[#7888A3]">Last updated: {LAST_UPDATED}</p>
   </NoticePage>

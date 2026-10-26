@@ -16,6 +16,7 @@ import '../../services/tour_service.dart';
 import '../../services/nav_tab_service.dart';
 import '../../widgets/reward_celebration_dialog.dart';
 import '../../widgets/update_dialogs.dart';
+import '../../widgets/country_currency_update_dialog.dart';
 import 'dashboard_screen.dart';
 import 'trade_screen.dart';
 import 'portfolio_screen.dart';
@@ -62,8 +63,10 @@ class _MainNavigationState extends State<MainNavigation> {
     });
     // Initial check after a brief load delay
     Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
       _checkRewards();
       _checkSoftUpdate();
+      CountryCurrencyUpdateDialog.checkAndShow(context);
       _maybeAskForRating();
       SupabaseService().evaluatePriceAlerts();
     });
@@ -97,7 +100,7 @@ class _MainNavigationState extends State<MainNavigation> {
     _softUpdatePrompted = true;
     showDialog(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (dialogCtx) => SoftUpdateDialog(
         updateUrl: auth.updateUrl,
         releaseNotes: auth.latestVersionNotes,

@@ -13,7 +13,18 @@ class OptionPricing {
 
   // Risk-free rate and implied volatility assumptions used across the app.
   static const double _r = 0.065;
-  static const double _sigma = 0.25;
+  static const double _sigmaStock = 0.24;
+  static const double _sigmaIndex = 0.14;
+
+  /// Returns calibrated IV based on whether the underlying is an index or stock.
+  static double sigmaFor(String? symbol) {
+    if (symbol == null) return _sigmaStock;
+    final s = symbol.toUpperCase();
+    if (s.contains('NIFTY') || s.contains('SENSEX') || s.contains('BANKEX')) {
+      return _sigmaIndex;
+    }
+    return _sigmaStock;
+  }
 
   /// Abramowitz-Stegun approximation of the standard normal CDF.
   static double _normalCDF(double x) {
@@ -36,24 +47,53 @@ class OptionPricing {
     double spot,
     double strike,
     double tYears,
+    double sigma,
   ) {
     if (spot <= 0 || strike <= 0) return 0.05;
+    final intrinsic = optionType.toUpperCase() == 'CE'
+        ? math.max(0.0, spot - strike)
+        : math.max(0.0, strike - spot);
     if (tYears <= 0) {
-      final intrinsic = optionType == 'CE'
-          ? math.max(0.0, spot - strike)
-          : math.max(0.0, strike - spot);
-      return intrinsic;
+      return math.max(0.05, (intrinsic * 100).round() / 100.0);
     }
-    final d1 = (math.log(spot / strike) + (_r + 0.5 * _sigma * _sigma) * tYears) /
-        (_sigma * math.sqrt(tYears));
-    final d2 = d1 - _sigma * math.sqrt(tYears);
+    final d1 = (math.log(spot / strike) + (_r + 0.5 * sigma * sigma) * tYears) /
+        (sigma * math.sqrt(tYears));
+    final d2 = d1 - sigma * math.sqrt(tYears);
     double price;
-    if (optionType == 'CE') {
+    if (optionType.toUpperCase() == 'CE') {
       price = spot * _normalCDF(d1) - strike * math.exp(-_r * tYears) * _normalCDF(d2);
     } else {
       price = strike * math.exp(-_r * tYears) * _normalCDF(-d2) - spot * _normalCDF(-d1);
     }
-    return math.max(0.05, (price * 100).round() / 100.0);
+    return math.max(0.05, math.max(intrinsic, (price * 100).round() / 100.0));
+  }
+
+  /// Calculates Black-Scholes Delta for option sensitivity to underlying movements.
+  static double delta({
+    required String optionType,
+    required double spot,
+    required double strike,
+    required double daysToExpiry,
+    String? symbol,
+    double? sigma,
+  }) {
+    if (spot <= 0 || strike <= 0) return 0.0;
+    if (daysToExpiry <= 0) {
+      if (optionType.toUpperCase() == 'CE') {
+        return spot > strike ? 1.0 : 0.0;
+      } else {
+        return spot < strike ? -1.0 : 0.0;
+      }
+    }
+    final tYears = math.max(0.0001, daysToExpiry) / 365.0;
+    final sig = sigma ?? sigmaFor(symbol);
+    final d1 = (math.log(spot / strike) + (_r + 0.5 * sig * sig) * tYears) /
+        (sig * math.sqrt(tYears));
+    if (optionType.toUpperCase() == 'CE') {
+      return _normalCDF(d1).clamp(0.0, 1.0);
+    } else {
+      return (_normalCDF(d1) - 1.0).clamp(-1.0, 0.0);
+    }
   }
 
   /// Estimated option premium for the given [spot], [strike] and [optionType]
@@ -63,9 +103,12 @@ class OptionPricing {
     required double spot,
     required double strike,
     required double daysToExpiry,
+    String? symbol,
+    double? sigma,
   }) {
     final tYears = math.max(0.0001, daysToExpiry) / 365.0;
-    return _blackScholes(optionType, spot, strike, tYears);
+    final sig = sigma ?? sigmaFor(symbol);
+    return _blackScholes(optionType, spot, strike, tYears, sig);
   }
 
   /// Estimated futures price = spot adjusted by the cost-of-carry to expiry.

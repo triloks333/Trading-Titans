@@ -27,6 +27,7 @@ function channelFor(t: string | null | undefined): { channel: string; type: stri
     case "order_pending": return { channel: "order_pending_channel_v1", type: "order_pending" };
     case "order_failed": return { channel: "order_failed_channel_v1", type: "order_failed" };
     case "reward": return { channel: "reward_channel_v1", type: "reward" };
+    case "chat": return { channel: "chat_channel_v1", type: "chat" };
     default: return { channel: "broadcast_channel_v1", type: "broadcast" };
   }
 }
@@ -95,7 +96,7 @@ serve(async (req) => {
   // (the client would read '' as a route and reject it, losing the fallback). Only
   // these four keys are forwarded — no reason to ship a whole row to the handset.
   const pushData: Record<string, string> = { type };
-  for (const key of ["cta_route", "cta_url", "symbol", "market"]) {
+  for (const key of ["cta_route", "cta_url", "symbol", "market", "message_id", "author_name", "author_id", "tag", "is_everyone", "action_route"]) {
     const raw = actionData?.[key];
     if (raw === null || raw === undefined) continue;
     const value = String(raw).trim();

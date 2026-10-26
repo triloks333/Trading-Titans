@@ -1,4 +1,4 @@
-﻿/// Terms & Conditions and Privacy Policy shown in the app.
+/// Terms & Conditions and Privacy Policy shown in the app.
 ///
 /// Written for the app as it actually behaves. As of the September 2026 revision
 /// that includes optional paid plans (Pro, Titan) and one-time demo-cash top-ups,
@@ -102,24 +102,27 @@ class LegalDocs {
     lastUpdated: lastUpdated,
     noticeTitle: 'IMPORTANT NOTICE',
     notice:
-        'Trading Titans is a virtual paper-trading simulation for educational '
-        'purposes only. It is free to use; some optional features are paid.\n\n'
+        'Trading Titans is an educational market simulation platform wholly owned, '
+        'developed, and operated by Kashivwealth Management LLP, incorporated in India. '
+        'It is free to use; some optional features are paid.\n\n'
         'We do not facilitate real-world trading, broker connectivity, real '
         'financial transactions or payouts, and we do not provide professional '
         'financial advice. Every portfolio, balance and profit figure in the app '
-        'is fictional, including any balance added by a paid top-up.',
+        'is fictional, including any balance added by a paid subscription or top-up.',
     intro:
         'By accessing, downloading, or using the Trading Titans mobile '
-        'application or website (together, the "Platform"), you agree to these '
-        'Terms & Conditions.',
+        'application or website (together, the "Platform"), operated by '
+        'Kashivwealth Management LLP, you agree to these Terms & Conditions.',
     sections: [
       LegalSection(
-        heading: '1. Agreement to Terms',
+        heading: '1. Agreement to Terms & Corporate Entity',
         paragraphs: [
           'By accessing, downloading, or using the Trading Titans mobile '
               'application or website (together, the "Platform"), you agree to '
-              'be bound by these Terms & Conditions. If you do not agree, you '
+              'be bound by these Terms & Conditions with Kashivwealth Management LLP '
+              '("Company", "we", "us", or "our"). If you do not agree, you '
               'must stop using the Platform and uninstall the app.',
+          'Trading Titans is a software product owned and operated by Kashivwealth Management LLP.',
         ],
       ),
       LegalSection(
@@ -261,7 +264,8 @@ class LegalDocs {
     title: 'Privacy Policy',
     lastUpdated: lastUpdated,
     intro:
-        'Trading Titans is a virtual trading simulator. This policy explains '
+        'Trading Titans is an educational market simulation service operated by '
+        'Kashivwealth Management LLP ("Company", "we", "us", or "our"). This policy explains '
         'what we collect, why, and what you can do about it. We do not sell '
         'your data, and we never see your card details.',
     sections: [

@@ -1,6 +1,6 @@
 import React from 'react'
 import { NoticePage } from './NoticePage'
-import { PLAY_STORE_URL, STARTING_CASH } from '../lib/config'
+import { GUEST_STARTING_CASH, PLAY_STORE_URL, STARTING_CASH } from '../lib/config'
 
 /**
  * Public route: /prereg-terms
@@ -14,8 +14,8 @@ export const PreregTermsPage: React.FC = () => (
     title="Pre-registration has ended"
     lead={`Trading Titans is now live on Google Play, and it is free to download. There is no longer anything to pre-register for.`}
     points={[
-      `Every new account starts with ${STARTING_CASH} in virtual practice cash — no pre-registration needed.`,
-      'The app is completely free. No subscriptions, no paid plans, no in-app purchases.',
+      `Every new account starts with ${STARTING_CASH} in virtual practice cash on signup (or ${GUEST_STARTING_CASH} in guest mode) — no pre-registration needed.`,
+      'Core trading simulation is completely free to use, with optional paid subscriptions (Pro & Titan) and top-up packs.',
       'Demo cash is fictional. It has zero real-world value and cannot be withdrawn, redeemed or exchanged for real money.',
       'Challenges, streaks and referrals award further demo cash inside the app.',
     ]}

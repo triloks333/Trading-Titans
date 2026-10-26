@@ -45,6 +45,10 @@ void main() {
       category: NotificationCategory.broadcast,
       channelId: 'broadcast_channel_v1',
     ),
+    'chat': (
+      category: NotificationCategory.chat,
+      channelId: 'chat_channel_v1',
+    ),
   };
 
   group('categoryFromType matches the push-notification contract', () {

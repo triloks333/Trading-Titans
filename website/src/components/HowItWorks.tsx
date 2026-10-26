@@ -7,7 +7,7 @@ const STEPS = [
   {
     n: '01',
     title: `Start with ${STARTING_CASH} free`,
-    body: 'Sign up and your virtual wallet is funded straight away. No payment, no plan, nothing to unlock.',
+    body: `Sign up and your virtual wallet is funded with ${STARTING_CASH} straight away (or test out the market with ₹500 in guest mode). No payment, no plan, nothing to unlock.`,
   },
   {
     n: '02',

@@ -216,10 +216,10 @@ void main() {
   });
 
   group('MarketTab catalogue', () {
-    test('covers the three markets with distinct keys', () {
+    test('covers all markets with distinct keys', () {
       expect(MarketTab.all.map((t) => t.key).toList(),
-          ['stock', 'us_stock', 'crypto']);
-      expect(MarketTab.all.map((t) => t.key).toSet().length, 3);
+          ['stock', 'us_stock', 'crypto', 'pakistan_stock', 'italy_stock']);
+      expect(MarketTab.all.map((t) => t.key).toSet().length, 5);
     });
 
     test('byKey falls back to Indian stocks for an unknown market', () {

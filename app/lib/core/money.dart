@@ -33,10 +33,14 @@ class Money {
 
   /// The currency an instrument's own prices arrive in.
   ///
-  /// US equities are quoted in USD by the backend; everything else is INR,
-  /// including crypto, which is already converted upstream.
-  static Currency sourceFor(String? market) =>
-      market == MarketHours.usStock ? Currency.usd : Currency.inr;
+  /// US equities arrive in USD, Pakistan stocks in PKR, Italy stocks in EUR;
+  /// Indian equities, F&O and crypto arrive in INR.
+  static Currency sourceFor(String? market) => switch (market) {
+        MarketHours.usStock => Currency.usd,
+        MarketHours.pakistanStock => Currency.pkr,
+        MarketHours.italyStock => Currency.eur,
+        _ => Currency.inr,
+      };
 
   /// Symbol currently being displayed. Independent of market, because the user's
   /// choice governs the whole app.
@@ -108,11 +112,26 @@ class Money {
 
   /// A short note explaining the conversion, for order confirmation screens.
   /// Returns null when nothing is being converted.
-  static String? conversionNote() {
-    if (!isConverted) return null;
-    final r = rate;
-    if (r == null) return 'Converted from \u20b9 at the live rate';
-    return 'Converted at 1 $dollar = $rupee${r.toStringAsFixed(2)}';
+  static String? conversionNote({String? market}) {
+    final src = sourceFor(market);
+    final target = display;
+
+    // If instrument source is non-INR, show instrument conversion to INR
+    if (src != Currency.inr) {
+      final rate = _svc.converter.inrRateFor(src);
+      return '(1 ${src.symbol.trim()} = $rupee${rate.toStringAsFixed(2)})';
+    }
+
+    // If user's display currency is non-INR, explain user currency to INR
+    if (target != Currency.inr) {
+      final rate = _svc.converter.inrRateFor(target);
+      if (market == null) {
+        return 'Converted at 1 ${target.symbol.trim()} = $rupee${rate.toStringAsFixed(2)}';
+      }
+      return '(1 ${target.symbol.trim()} = $rupee${rate.toStringAsFixed(2)})';
+    }
+
+    return null;
   }
 
   /// The rupee amount that will actually move in the wallet, for a figure whose

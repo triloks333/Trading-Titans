@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { searchUsStocks } from "../_shared/yahoo.ts";
+import { searchUsStocks, searchPakistanStocks, searchItalyStocks } from "../_shared/yahoo.ts";
 
 // Inline CORS helpers
 export const corsHeaders = {
@@ -245,6 +245,34 @@ async function handleRequest(req: Request): Promise<Response> {
           market: "us_stock",
           instrument_type: "EQUITY",
         }));
+      }
+    } else if (market === "pakistan_stock") {
+      if (q.length > 0) {
+        const hits = await searchPakistanStocks(query);
+        results = hits.map((h) => {
+          const disp = h.symbol.endsWith(".KA") ? h.symbol.slice(0, -3) : h.symbol;
+          return {
+            symbol: h.symbol,
+            display_symbol: disp,
+            name: h.name,
+            market: "pakistan_stock",
+            instrument_type: "EQUITY",
+          };
+        });
+      }
+    } else if (market === "italy_stock") {
+      if (q.length > 0) {
+        const hits = await searchItalyStocks(query);
+        results = hits.map((h) => {
+          const disp = h.symbol.endsWith(".MI") ? h.symbol.slice(0, -3) : h.symbol;
+          return {
+            symbol: h.symbol,
+            display_symbol: disp,
+            name: h.name,
+            market: "italy_stock",
+            instrument_type: "EQUITY",
+          };
+        });
       }
     } else {
       results = await searchCrypto(query);

@@ -140,6 +140,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
 
   void _navigateToOrder(bool isBuy) async {
     if (_quote == null) return;
+    final deriv = MarketService.parseDerivative(widget.symbol);
     final navigator = Navigator.of(context);
     final refresh = widget.onRefresh;
     Navigator.pop(context);
@@ -148,10 +149,30 @@ class _StockActionSheetState extends State<StockActionSheet> {
         builder: (_) => OrderEntryScreen(
           quote: _quote!,
           isBuy: isBuy,
+          instrumentType: deriv?.type ?? 'EQUITY',
+          strikePrice: deriv?.strikePrice,
+          optionType: deriv?.optionType,
+          expiryDate: deriv?.expiryDate,
         ),
       ),
     );
     if (refresh != null) refresh();
+  }
+
+  String get _exchangeLabel {
+    switch (widget.market) {
+      case 'crypto':
+        return 'CRYPTO';
+      case 'pakistan_stock':
+        return 'PSX';
+      case 'italy_stock':
+        return 'BORSA ITALIANA';
+      case 'us_stock':
+        return 'US';
+      case 'stock':
+      default:
+        return 'NSE';
+    }
   }
 
   @override
@@ -220,7 +241,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                       Row(
                         children: [
                           Text(
-                            widget.market == 'crypto' ? 'CRYPTO' : 'NSE',
+                            _exchangeLabel,
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: AppColors.ink4,
@@ -341,41 +362,44 @@ class _StockActionSheetState extends State<StockActionSheet> {
                               ],
                             ),
                           ),
-                          GestureDetector(
-                            onTap: () async {
-                              final navigator = Navigator.of(context);
-                              final refresh = widget.onRefresh;
-                              Navigator.pop(context);
-                              await navigator.push(
-                                MaterialPageRoute(
-                                  builder: (_) => OptionChainScreen(
-                                    underlyingSymbol: widget.symbol,
-                                    spotPrice: _quote?.price ?? 0.0,
-                                    market: widget.market,
+                          if (widget.market == 'stock')
+                            GestureDetector(
+                              onTap: () async {
+                                final navigator = Navigator.of(context);
+                                final refresh = widget.onRefresh;
+                                final deriv = MarketService.parseDerivative(widget.symbol);
+                                final underlying = deriv?.underlying ?? widget.symbol;
+                                Navigator.pop(context);
+                                await navigator.push(
+                                  MaterialPageRoute(
+                                    builder: (_) => OptionChainScreen(
+                                      underlyingSymbol: underlying,
+                                      spotPrice: _quote?.price ?? 0.0,
+                                      market: widget.market,
+                                    ),
                                   ),
-                                ),
-                              );
-                              if (refresh != null) refresh();
-                            },
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.toc,
-                                  color: Color(0xFF4A84F6),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: AppSpacing.xs),
-                                Text(
-                                  'Option chain',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF4A84F6),
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13,
+                                );
+                                if (refresh != null) refresh();
+                              },
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.toc,
+                                    color: Color(0xFF4A84F6),
+                                    size: 20,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    'Option chain',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF4A84F6),
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),

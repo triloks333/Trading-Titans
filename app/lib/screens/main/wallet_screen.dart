@@ -197,6 +197,41 @@ class _WalletScreenState extends State<WalletScreen> {
                               ],
                             ),
                           ),
+                          if (monetized) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  await Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const SubscribeScreen(initialTabIndex: 1),
+                                    ),
+                                  );
+                                  _load();
+                                },
+                                icon: const Icon(Icons.bolt_rounded, size: 20, color: Colors.white),
+                                label: Text(
+                                  'Top Up Demo Capital',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.imperialGold,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(AppRadius.md),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -241,24 +276,82 @@ class _WalletScreenState extends State<WalletScreen> {
                       const SizedBox(height: AppSpacing.md),
                       GestureDetector(
                         onTap: () async {
-                          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen()));
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const SubscribeScreen(initialTabIndex: 0),
+                            ),
+                          );
                           _load();
                         },
                         child: Container(
                           padding: const EdgeInsets.all(AppSpacing.lg),
-                          decoration: AppCard.darkCta,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF4338CA).withValues(alpha: 0.25),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
                           child: Row(
                             children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.workspace_premium_rounded, size: 22, color: Color(0xFFFFD700)),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Plans & top-ups', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'VIP Mentorship & Plans',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFD700).withValues(alpha: 0.2),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            '₹1L+/MO',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFFFFD700),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                     const SizedBox(height: 2),
-                                    // No figures here on purpose: prices live in
-                                    // `plan_catalogue` and this caption would be
-                                    // the one copy that silently goes stale.
-                                    Text('Pro, Titan and one-time demo cash', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFBBD7F8))),
+                                    Text(
+                                      'Twice-weekly live 1-on-1 sessions & options unlock',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        color: const Color(0xFFC7D2FE),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),

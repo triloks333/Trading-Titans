@@ -11,6 +11,73 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.11 (versionCode 56)
+
+Reliance & stock futures price loading fix, full-featured Market Intel & News reader with seamless article redirection, zero layout overflows across screen sizes, and synchronized legal compliance.
+
+### Play Store "What's new" (paste this)
+
+```
+• Instant price loading for Reliance & stock futures with reliable off-market pricing.
+• Dedicated Market Intel & News reader with rich formatting & official research access.
+• Polished news layout with perfect edge-to-edge formatting across all phone displays.
+• Smoother demo cash top-up flow and streamlined options trade execution.
+• Updated platform terms, privacy policy, and Kashivwealth Management LLP entity alignment.
+```
+
+---
+
+## 1.2.10 (versionCode 54)
+
+Titans Room chat upgrade with message editing, community-wide notifications, WhatsApp action tray, admin @everyone priority announcements, slash commands, and streamlined low-price-first top-up experience.
+
+### Play Store "What's new" (paste this)
+
+```
+• Titans Room chat upgrade: edit messages, delete for me, & bottom-pinned chat.
+• WhatsApp-style fullscreen image viewer with pinch-to-zoom in chat.
+• Interactive notification tray with instant Reply, Mark as Read, & Mute 8h.
+• Admin @everyone priority announcements & in-app page slash commands.
+• Decluttered Top-Up capital store with lower prices on top (₹199, ₹599, ₹999).
+• 4.5s auto-rotating 3D animated hero banners for Quick Boost, VIP Pass, & Glossary.
+• Mandatory update protection so all traders stay on the latest market features.
+```
+
+---
+
+## 1.2.9 (versionCode 53)
+
+Luxury animated home screen hero banner, real-time option market alignment, instant capital top-up packs from ₹199, and compulsory app update protection.
+
+### Play Store "What's new" (paste this)
+
+```
+• Luxury animated hero banner with capital top-up starting from ₹199.
+• F&O pricing matches real NSE bhavcopy settlement & live underlying movement.
+• Synchronized active derivatives contracts for Oct, Nov, and Dec series.
+• Real-time chart tick streaming for responsive price tracking.
+• Fullscreen chart expansion and minimize mode on web.
+• Compulsory update gating to ensure you never trade on outdated market rules.
+```
+
+---
+
+## 1.2.8 (versionCode 52)
+
+F&O pricing real NSE Bhavcopy settlement alignment, monthly market contracts sync, chart edge live tracking, fullscreen chart view on web, and home top-up banner.
+
+### Play Store "What's new" (paste this)
+
+```
+• F&O pricing now matches real NSE bhavcopy settlement and live market movement.
+• Updated monthly and weekly derivatives contracts for Oct, Nov, and Dec.
+• Interactive charts now move smoothly with real-time price updates.
+• Website chart fullscreen expand and minimize view.
+• Lower price top-up packs shown first, starting from ₹199.
+```
+
+---
+
 ## 1.2.7 (versionCode 51)
 
 The F&O drift fix, finished. 1.2.6 shipped an incomplete version of it.

@@ -5,8 +5,20 @@
 ///        shifts by an hour when US daylight saving flips.
 /// Crypto: always open.
 class MarketHours {
+  /// Market key used for Indian equities / F&O on `orders.market`.
+  static const String stock = 'stock';
+
   /// Market key used for US equities on `orders.market` / `holdings.market`.
   static const String usStock = 'us_stock';
+
+  /// Market key used for Pakistan Stock Exchange (PSX).
+  static const String pakistanStock = 'pakistan_stock';
+
+  /// Market key used for Borsa Italiana (Milan).
+  static const String italyStock = 'italy_stock';
+
+  /// Market key used for Cryptocurrencies.
+  static const String crypto = 'crypto';
 
   static DateTime _ist([DateTime? at]) =>
       (at ?? DateTime.now()).toUtc().add(const Duration(hours: 5, minutes: 30));
@@ -50,9 +62,29 @@ class MarketHours {
   /// completes, which degrades to the old weekends-only behaviour rather than
   /// guessing a calendar.
   ///
+  /// Built-in known exchange holidays for 2026 as a guaranteed baseline
+  /// before the first server load finishes or during offline launches.
+  static const Set<String> defaultIndianHolidays = {
+    '2026-01-26', // Republic Day
+    '2026-03-03', // Holi
+    '2026-03-26', // Shri Ram Navami
+    '2026-03-31', // Shri Mahavir Jayanti
+    '2026-04-03', // Good Friday
+    '2026-04-14', // Dr. Ambedkar Jayanti
+    '2026-05-01', // Maharashtra Day
+    '2026-05-28', // Bakri Id
+    '2026-06-26', // Muharram
+    '2026-09-14', // Ganesh Chaturthi
+    '2026-10-02', // Mahatma Gandhi Jayanti
+    '2026-10-20', // Dussehra (Vijayadashami)
+    '2026-11-10', // Diwali-Balipratipada
+    '2026-11-24', // Guru Nanak Jayanti
+    '2026-12-25', // Christmas
+  };
+
   /// Indian equities and F&O only. Crypto never closes and US equities have their
   /// own window, so nothing here can shut either of them.
-  static Set<String> indianHolidays = const {};
+  static Set<String> indianHolidays = Set<String>.from(defaultIndianHolidays);
 
   /// The IST calendar day of [at] as a YYYY-MM-DD key, matching the
   /// `market_holidays.holiday_date` column.
@@ -77,18 +109,26 @@ class MarketHours {
       return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
     }
 
+    if (market == pakistanStock) {
+      // PKT is UTC+5
+      final pkt = (at ?? DateTime.now()).toUtc().add(const Duration(hours: 5));
+      if (pkt.weekday == DateTime.saturday || pkt.weekday == DateTime.sunday) return false;
+      final minutes = pkt.hour * 60 + pkt.minute;
+      return minutes >= 555 && minutes < 930; // 09:15 - 15:30 PKT
+    }
+
+    if (market == italyStock) {
+      // CET is UTC+1 (or UTC+2 DST)
+      final cet = (at ?? DateTime.now()).toUtc().add(Duration(hours: isUsDst(at) ? 2 : 1));
+      if (cet.weekday == DateTime.saturday || cet.weekday == DateTime.sunday) return false;
+      final minutes = cet.hour * 60 + cet.minute;
+      return minutes >= 540 && minutes < 1050; // 09:00 - 17:30 CET
+    }
+
     final now = _ist(at);
     if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) return false;
-    // Checked before the clock so a holiday closes the whole day. The server
-    // enforces the same thing independently: a BEFORE UPDATE trigger on `orders`
-    // declines the execution engine's claim, so nothing fills even on a build that
-    // predates this check.
     if (isIndianHoliday(at)) return false;
     final minutes = now.hour * 60 + now.minute;
-    // 555 = 09:15, 930 = 15:30. This read `< 915` (15:15) and so closed the
-    // session a quarter of an hour early, disagreeing with both `sessionLabel`
-    // below and the market-status endpoint, which have always said 3:30 PM.
-    // The server-side copies are fixed in _shared/market_hours.ts.
     return minutes >= 555 && minutes < 930;
   }
 
@@ -161,8 +201,18 @@ class MarketHours {
     DateTime? at,
   }) {
     if (expiry == null) return fallback;
+    DateTime targetExpiry = expiry;
+    if (expiry.hour == 0 && expiry.minute == 0) {
+      if (market == usStock) {
+        final isDst = isUsDst(expiry);
+        targetExpiry = DateTime.utc(expiry.year, expiry.month, expiry.day, isDst ? 20 : 21, 0);
+      } else {
+        // Indian close is 15:30 IST = 10:00 UTC
+        targetExpiry = DateTime.utc(expiry.year, expiry.month, expiry.day, 10, 0);
+      }
+    }
     final from = valuationTime(market, at: at);
-    final days = expiry.difference(from).inMinutes / 1440.0;
+    final days = targetExpiry.difference(from).inMinutes / 1440.0;
     return days <= 0 ? 0.0 : days;
   }
 
@@ -176,6 +226,22 @@ class MarketHours {
         return 'Weekend Closed';
       }
       return 'Opens at ${_usOpenIst(at)} IST';
+    }
+
+    if (market == pakistanStock) {
+      final pkt = (at ?? DateTime.now()).toUtc().add(const Duration(hours: 5));
+      if (pkt.weekday == DateTime.saturday || pkt.weekday == DateTime.sunday) {
+        return 'Weekend Closed';
+      }
+      return 'Opens at 9:15 AM PKT';
+    }
+
+    if (market == italyStock) {
+      final cet = (at ?? DateTime.now()).toUtc().add(Duration(hours: isUsDst(at) ? 2 : 1));
+      if (cet.weekday == DateTime.saturday || cet.weekday == DateTime.sunday) {
+        return 'Weekend Closed';
+      }
+      return 'Opens at 9:00 AM CET';
     }
 
     final now = _ist(at);
@@ -195,6 +261,14 @@ class MarketHours {
         return 'Opens Monday $open IST';
       }
       return 'Opens at $open IST';
+    }
+
+    if (market == pakistanStock) {
+      return 'Opens at 9:15 AM PKT';
+    }
+
+    if (market == italyStock) {
+      return 'Opens at 9:00 AM CET';
     }
 
     final now = _ist(at);

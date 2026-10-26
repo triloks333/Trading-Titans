@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { STARTING_CASH } from '../lib/config';
 
 export function ConfirmPage() {
   const [browserInfo, setBrowserInfo] = useState({ isMobile: false, isAndroid: false });
@@ -42,7 +43,7 @@ export function ConfirmPage() {
         </h1>
         
         <p className="text-[#525E75] text-sm leading-relaxed mb-8">
-          Thank you for confirming your email. Your Trading Titans account is now fully active, and your ₹10,00,000 virtual cash is ready to trade.
+          Thank you for confirming your email. Your Trading Titans account is now fully active, and your {STARTING_CASH} virtual cash is ready to trade.
         </p>
 
         {browserInfo.isMobile ? (

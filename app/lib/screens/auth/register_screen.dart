@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -157,6 +158,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    if (!_requireLegalConsent()) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final auth = context.read<AuthService>();
+    try {
+      await AnalyticsService.logSignupMethodSelected('apple');
+      await auth.signInWithApple(
+        referralCode: _hasReferral ? _referralController.text.trim() : null,
+      );
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -274,6 +301,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      if (Platform.isIOS) ...[
+                        OutlinedButton(
+                          onPressed: _busy ? null : _signInWithApple,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            side: const BorderSide(color: Colors.black),
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.apple, color: Colors.white, size: 24),
+                              SizedBox(width: AppSpacing.sm),
+                              Text(
+                                'Sign in with Apple',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       OutlinedButton(
                         onPressed: _busy ? null : _signInWithGoogle,
                         style: OutlinedButton.styleFrom(

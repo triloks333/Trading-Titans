@@ -44,10 +44,32 @@ class MarketTab {
     label: 'Crypto',
     icon: Icons.currency_bitcoin,
     searchHint: 'Search crypto...',
-    popularHeading: 'TOP CRYPTO',
+    popularHeading: 'POPULAR CRYPTO',
   );
 
-  static const List<MarketTab> all = [stock, usStock, crypto];
+  static const pakistanStock = MarketTab(
+    key: 'pakistan_stock',
+    label: 'Pakistan',
+    icon: Icons.account_balance,
+    searchHint: 'Search PSX stocks...',
+    popularHeading: 'POPULAR PAKISTAN STOCKS',
+  );
+
+  static const italyStock = MarketTab(
+    key: 'italy_stock',
+    label: 'Italy',
+    icon: Icons.euro,
+    searchHint: 'Search Milan stocks...',
+    popularHeading: 'POPULAR ITALY STOCKS',
+  );
+
+  static const List<MarketTab> all = [
+    stock,
+    usStock,
+    crypto,
+    pakistanStock,
+    italyStock,
+  ];
 
   static MarketTab byKey(String key) =>
       all.firstWhere((t) => t.key == key, orElse: () => stock);
@@ -55,14 +77,6 @@ class MarketTab {
 
 /// Horizontal market selector where the active tab expands to icon + label and
 /// the inactive ones collapse to icon only.
-///
-/// ```
-/// [ ₹ India ]  [ $ ]  [ ₿ ]      <- India active
-/// [ ₹ ]  [ $ US Stocks ]  [ ₿ ]  <- US active
-/// ```
-///
-/// Collapsed tabs are icon-only, so each one carries a [Tooltip] and a
-/// [Semantics] label — the icon alone is not an accessible name.
 class MarketNavBar extends StatelessWidget {
   const MarketNavBar({
     super.key,
@@ -70,25 +84,32 @@ class MarketNavBar extends StatelessWidget {
     required this.onSelected,
     this.comingSoonKeys = const {},
     this.preferredKeys = const [],
+    this.filterToPreferred = false,
   });
 
   final String selectedKey;
   final ValueChanged<String> onSelected;
 
-  /// Tabs that are visible but not wired to live data yet. They stay tappable
-  /// (so the user can read the "Coming soon" state) and show a marker dot.
+  /// Tabs that are visible but not wired to live data yet.
   final Set<String> comingSoonKeys;
 
-  /// Markets the user said they care about. These sort to the front; the rest
-  /// stay visible behind them, because hiding a market would strand any position
-  /// the user already holds in it.
+  /// Markets the user chose in their preferences (maximum 3).
   final List<String> preferredKeys;
+
+  /// When true, limits visible tabs to only the user's preferred markets (max 3),
+  /// keeping the trade screen clean and uncluttered.
+  final bool filterToPreferred;
 
   static const Duration _animation = Duration(milliseconds: 200);
 
-  /// Preferred markets first, each group keeping the canonical order so the bar
-  /// never reshuffles unpredictably.
+  /// Preferred markets first, each group keeping canonical order. When
+  /// [filterToPreferred] is true, returns only the preferred markets (max 3).
   List<MarketTab> get orderedTabs {
+    if (filterToPreferred) {
+      if (preferredKeys.isEmpty) return MarketTab.all.take(3).toList();
+      final filtered = MarketTab.all.where((t) => preferredKeys.contains(t.key)).toList();
+      return filtered.isEmpty ? MarketTab.all.take(3).toList() : filtered.take(3).toList();
+    }
     if (preferredKeys.isEmpty) return MarketTab.all;
     final preferred = MarketTab.all.where((t) => preferredKeys.contains(t.key));
     final rest = MarketTab.all.where((t) => !preferredKeys.contains(t.key));

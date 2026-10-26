@@ -70,3 +70,8 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
+tasks.matching { it.name.contains("uploadCrashlyticsMappingFile") }.configureEach {
+    enabled = false
+}
+

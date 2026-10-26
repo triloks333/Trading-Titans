@@ -25,13 +25,54 @@ async function getSettlementPrice(supabase: any, pos: any): Promise<number | nul
   const underlying = INDEX_MAP[u] ?? u;
   const expiry = pos.expiry_date;
   if (!underlying || !expiry) return null;
+
+  // Maximum allowable lookback: 5 calendar days before expiry (handles 3-day weekends / holidays).
+  // A price from weeks or months ago MUST NEVER be used as a settlement price.
+  const expiryDate = new Date(expiry);
+  const minDate = new Date(expiryDate.getTime() - 5 * 86400000).toISOString().split("T")[0];
+
+  // 1. Primary: Search nse_fo_bhavcopy for matching futures/underlying near expiry date.
+  // Handles both legacy format (option_type="XX") and modern format (strike_price=0, option_type="" or "FUT").
   const { data, error } = await supabase.from("nse_fo_bhavcopy")
     .select("settle_price, close_price, trading_date, expiry_date")
-    .eq("symbol", underlying).eq("option_type", "XX").lte("trading_date", expiry)
-    .order("trading_date", { ascending: false }).order("expiry_date", { ascending: true }).limit(1);
-  if (error || !data || data.length === 0) { console.error(`No bhavcopy settle price for ${underlying} (expiry ${expiry}).`); return null; }
-  const px = Number(data[0].settle_price ?? data[0].close_price);
-  return Number.isFinite(px) && px > 0 ? px : null;
+    .eq("symbol", underlying)
+    .or("strike_price.eq.0,option_type.eq.XX,option_type.eq.,option_type.eq.FUT")
+    .gte("trading_date", minDate)
+    .lte("trading_date", expiry)
+    .order("trading_date", { ascending: false })
+    .order("expiry_date", { ascending: true })
+    .limit(1);
+
+  if (!error && data && data.length > 0) {
+    const px = Number(data[0].settle_price ?? data[0].close_price);
+    if (Number.isFinite(px) && px > 0) {
+      console.log(`Found authoritative bhavcopy settlement price for ${underlying} (${data[0].trading_date}): ${px}`);
+      return px;
+    }
+  }
+
+  // 2. Secondary fallback: check quotes_cache for fresh underlying spot price
+  const { data: cacheRow } = await supabase
+    .from("quotes_cache")
+    .select("price, updated_at")
+    .in("symbol", [underlying, `^${underlying}`, "^NSEI", "^NSEBANK"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (cacheRow && Number(cacheRow.price) > 0) {
+    const updatedAt = cacheRow.updated_at ? new Date(cacheRow.updated_at).getTime() : 0;
+    const expiryMidnight = new Date(`${expiry}T23:59:59+05:30`).getTime();
+    const expiryStart = new Date(`${expiry}T00:00:00+05:30`).getTime() - (2 * 86400000);
+    if (updatedAt >= expiryStart && updatedAt <= expiryMidnight + 86400000) {
+      const cachePx = Number(cacheRow.price);
+      console.log(`Using fresh quotes_cache fallback for ${underlying} settlement: ${cachePx}`);
+      return cachePx;
+    }
+  }
+
+  console.error(`No fresh settlement price found for ${underlying} near expiry ${expiry} (Bhavcopy and quotes_cache both stale/missing). Position settlement postponed.`);
+  return null;
 }
 
 serve(async (_req) => {
@@ -68,6 +109,25 @@ serve(async (_req) => {
         if (settlementPnl < 0) walletDebit = Math.abs(settlementPnl);
         notifTitle = "Futures Expired";
         notifBody = `${pos.symbol} expired and settled at ${settlementPrice}. Settlement P&L: ${settlementPnl.toFixed(2)}. Margin released to your wallet.`;
+      }
+
+      // Circuit Breaker: Halt settlement if an extreme anomaly / glitch is detected
+      // (e.g. entry price <= 1.0 with intrinsic >= 50.0, or payout > 100x entry cost yielding > 50,000 INR)
+      const costBasis = Number(pos.avg_entry_price) * totalUnits;
+      const isExtremeGain = (pos.net_qty > 0 && settlementPnl > 50000 && (settlementPnl / Math.max(1, costBasis)) > 100);
+      const isExtremeIntrinsic = (pos.instrument_type === "OPTION" && Number(pos.avg_entry_price) <= 1.0 && computeIntrinsicValue(pos.option_type, Number(pos.strike_price), settlementPrice) >= 50.0);
+
+      if (isExtremeGain || isExtremeIntrinsic) {
+        console.error(`CIRCUIT BREAKER TRIGGERED: User ${pos.user_id}, Position ${pos.id}, symbol ${pos.symbol}, entry ${pos.avg_entry_price}, settle ${settlementPrice}, PnL ${settlementPnl}. Holding for admin review.`);
+        await supabase.from("notifications").insert({
+          user_id: pos.user_id,
+          title: "Settlement Held for Audit Review",
+          body: `Position ${pos.symbol} settlement resulted in an extreme pricing variance (${settlementPnl > 0 ? "+" : ""}${settlementPnl.toFixed(2)}). Settlement has been put on hold for security audit.`,
+          is_read: false,
+          action_type: "audit_hold",
+        });
+        skipped++;
+        continue;
       }
       const newWallet = Number(profile.wallet_balance) + walletCredit - walletDebit;
       const newRealized = Number(profile.total_realized_pnl) + settlementPnl;

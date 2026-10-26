@@ -11,6 +11,7 @@ import '../../services/market_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import 'stock_detail_screen.dart';
+import 'option_detail_screen.dart';
 import 'order_entry_screen.dart';
 import 'orders_screen.dart';
 import '../../models/quote.dart';
@@ -514,9 +515,42 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
     return GestureDetector(
       onTap: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: h.symbol, market: h.market, name: h.name)),
-        );
+        if (h.instrumentType == 'OPTION') {
+          final underlyingSymbol = h.symbol.contains('-') ? h.symbol.split('-')[0] : h.symbol;
+          final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, h.market);
+          final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
+          final underlyingSpotPrice = (spotQuote != null && spotQuote.price > 0)
+              ? spotQuote.price
+              : h.currentPrice;
+
+          final optionData = {
+            'symbol': h.symbol,
+            'name': h.name,
+            'strike_price': h.strikePrice ?? 0.0,
+            'option_type': h.optionType ?? (h.symbol.endsWith('PE') ? 'PE' : 'CE'),
+            'expiry_date': h.expiryDate ?? '',
+            'price': h.currentPrice,
+            'ltp': h.currentPrice,
+            'previous_close': h.previousClose,
+            'change': h.currentPrice - h.previousClose,
+            'change_pct': h.previousClose > 0 ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 : 0.0,
+          };
+
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OptionDetailScreen(
+                optionData: optionData,
+                underlyingSymbol: underlyingSymbol,
+                underlyingSpotPrice: underlyingSpotPrice,
+                market: h.market,
+              ),
+            ),
+          );
+        } else {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: h.symbol, market: h.market, name: h.name)),
+          );
+        }
         _load();
       },
       child: Opacity(
@@ -752,11 +786,46 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     final formattedQty = '${pos.netQty > 0 ? "+" : ""}${pos.netQty} Lot${pos.netQty.abs() > 1 ? "s" : ""}';
     final totalUnits = pos.netQty.abs() * pos.lotSize;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppCard.secondary,
-      child: Column(
+    return GestureDetector(
+      onTap: () async {
+        if (pos.instrumentType == 'OPTION') {
+          final estPrevClose = _estimateFoPreviousClose(pos);
+          final underlyingSymbol = (pos.symbol.contains('-')) ? pos.symbol.split('-')[0] : pos.symbol;
+          final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, 'stock');
+          final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
+          final underlyingSpotPrice = (spotQuote != null && spotQuote.price > 0) ? spotQuote.price : estPrice;
+
+          final optionData = {
+            'symbol': pos.symbol,
+            'strike_price': pos.strikePrice,
+            'option_type': pos.optionType,
+            'expiry_date': pos.expiry.toIso8601String(),
+            'price': estPrice,
+            'ltp': estPrice,
+            'previous_close': estPrevClose,
+            'lot_size': pos.lotSize,
+            'open_interest': 0,
+            'volume': 0,
+          };
+
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OptionDetailScreen(
+                optionData: optionData,
+                underlyingSymbol: underlyingSymbol,
+                underlyingSpotPrice: underlyingSpotPrice,
+                market: 'stock',
+              ),
+            ),
+          );
+          _load();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: AppCard.secondary,
+        child: Column(
         children: [
           Row(
             children: [
@@ -904,8 +973,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _holdingStat(String label, String value, {Color? valueColor}) {
     return StatCell(label: label, value: value, valueColor: valueColor);

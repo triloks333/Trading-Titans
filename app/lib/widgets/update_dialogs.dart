@@ -310,14 +310,12 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
     }
   }
 
-  /// Handles the "Update" button: on success closes the (non-blocking) dialog,
-  /// on failure keeps it open and surfaces an error (R9.4).
+  /// Handles the "Update" button: opens the store link. Dialog remains blocking
+  /// since the update is compulsory.
   Future<void> _onUpdatePressed() async {
     final launched = await _launchUpdate();
     if (!mounted) return;
-    if (launched) {
-      Navigator.of(context).pop();
-    } else {
+    if (!launched) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Couldn\'t open the store. Please try again.'),
@@ -332,112 +330,102 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
     final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
     final releaseNotes = widget.releaseNotes;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: AppColors.bull,
-                  size: 28,
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: AppColors.bull,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Update Required',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: inkColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'A new version of Trading Titans is required to continue. Please update now to access the latest market features and improvements.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  height: 1.4,
                 ),
-                const SizedBox(width: 12),
+              ),
+              if (releaseNotes.isNotEmpty) ...[
+                const SizedBox(height: 16),
                 Text(
-                  'Update Available!',
+                  'What\'s New:',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                     color: inkColor,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'A new update is available on the Play Store with performance improvements and new features.',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                height: 1.4,
-              ),
-            ),
-            if (releaseNotes.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text(
-                'What\'s New:',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: inkColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 120),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: releaseNotes
-                        .split('\n')
-                        .where((line) => line.trim().isNotEmpty)
-                        .map((line) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 2.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    '• ',
-                                    style: TextStyle(
-                                      color: AppColors.bull,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      line.replaceAll('•', '').trim(),
+                const SizedBox(height: 8),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: releaseNotes
+                          .split('\n')
+                          .where((line) => line.trim().isNotEmpty)
+                          .map((line) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      '• ',
                                       style: TextStyle(
-                                        fontSize: 12,
-                                        height: 1.3,
-                                        color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                        color: AppColors.bull,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    widget.onDismiss();
-                    Navigator.of(context).pop();
-                  },
-                  child: Text(
-                    'Remind Later',
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                      fontWeight: FontWeight.w600,
+                                    Expanded(
+                                      child: Text(
+                                        line.replaceAll('•', '').trim(),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.3,
+                                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
                   onPressed: _onUpdatePressed,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.bull,
@@ -448,15 +436,16 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
                     elevation: 0,
                   ),
                   child: const Text(
-                    'Update',
+                    'Update Now',
                     style: TextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

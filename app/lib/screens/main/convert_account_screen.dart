@@ -157,21 +157,21 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Unlock the full ₹11,000',
+                    Text('Unlock the full ₹1,100',
                         style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink)),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Guest accounts start with ₹5,000. Attach a Google account '
+                      'Guest accounts start with ₹500. Attach a Google account '
                       'or an email and password and we will top you up to the '
-                      'full ₹11,000.',
+                      'full ₹1,100.',
                       style: GoogleFonts.inter(
                           fontSize: 13, color: AppColors.ink3, height: 1.5),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    _point(Icons.savings_outlined, '₹6,000 demo cash added once'),
+                    _point(Icons.savings_outlined, '₹600 demo cash added once'),
                     _point(Icons.lock_outline,
                         'Your account survives sign-out and reinstalls'),
                     _point(Icons.inventory_2_outlined,

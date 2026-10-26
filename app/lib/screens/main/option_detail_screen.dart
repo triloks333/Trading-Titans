@@ -30,12 +30,17 @@ class OptionDetailScreen extends StatefulWidget {
   State<OptionDetailScreen> createState() => _OptionDetailScreenState();
 }
 
+enum ChartViewMode { option, spot }
+
 class _OptionDetailScreenState extends State<OptionDetailScreen> {
   Quote? _quote;
   Holding? _holding;
   Timer? _pollTimer;
   Timer? _expiryTimer;
   bool _loading = true;
+
+  // Chart view mode state
+  ChartViewMode _chartViewMode = ChartViewMode.option;
 
   // Expiry countdown state
   String _expiryCountdownText = '';
@@ -397,6 +402,8 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                       _buildExpiryCountdown(),
                     ],
                     const SizedBox(height: AppSpacing.lg),
+                    _buildChartToggle(),
+                    const SizedBox(height: AppSpacing.sm),
                     _buildChartCard(q),
                     const SizedBox(height: AppSpacing.lg),
                     _buildViewChartButton(q),
@@ -496,7 +503,102 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
     );
   }
 
+  Widget _buildChartToggle() {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _chartTogglePill(
+              title: 'Option Chart',
+              isSelected: _chartViewMode == ChartViewMode.option,
+              onTap: () {
+                if (_chartViewMode != ChartViewMode.option) {
+                  setState(() => _chartViewMode = ChartViewMode.option);
+                }
+              },
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _chartTogglePill(
+              title: 'Spot Chart (${widget.underlyingSymbol})',
+              isSelected: _chartViewMode == ChartViewMode.spot,
+              onTap: () {
+                if (_chartViewMode != ChartViewMode.spot) {
+                  setState(() => _chartViewMode = ChartViewMode.spot);
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chartTogglePill({
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.pureWhite : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+          border: isSelected ? Border.all(color: AppColors.birch) : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.ink : AppColors.ink4,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
   Widget _buildChartCard(Quote q) {
+    final isOptionMode = _chartViewMode == ChartViewMode.option;
+    final activeSymbol = isOptionMode ? q.symbol : widget.underlyingSymbol;
+    final activeName = isOptionMode ? q.name : '${widget.underlyingSymbol} Spot';
+    final activeQuote = isOptionMode
+        ? q
+        : Quote(
+            symbol: widget.underlyingSymbol,
+            yfSymbol: widget.underlyingSymbol,
+            name: activeName,
+            price: widget.underlyingSpotPrice,
+            previousClose: widget.underlyingSpotPrice,
+            change: 0.0,
+            changePct: 0.0,
+            currency: 'INR',
+            market: widget.market,
+          );
+
     return Container(
       height: 350,
       decoration: BoxDecoration(
@@ -511,7 +613,8 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         child: Stack(
           children: [
             InstrumentChart(
-              symbol: q.symbol,
+              key: ValueKey(activeSymbol),
+              symbol: activeSymbol,
               market: widget.market,
             ),
             Positioned(
@@ -527,10 +630,10 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => FullscreenChartScreen(
-                          symbol: q.symbol,
+                          symbol: activeSymbol,
                           market: widget.market,
-                          name: q.name,
-                          quote: q,
+                          name: activeName,
+                          quote: activeQuote,
                         ),
                       ),
                     );
@@ -546,20 +649,40 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
   }
 
   Widget _buildViewChartButton(Quote q) {
+    final isOptionMode = _chartViewMode == ChartViewMode.option;
+    final activeSymbol = isOptionMode ? q.symbol : widget.underlyingSymbol;
+    final activeName = isOptionMode ? q.name : '${widget.underlyingSymbol} Spot';
+    final activeQuote = isOptionMode
+        ? q
+        : Quote(
+            symbol: widget.underlyingSymbol,
+            yfSymbol: widget.underlyingSymbol,
+            name: activeName,
+            price: widget.underlyingSpotPrice,
+            previousClose: widget.underlyingSpotPrice,
+            change: 0.0,
+            changePct: 0.0,
+            currency: 'INR',
+            market: widget.market,
+          );
+
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        icon:       Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
-        label: Text('VIEW CHART', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        icon: Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
+        label: Text(
+          isOptionMode ? 'VIEW OPTION CHART' : 'VIEW SPOT CHART',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+        ),
         onPressed: () async {
           await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => FullscreenChartScreen(
-                symbol: q.symbol,
+                symbol: activeSymbol,
                 market: widget.market,
-                name: q.name,
-                quote: q,
+                name: activeName,
+                quote: activeQuote,
               ),
             ),
           );
@@ -674,9 +797,47 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Row(
             children: [
-                    Expanded(
-                child: Text('Option Greeks',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      'Option Greeks',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.tag),
+                      onTap: () => _showGreeksEducationSheet(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldPale,
+                          borderRadius: BorderRadius.circular(AppRadius.tag),
+                          border: Border.all(color: AppColors.goldBorder),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Black-Scholes',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.goldDeep,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 13,
+                              color: AppColors.goldDeep,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               if (!hasApiGreeks)
                 Container(
@@ -759,6 +920,185 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: accentColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGreeksEducationSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.pureWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+          ),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.birch,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Option Greeks & Pricing Model',
+                    style: GoogleFonts.inter(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Calculated dynamically using the Black-Scholes-Merton model with risk-free rate r = 6.5%.',
+                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _greekExplainerTile(
+                    symbol: 'Delta (Δ)',
+                    color: AppColors.bull,
+                    summary: 'Price Sensitivity',
+                    explanation:
+                        'Measures how much the option price moves for every ₹1 change in the underlying spot price. Calls range from 0 to +1; Puts range from -1 to 0.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _greekExplainerTile(
+                    symbol: 'Theta (Θ)',
+                    color: AppColors.bear,
+                    summary: 'Time Decay',
+                    explanation:
+                        'Measures the decay in option premium for every passing calendar day. Options lose value as expiry nears, holding all else constant.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _greekExplainerTile(
+                    symbol: 'Gamma (Γ)',
+                    color: AppColors.violet,
+                    summary: 'Delta Acceleration',
+                    explanation:
+                        'Measures the rate of change of Delta for every ₹1 change in the underlying. Highest near the at-the-money (ATM) strike.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _greekExplainerTile(
+                    symbol: 'Vega (ν)',
+                    color: AppColors.blue,
+                    summary: 'Volatility Sensitivity',
+                    explanation:
+                        'Measures how much the option premium changes for every 1% change in Implied Volatility (IV).',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _greekExplainerTile(
+                    symbol: 'IV (%)',
+                    color: const Color(0xFFD4A017),
+                    summary: 'Implied Volatility',
+                    explanation:
+                        'The market\'s consensus estimate of annual price fluctuation, solved backwards from live option market prices.',
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.goldPale,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.goldBorder),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.school_outlined, size: 18, color: AppColors.goldDeep),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Note: These Greeks are calculated dynamically for educational and simulation purposes using theoretical models. Actual live execution prices may vary with liquidity and bid-ask spreads.',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: AppColors.goldDeep,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _greekExplainerTile({
+    required String symbol,
+    required Color color,
+    required String summary,
+    required String explanation,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.tag),
+                ),
+                child: Text(
+                  symbol,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                summary,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.ink,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            explanation,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppColors.ink3,
+              height: 1.45,
             ),
           ),
         ],
@@ -901,6 +1241,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
   }
 
   Widget _buildBottomBar(double strike, String optionType, String expiry) {
+    final isExpired = _expiryCountdownText == 'Expired';
     return Container(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
       decoration: BoxDecoration(
@@ -917,7 +1258,9 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               child: SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: isExpired
+                      ? null
+                      : () async {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -934,16 +1277,17 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                     _refreshData();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.bull,
+                    backgroundColor: isExpired ? AppColors.birch : AppColors.bull,
+                    disabledBackgroundColor: AppColors.birch,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                   ),
                   child: Text(
-                    'BUY',
+                    isExpired ? 'EXPIRED' : 'BUY',
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.pureWhite,
+                      color: isExpired ? AppColors.ink4 : AppColors.pureWhite,
                       letterSpacing: 1.0,
                     ),
                   ),
@@ -955,7 +1299,9 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               child: SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: isExpired
+                      ? null
+                      : () async {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -972,16 +1318,17 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                     _refreshData();
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.bear,
+                    backgroundColor: isExpired ? AppColors.birch : AppColors.bear,
+                    disabledBackgroundColor: AppColors.birch,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                   ),
                   child: Text(
-                    'SELL',
+                    isExpired ? 'EXPIRED' : 'SELL',
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.pureWhite,
+                      color: isExpired ? AppColors.ink4 : AppColors.pureWhite,
                       letterSpacing: 1.0,
                     ),
                   ),

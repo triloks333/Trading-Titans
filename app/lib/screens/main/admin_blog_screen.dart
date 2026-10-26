@@ -29,6 +29,16 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
   final _excerpt = TextEditingController();
   final _body = TextEditingController();
 
+  static const Map<String, String> _marketOptions = {
+    'all': 'All Markets (Global)',
+    'stock': 'Indian Stock Market (NSE/BSE)',
+    'us_stock': 'US Stocks (NASDAQ/NYSE)',
+    'crypto': 'Cryptocurrency (Crypto)',
+    'pakistan_stock': 'Pakistan Stocks (PSX)',
+    'italy_stock': 'Italy Stocks (Borsa Italiana)',
+  };
+
+  String _selectedMarket = 'all';
   List<Map<String, dynamic>> _posts = const [];
   String? _editingId;
   String? _coverUrl;
@@ -99,6 +109,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
       _coverUrl = null;
       _slugTouched = false;
       _publish = true;
+      _selectedMarket = 'all';
       _title.clear();
       _slug.clear();
       _excerpt.clear();
@@ -107,11 +118,22 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
   }
 
   void _edit(Map<String, dynamic> post) {
+    final rawExcerpt = post['excerpt'] as String?;
+    final match = RegExp(r'^\[market:([a-z_]+)\]\s*(.*)$', dotAll: true)
+        .firstMatch(rawExcerpt ?? '');
+    String cleanExcerpt = rawExcerpt ?? '';
+    String market = 'all';
+    if (match != null) {
+      market = match.group(1) ?? 'all';
+      cleanExcerpt = match.group(2) ?? '';
+    }
+
     setState(() {
       _editingId = '${post['id']}';
+      _selectedMarket = _marketOptions.containsKey(market) ? market : 'all';
       _title.text = '${post['title'] ?? ''}';
       _slug.text = '${post['slug'] ?? ''}';
-      _excerpt.text = '${post['excerpt'] ?? ''}';
+      _excerpt.text = cleanExcerpt;
       _body.text = '${post['body_markdown'] ?? ''}';
       _coverUrl = post['cover_url'] as String?;
       _publish = post['published_at'] != null;
@@ -148,11 +170,18 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final cleanExcerpt = _excerpt.text.trim();
+    final savedExcerpt = cleanExcerpt.isEmpty
+        ? (_selectedMarket == 'all' ? null : '[market:$_selectedMarket]')
+        : (_selectedMarket == 'all'
+            ? cleanExcerpt
+            : '[market:$_selectedMarket] $cleanExcerpt');
+
     final error = await SupabaseService().saveBlogPost(
       id: _editingId,
       slug: _slug.text.trim(),
       title: _title.text.trim(),
-      excerpt: _excerpt.text.trim(),
+      excerpt: savedExcerpt,
       bodyMarkdown: _body.text,
       coverUrl: _coverUrl,
       publish: _publish,
@@ -164,7 +193,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
       return;
     }
     _tell(_publish
-        ? 'Published to ${AppConstants.marketingSiteUrl}/blog/${_slug.text.trim()}'
+        ? 'Published live to app & ${AppConstants.marketingSiteUrl}/blog/${_slug.text.trim()}'
         : 'Saved as a draft.');
     _reset();
     await _load();
@@ -227,17 +256,18 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             _field(
               controller: _title,
               label: 'Title',
-              hint: 'How margin actually works',
+              hint: 'e.g. RBI Keeps Rates Unchanged or PSX Surges to All-Time High',
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'A title is required' : null,
               onChanged: (v) {
                 if (!_slugTouched) _slug.text = slugify(v);
               },
             ),
+            _marketSelector(),
             _field(
               controller: _slug,
-              label: 'Slug (the URL)',
-              hint: 'how-margin-actually-works',
+              label: 'Slug (Website Blog URL)',
+              hint: 'rbi-keeps-rates-unchanged',
               helper: '${AppConstants.marketingSiteUrl}/blog/<slug>',
               onChanged: (_) => _slugTouched = true,
               validator: (v) {
@@ -254,8 +284,8 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             ),
             _field(
               controller: _excerpt,
-              label: 'Excerpt (optional)',
-              hint: 'One or two lines, shown in search results and on the index.',
+              label: 'Short Description / Excerpt',
+              hint: 'One or two lines shown on home news cards and search preview.',
               maxLines: 2,
               validator: (v) => (v != null && v.length > 320)
                   ? 'Keep it under 320 characters'
@@ -266,9 +296,8 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             const SizedBox(height: AppSpacing.md),
             _field(
               controller: _body,
-              label: 'Body (Markdown)',
-              hint: '## A heading\n\nSome **bold** text and a '
-                  '[link](https://example.com).',
+              label: 'Full Article Content (Markdown)',
+              hint: '## Market Impact\n\nWrite full article body here...\n\nUsers read the first 50% in-app and can tap to continue reading on the website.',
               maxLines: 16,
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'The post needs a body' : null,
@@ -408,8 +437,74 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
     );
   }
 
+  Widget _marketSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Target Market Category',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.ink2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.pureWhite,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.birch),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedMarket,
+                isExpanded: true,
+                icon: Icon(Icons.arrow_drop_down, color: AppColors.ink3),
+                items: _marketOptions.entries.map((entry) {
+                  return DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(
+                      entry.value,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: AppColors.ink,
+                        fontWeight: entry.key == 'all'
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedMarket = val);
+                },
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 4),
+            child: Text(
+              'Only users interested in this market will see this news in their home feed. "All Markets" shows to everyone.',
+              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.ink4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _postRow(Map<String, dynamic> post) {
     final published = post['published_at'] != null;
+    final rawExcerpt = post['excerpt'] as String?;
+    final match = RegExp(r'^\[market:([a-z_]+)\]\s*(.*)$', dotAll: true)
+        .firstMatch(rawExcerpt ?? '');
+    final market = match != null ? (match.group(1) ?? 'all') : 'all';
+    final marketLabel = _marketOptions[market] ?? market;
+
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -424,6 +519,28 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.cream,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppColors.birch),
+                      ),
+                      child: Text(
+                        marketLabel.split(' (').first,
+                        style: GoogleFonts.inter(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.imperialGold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text('${post['title']}',
                     style: GoogleFonts.inter(
                         fontSize: 14,

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// One message in the public room.
@@ -16,6 +18,8 @@ class ChatMessage {
     this.authorName,
     this.authorTier,
     this.authorIsAdmin = false,
+    this.editedAt,
+    this.actionRoute,
   });
 
   final String id;
@@ -37,6 +41,12 @@ class ChatMessage {
   /// hardcoded copy of the owner email list.
   final bool authorIsAdmin;
 
+  /// Timestamp when the message was last edited by its author.
+  final DateTime? editedAt;
+
+  /// Optional in-app route tag (/top-up, /mentorship, etc.) attached to the message.
+  final String? actionRoute;
+
   /// Reads a row from `public.chat_feed`, which already carries the author's name
   /// and tier as flat columns.
   static ChatMessage fromRow(Map<String, dynamic> row) {
@@ -54,11 +64,37 @@ class ChatMessage {
       authorName: row['author_name'] as String?,
       authorTier: row['author_tier'] as String?,
       authorIsAdmin: row['author_is_admin'] == true,
+      editedAt: row['edited_at'] != null
+          ? DateTime.tryParse('${row['edited_at']}')?.toLocal()
+          : null,
+      actionRoute: row['action_route'] as String?,
     );
   }
 
   bool get isImage => kind == 'image';
   bool get isVoice => kind == 'voice';
+  bool get isEdited => editedAt != null;
+}
+
+/// A user returned for admin @autocomplete mentions.
+class ChatTaggableUser {
+  final String id;
+  final String name;
+  final bool isAdmin;
+
+  const ChatTaggableUser({
+    required this.id,
+    required this.name,
+    required this.isAdmin,
+  });
+
+  factory ChatTaggableUser.fromMap(Map<String, dynamic> map) {
+    return ChatTaggableUser(
+      id: '${map['id']}',
+      name: '${map['name'] ?? 'Titan'}',
+      isAdmin: map['is_admin'] == true,
+    );
+  }
 }
 
 /// Reads and writes the single public chat room.
@@ -78,18 +114,53 @@ class ChatService {
   /// fetches newest-first and reverses.
   static const int pageSize = 50;
 
+  /// Track whether an admin or user is currently inside the chat room.
+  /// Used to suppress redundant system tray notifications when actively chatting.
+  static bool isChatRoomActive = false;
+
+  static const String _kChatMutedUntilPref = 'chat_notifications_muted_until';
+
+  /// Checks if chatroom notifications are currently muted on this device.
+  static Future<bool> isChatMuted() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final val = prefs.getString(_kChatMutedUntilPref);
+      if (val == null) return false;
+      final until = DateTime.tryParse(val);
+      if (until == null) return false;
+      return DateTime.now().isBefore(until);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Mutes chatroom notifications for the specified duration (e.g. 8 hours).
+  static Future<void> muteNotificationsFor(Duration duration) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final until = DateTime.now().add(duration);
+      await prefs.setString(_kChatMutedUntilPref, until.toIso8601String());
+      unawaited(Supabase.instance.client.rpc('mute_chat', params: {
+        'p_duration_hours': duration.inHours,
+      }).catchError((_) {}));
+    } catch (_) {}
+  }
+
+  /// Unmutes chatroom notifications.
+  static Future<void> unmuteNotifications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kChatMutedUntilPref);
+      unawaited(Supabase.instance.client.rpc('unmute_chat').catchError((_) {}));
+    } catch (_) {}
+  }
+
   SupabaseClient get _db => Supabase.instance.client;
 
   /// Reads go through `public.chat_feed`, not `chat_messages`.
-  ///
-  /// Not a preference. `chat_messages.user_id` references `auth.users`, so
-  /// PostgREST cannot embed `profiles` — there is no relationship to follow — and
-  /// `profiles` is own-row-only under RLS anyway, so a join would have returned a
-  /// blank author on every message except your own. The view resolves both, and it
-  /// already filters soft-deleted rows.
   static const String _columns =
       'id, user_id, kind, body, media_path, duration_ms, created_at, '
-      'author_name, author_tier, author_is_admin';
+      'author_name, author_tier, author_is_admin, edited_at, action_route';
 
   static const String _view = 'chat_feed';
 
@@ -127,16 +198,11 @@ class ChatService {
     }
   }
 
-  /// Subscribes to new messages. Returns the channel so the caller can dispose it.
-  ///
-  /// Only INSERT is watched. Deletes are soft, and a soft delete arrives as an
-  /// UPDATE that RLS then hides — so rather than reconcile that live, a removed
-  /// message disappears on the next open. Moderation is not a real-time need and
-  /// pretending otherwise would mean re-fetching the room on every edit.
+  /// Subscribes to new messages and edits.
   RealtimeChannel subscribe(void Function(String messageId) onInsert) {
     final channel = _db.channel('public:chat_messages');
     channel.onPostgresChanges(
-      event: PostgresChangeEvent.insert,
+      event: PostgresChangeEvent.all,
       schema: 'public',
       table: 'chat_messages',
       callback: (payload) {
@@ -147,16 +213,31 @@ class ChatService {
     return channel;
   }
 
-  /// Posts a text message. Returns null on success, or the reason it was refused.
-  ///
-  /// The reason is the server's own, minus the 'chat: ' prefix the trigger uses to
-  /// mark its messages as safe to show a user. Anything without that prefix is an
-  /// unexpected failure and gets generic copy, so a raw Postgres error can never
-  /// reach the UI.
-  Future<String?> sendText(String body) async {
+  /// Posts a text message with optional attached route. Returns null on success,
+  /// or the reason it was refused.
+  Future<String?> sendText(String body, {String? actionRoute}) async {
     final text = body.trim();
     if (text.isEmpty) return 'Type something first.';
-    return _insert({'kind': 'text', 'body': text});
+    final payload = <String, dynamic>{'kind': 'text', 'body': text};
+    if (actionRoute != null && actionRoute.isNotEmpty) {
+      payload['action_route'] = actionRoute;
+    }
+    return _insert(payload);
+  }
+
+  /// Edits an existing text message sent by the current user.
+  Future<String?> editMessage(String messageId, String newBody) async {
+    final text = newBody.trim();
+    if (text.isEmpty) return 'Message cannot be empty.';
+    try {
+      await _db.rpc('edit_chat_message', params: {
+        'p_message_id': messageId,
+        'p_new_body': text,
+      });
+      return null;
+    } catch (e) {
+      return readableFailure(e);
+    }
   }
 
   /// Posts an image, with an optional caption. [bytes] should already be
@@ -290,6 +371,25 @@ class ChatService {
     } catch (e) {
       debugPrint('ChatService.myMutedUntil failed: $e');
       return null;
+    }
+  }
+
+  /// Admin-only: searches registered users to tag in the chat room.
+  Future<List<ChatTaggableUser>> getTaggableUsers([String query = '']) async {
+    try {
+      final res = await _db.rpc('get_taggable_users', params: {
+        'p_query': query.trim(),
+      });
+      if (res is List) {
+        return res
+            .map((e) =>
+                ChatTaggableUser.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      return const [];
+    } catch (e) {
+      debugPrint('ChatService.getTaggableUsers failed: $e');
+      return const [];
     }
   }
 

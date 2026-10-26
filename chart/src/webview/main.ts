@@ -48,6 +48,7 @@ interface TtChartApi {
    * second copy of it. */
   load(symbol: string, market: string, periodId?: string): void
   refreshQuote(): void
+  pushTick(price: number, time?: number): void
   /**
    * The currency to draw in, and rupees per dollar to get there.
    *
@@ -413,24 +414,19 @@ window.ttChart = {
         // Same conversion as the series it folds into. A raw tick here would put
         // one rupee bar on the end of a dollar chart, which reads as a spike.
         chart.pushTick({ time: q.time, price: q.price * factor() })
-        // Re-READ the legend, which is cheap, without re-BUILDING the indicators,
-        // which is not. `readLegend` only looks up values already computed in
-        // `results`, so this costs a few map reads and keeps the OHLC close
-        // tracking the live price. Passing `lastHover` rather than NO_HOVER so a
-        // tick cannot yank the row away from the bar the user is holding.
-        //
-        // ponytail: the indicator VALUES still trail by one bar. A tick moves only
-        // the forming bar, so only each indicator's last value would change, and
-        // rebuilding nineteen of them over several hundred bars on every poll is
-        // real work on a phone for a digit or two. The ceiling is that trailing
-        // value; the upgrade path is an incremental `update(lastBar)` per
-        // indicator, which the current `build(bars)` signature does not offer.
         renderLegend(lastHover)
       })
       .catch(() => {
         // A failed poll is not worth reporting: another one is coming and the
         // chart still holds the last good price.
       })
+  },
+
+  pushTick(price: number, time?: number) {
+    if (!chart || price <= 0) return
+    const t = time ?? Math.floor(Date.now() / 1000)
+    chart.pushTick({ time: t, price: price * factor() })
+    renderLegend(lastHover)
   },
 }
 

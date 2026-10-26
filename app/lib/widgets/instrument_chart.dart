@@ -44,11 +44,16 @@ class InstrumentChart extends StatefulWidget {
   /// 'light' or 'dark'. Anything else is treated as dark.
   final String theme;
 
+  /// Optional live quote price pushed by the host screen to keep candle moving
+  /// smoothly with every incoming tick.
+  final double? livePrice;
+
   const InstrumentChart({
     super.key,
     required this.symbol,
     this.market = 'stock',
     this.theme = 'dark',
+    this.livePrice,
   });
 
   @override
@@ -110,13 +115,8 @@ class _InstrumentChartState extends State<InstrumentChart> {
     // notice.
     _currency.addListener(_onCurrencyChanged);
 
-    // Once a minute, matching how often the data underneath can actually change:
-    // `refresh-quotes` rewrites `quotes_cache` on a one-minute cron, so polling
-    // faster re-reads the same number. The screens around this widget poll their
-    // headers every four seconds for their own reasons; the chart does not need
-    // to, and for a symbol outside the refresh universe each poll costs an edge
-    // function invocation.
-    _poll = Timer.periodic(const Duration(minutes: 1), (_) {
+    // Polls quote to keep live candle updating smoothly
+    _poll = Timer.periodic(const Duration(seconds: 4), (_) {
       if (_ready) _call('window.ttChart.refreshQuote()');
     });
   }
@@ -137,6 +137,10 @@ class _InstrumentChartState extends State<InstrumentChart> {
       // A new symbol, not a new page: the library and the indicators are already
       // parsed, so this is a fetch rather than a reload.
       _load();
+    } else if (widget.livePrice != null &&
+        widget.livePrice != old.livePrice &&
+        widget.livePrice! > 0) {
+      _call('window.ttChart.pushTick(${widget.livePrice})');
     }
   }
 

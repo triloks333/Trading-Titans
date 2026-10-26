@@ -19,7 +19,7 @@ const ITEMS = [
   {
     icon: Coins,
     title: 'Tasks pay your practice balance',
-    body: 'Rewards run from ₹500 for a green day up to ₹25,000 for the Century Club. Earn a bigger balance instead of buying one — there is nothing to buy.',
+    body: 'Rewards run from ₹500 for a green day up to ₹25,000 for the Century Club. Earn a bigger balance through skill and daily tasks, or accelerate your practice.',
   },
   {
     icon: Flame,

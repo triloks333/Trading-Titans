@@ -164,6 +164,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
         symbol: widget.symbol,
         market: widget.market,
         theme: 'light',
+        livePrice: widget.quote?.price,
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

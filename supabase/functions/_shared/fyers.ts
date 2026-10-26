@@ -722,7 +722,8 @@ function generateMockOption(
     price = strike * Math.exp(-r * T) * normalCDF(-d2) - spotPrice * normalCDF(-d1);
   }
   
-  price = Math.max(0.05, Math.round(price * 100) / 100);
+  const intrinsic = optionType === "CE" ? Math.max(0, spotPrice - strike) : Math.max(0, strike - spotPrice);
+  price = Math.max(0.05, Math.max(intrinsic, Math.round(price * 100) / 100));
   
   const change = Math.round((price * (Math.random() * 0.1 - 0.05)) * 100) / 100;
   const prev = price - change;

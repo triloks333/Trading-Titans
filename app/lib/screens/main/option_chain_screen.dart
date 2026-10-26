@@ -908,9 +908,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                       color: AppColors.imperialGold,
                                     ),
                                     items: _expiries.map((expiry) {
+                                      final exp = DateTime.tryParse(expiry);
+                                      final isExp = exp != null && DateTime.now().isAfter(DateTime(exp.year, exp.month, exp.day, 15, 30));
                                       return DropdownMenuItem<String>(
                                         value: expiry,
-                                        child: Text(expiry),
+                                        child: Text(isExp ? '$expiry (Expired)' : expiry),
                                       );
                                     }).toList(),
                                     onChanged: (val) {
@@ -1077,6 +1079,9 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         final markPrice = (future['mark_price'] as num?)?.toDouble();
         final funding = (future['funding_rate'] as num?)?.toDouble();
         final isUp = changePct >= 0;
+        final expStr = future['expiry_date'] as String?;
+        final expDate = expStr != null && expStr != 'PERPETUAL' ? DateTime.tryParse(expStr) : null;
+        final isFutureExpired = expDate != null && DateTime.now().isAfter(DateTime(expDate.year, expDate.month, expDate.day, 15, 30));
 
         return Container(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -1190,17 +1195,18 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _openFutureOrder(future, true),
+                      onPressed: isFutureExpired ? null : () => _openFutureOrder(future, true),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.bull,
-                        foregroundColor: AppColors.pureWhite,
+                        backgroundColor: isFutureExpired ? AppColors.birch : AppColors.bull,
+                        disabledBackgroundColor: AppColors.birch,
+                        foregroundColor: isFutureExpired ? AppColors.ink4 : AppColors.pureWhite,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                       ),
                       child: Text(
-                        'BUY',
+                        isFutureExpired ? 'EXPIRED' : 'BUY',
                         style: GoogleFonts.inter(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -1208,17 +1214,18 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () => _openFutureOrder(future, false),
+                      onPressed: isFutureExpired ? null : () => _openFutureOrder(future, false),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.bear,
-                        foregroundColor: AppColors.pureWhite,
+                        backgroundColor: isFutureExpired ? AppColors.birch : AppColors.bear,
+                        disabledBackgroundColor: AppColors.birch,
+                        foregroundColor: isFutureExpired ? AppColors.ink4 : AppColors.pureWhite,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.md),
                         ),
                       ),
                       child: Text(
-                        'SELL',
+                        isFutureExpired ? 'EXPIRED' : 'SELL',
                         style: GoogleFonts.inter(fontWeight: FontWeight.bold),
                       ),
                     ),

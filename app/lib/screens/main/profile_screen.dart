@@ -1,4 +1,4 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -147,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
                 icon: Icon(Icons.lock_open_outlined,
                     size: 18, color: AppColors.pureWhite),
-                label: Text('Make account permanent â€” get â‚¹6,000',
+                label: Text('Make account permanent \u2014 get \u20b91,100',
                     style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -263,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
               _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
               _menuItem(context, Icons.insights_outlined, 'User Analytics', const AdminAnalyticsScreen()),
-              _menuItem(context, Icons.article_outlined, 'Blog Posts', const AdminBlogScreen()),
+              _menuItem(context, Icons.newspaper_outlined, 'Post Market News & Blogs', const AdminBlogScreen()),
             ],
 
             const SizedBox(height: AppSpacing.md),
@@ -278,12 +278,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               child: Text('Sign Out', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.bear, letterSpacing: 0.5)),
             ),
-            const SizedBox(height: AppSpacing.xxl),
-            Center(child: Text('Trading Titans v1.1', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5))),
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(
+              onPressed: () => _confirmDeleteAccount(context, auth),
+              child: Text(
+                'Delete Account',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.bear.withValues(alpha: 0.8),
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Center(child: Text('Trading Titans v1.2', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5))),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context, AuthService auth) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.pureWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+        title: Text(
+          'Delete Account?',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.bear),
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete your Trading Titans account? '
+          'This will immediately remove your profile, trade history, demo cash, and rankings. '
+          'This action is irreversible.',
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.ink4, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.bear,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+            ),
+            child: Text('Delete Permanently', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      try {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Deleting account...')),
+        );
+        await auth.deleteAccount();
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), ''))),
+        );
+      }
+    }
   }
 
   Future<void> _replayTour(BuildContext context) async {
@@ -533,13 +594,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'stock': 'Indian Stocks',
       'us_stock': 'US Stocks',
       'crypto': 'Crypto',
+      'pakistan_stock': 'Pakistan Stocks',
+      'italy_stock': 'Italy Stocks',
     };
     final ordered = MarketTabOrder.canonical
         .where(markets.contains)
         .map((m) => names[m] ?? m)
         .toList();
     if (ordered.isEmpty) return 'None selected';
-    if (ordered.length == 3) return 'All markets';
+    if (ordered.length >= 5) return 'All markets';
     return ordered.join(', ');
   }
 
@@ -573,9 +636,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 for (final c in Currency.values)
                   _themeOption(
                     context,
-                    icon: c == Currency.inr
-                        ? Icons.currency_rupee
-                        : Icons.attach_money,
+                    icon: switch (c) {
+                      Currency.inr => Icons.currency_rupee,
+                      Currency.usd => Icons.attach_money,
+                      Currency.eur => Icons.euro,
+                      Currency.pkr => Icons.currency_rupee,
+                    },
                     title: c.label,
                     isSelected: currency.displayCurrency == c,
                     onTap: () async {
@@ -801,11 +867,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ('stock', 'Indian Stocks', Icons.currency_rupee),
                     ('us_stock', 'US Stocks', Icons.attach_money),
                     ('crypto', 'Cryptocurrency', Icons.currency_bitcoin),
+                    ('pakistan_stock', 'Pakistan Stocks', Icons.account_balance_outlined),
+                    ('italy_stock', 'Italy Stocks', Icons.euro),
                   ])
                     CheckboxListTile(
                       value: selected.contains(m.$1),
                       onChanged: (on) => setSheetState(() {
                         if (on == true) {
+                          if (selected.length >= 3) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('You can select a maximum of 3 markets at a time.'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
                           selected.add(m.$1);
                         } else if (selected.length > 1) {
                           // Never allow an empty selection: the nav bar and the

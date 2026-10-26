@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -141,9 +142,33 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       _failWith(e);
     } finally {
-      setState(() {
-        _busy = false;
-      });
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    if (!_requireLegalConsent()) return;
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+
+    final auth = context.read<AuthService>();
+    try {
+      await AnalyticsService.logSignupMethodSelected('apple');
+      await auth.signInWithApple();
+    } catch (e) {
+      _failWith(e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      }
     }
   }
 
@@ -389,6 +414,35 @@ class _LoginScreenState extends State<LoginScreen> {
                         }),
                       ),
                       const SizedBox(height: AppSpacing.md),
+                      if (Platform.isIOS) ...[
+                        OutlinedButton(
+                          onPressed: _busy ? null : _signInWithApple,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            side: const BorderSide(color: Colors.black),
+                            minimumSize: const Size.fromHeight(52),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.apple, color: Colors.white, size: 24),
+                              SizedBox(width: AppSpacing.sm),
+                              Text(
+                                'Sign in with Apple',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                      ],
                       OutlinedButton(
                         onPressed: _busy ? null : _signInWithGoogle,
                         style: OutlinedButton.styleFrom(
@@ -430,10 +484,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           minimumSize: const Size.fromHeight(48),
                         ),
                         child: Text(
-                          // Amount disclosed up front: a guest starts at ₹5,000,
-                          // not the ₹11,000 the store listing advertises for a
+                          // Amount disclosed up front: a guest starts at ₹500,
+                          // not the ₹1,100 the store listing advertises for a
                           // registered account.
-                          'Explore as guest (₹5,000)',
+                          'Explore as guest (₹500)',
                           style: TextStyle(
                             color: AppColors.ink3,
                             fontWeight: FontWeight.w600,

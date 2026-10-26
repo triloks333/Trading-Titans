@@ -8,10 +8,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/main/notifications_screen.dart'
     show openNotificationCta, parseActionData;
 import 'auth_service.dart' show AuthService;
+import 'chat_service.dart';
 import 'firebase_service.dart';
 
 /// Classifies a notification so it can be mapped to a dedicated Android
-/// channel and an iOS sound file. Exactly six values; [broadcast] is the
+/// channel and an iOS sound file. Exactly seven values; [broadcast] is the
 /// designated default category (R1.1, R1.3).
 enum NotificationCategory {
   orderExecuted,
@@ -20,6 +21,7 @@ enum NotificationCategory {
   priceAlert,
   broadcast, // default
   reward,
+  chat,
 }
 
 /// Per-category configuration mapping a [NotificationCategory] to its Android
@@ -115,6 +117,12 @@ class NotificationService {
       androidChannelDescription: 'Notifications for rewards',
       soundName: 'reward',
     ),
+    NotificationCategory.chat: _CategoryConfig(
+      androidChannelId: 'chat_channel_v1',
+      androidChannelName: 'Titans Room',
+      androidChannelDescription: 'Notifications for Titans Room chat messages',
+      soundName: 'broadcast',
+    ),
   };
 
   Future<void> _initLocalNotifications() async {
@@ -140,7 +148,33 @@ class NotificationService {
       // Covers the foreground case only. A push that arrives while the app is
       // open is posted by us as a local notification (see the onMessage handler),
       // so the OS routes its tap here rather than through FirebaseMessaging.
-      onDidReceiveNotificationResponse: (response) {
+      onDidReceiveNotificationResponse: (response) async {
+        if (response.actionId == 'chat_reply') {
+          final replyText = response.input;
+          if (replyText != null && replyText.trim().isNotEmpty) {
+            try {
+              await ChatService.instance.sendText(replyText.trim());
+            } catch (e) {
+              debugPrint('Direct reply error: $e');
+            }
+          }
+          return;
+        }
+        if (response.actionId == 'chat_mark_read') {
+          final id = response.id;
+          if (id != null) {
+            await _notificationsPlugin.cancel(id: id);
+          }
+          return;
+        }
+        if (response.actionId == 'chat_mute_8h') {
+          await ChatService.muteNotificationsFor(const Duration(hours: 8));
+          final id = response.id;
+          if (id != null) {
+            await _notificationsPlugin.cancel(id: id);
+          }
+          return;
+        }
         openPushTarget(response.payload);
       },
     );
@@ -299,17 +333,33 @@ class NotificationService {
       // here. Post it as a local notification so EVERY push appears in the
       // system tray regardless of app state. (Background/terminated pushes are
       // shown automatically by the OS.)
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
         final notif = message.notification;
         final data = message.data;
         final title = (notif?.title ?? data['title'] ?? '').trim();
         final body = (notif?.body ?? data['body'] ?? '').trim();
         if (title.isEmpty && body.isEmpty) return;
+
+        final category = categoryFromType(data['type']);
+        if (category == NotificationCategory.chat) {
+          final isEveryone = data['is_everyone'] == 'true' ||
+              data['is_everyone'] == true ||
+              data['tag'] == '@everyone';
+          if (ChatService.isChatRoomActive) {
+            debugPrint('Suppressing chat notification: user is active in chatroom.');
+            return;
+          }
+          if (!isEveryone && await ChatService.isChatMuted()) {
+            debugPrint('Suppressing chat notification: chat is muted.');
+            return;
+          }
+        }
+
         showNotification(
           id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
           title: title.isEmpty ? 'Trading Titans' : title,
           body: body,
-          category: categoryFromType(data['type']),
+          category: category,
           // Carried through so the tap can route. Without it, a push that landed
           // while the app was open would open nothing when tapped.
           payload: jsonEncode(data),
@@ -427,6 +477,30 @@ class NotificationService {
     // _categoryConfig is total over the enum, so the default always resolves.
     final resolved = config!;
 
+    final List<AndroidNotificationAction>? chatActions = category == NotificationCategory.chat
+        ? const [
+            AndroidNotificationAction(
+              'chat_reply',
+              'Reply',
+              inputs: [
+                AndroidNotificationActionInput(
+                  label: 'Type a reply...',
+                ),
+              ],
+            ),
+            AndroidNotificationAction(
+              'chat_mark_read',
+              'Mark as read',
+              cancelNotification: true,
+            ),
+            AndroidNotificationAction(
+              'chat_mute_8h',
+              'Mute 8h',
+              cancelNotification: true,
+            ),
+          ]
+        : null;
+
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       resolved.androidChannelId,
       resolved.androidChannelName,
@@ -435,6 +509,7 @@ class NotificationService {
       priority: Priority.high,
       sound: RawResourceAndroidNotificationSound(resolved.soundName),
       ticker: 'ticker',
+      actions: chatActions,
     );
 
     final DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -471,6 +546,7 @@ class NotificationService {
         importance: Importance.max,
         priority: Priority.high,
         ticker: 'ticker',
+        actions: chatActions,
       );
       const DarwinNotificationDetails fallbackIos = DarwinNotificationDetails(
         presentAlert: true,
@@ -528,6 +604,8 @@ class NotificationService {
         return NotificationCategory.orderFailed;
       case 'reward':
         return NotificationCategory.reward;
+      case 'chat':
+        return NotificationCategory.chat;
       default:
         return NotificationCategory.broadcast;
     }

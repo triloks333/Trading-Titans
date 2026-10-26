@@ -167,10 +167,12 @@ export function Plans() {
   }
 
   const all = plans.data ?? []
-  const subscriptions = all.filter(
-    (p) => p.kind === 'subscription' && p.billing_interval === interval,
-  )
-  const topups = all.filter((p) => p.kind === 'one_time')
+  const subscriptions = all
+    .filter((p) => p.kind === 'subscription' && p.billing_interval === interval)
+    .sort((a, b) => a.price_paise - b.price_paise)
+  const topups = all
+    .filter((p) => p.kind === 'one_time')
+    .sort((a, b) => a.price_paise - b.price_paise)
 
   // Annual vs monthly, computed rather than asserted, so a price change in the
   // database cannot leave a stale "save 33%" on the page. Computed in the billing
@@ -223,6 +225,53 @@ export function Plans() {
         </Card>
       )}
 
+      {/* ── One-time top-ups (₹199 Boost on top) ───────────────────────────── */}
+      <Card>
+        <CardHeader
+          title="One-time top-ups"
+          subtitle="A single purchase of demo cash. Not a subscription, and it never expires."
+        />
+        {plans.isLoading ? (
+          <div className="grid gap-4 p-5 sm:grid-cols-3">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        ) : (
+          <div className="grid gap-4 p-5 sm:grid-cols-3">
+            {topups.map((p) => (
+              <div
+                key={p.sku}
+                className="flex flex-col rounded-lg border border-birch bg-cream/40 p-4"
+              >
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-brand" />
+                  <p className="text-sm font-bold text-ink">{p.title}</p>
+                </div>
+                <p className="tnum mt-3 text-2xl font-extrabold text-ink">
+                  {compactMoney(p.cash_grant)}
+                </p>
+                <p className="text-[11px] text-ink-4">demo cash, credited once</p>
+                <div className="mt-auto pt-4">
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    disabled={busySku !== null}
+                    onClick={() => void buy(p)}
+                  >
+                    {busySku === p.sku ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <>Buy for {planPrice(p, billing)}</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {/* ── Subscriptions ──────────────────────────────────────────────────── */}
       <Card>
         <CardHeader
@@ -268,53 +317,6 @@ export function Plans() {
                 disabled={busySku !== null}
                 onBuy={() => void buy(p)}
               />
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* ── One-time top-ups ───────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader
-          title="One-time top-ups"
-          subtitle="A single purchase of demo cash. Not a subscription, and it never expires."
-        />
-        {plans.isLoading ? (
-          <div className="grid gap-4 p-5 sm:grid-cols-3">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-32 w-full" />
-          </div>
-        ) : (
-          <div className="grid gap-4 p-5 sm:grid-cols-3">
-            {topups.map((p) => (
-              <div
-                key={p.sku}
-                className="flex flex-col rounded-lg border border-birch bg-cream/40 p-4"
-              >
-                <div className="flex items-center gap-2">
-                  <Wallet className="h-4 w-4 text-brand" />
-                  <p className="text-sm font-bold text-ink">{p.title}</p>
-                </div>
-                <p className="tnum mt-3 text-2xl font-extrabold text-ink">
-                  {compactMoney(p.cash_grant)}
-                </p>
-                <p className="text-[11px] text-ink-4">demo cash, credited once</p>
-                <div className="mt-auto pt-4">
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    disabled={busySku !== null}
-                    onClick={() => void buy(p)}
-                  >
-                    {busySku === p.sku ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <>Buy for {planPrice(p, billing)}</>
-                    )}
-                  </Button>
-                </div>
-              </div>
             ))}
           </div>
         )}
