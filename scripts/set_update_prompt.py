@@ -37,6 +37,9 @@ import pathlib
 import sys
 import urllib.request
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 url = key = ""
@@ -150,19 +153,24 @@ def valid(v: str) -> bool:
 args = sys.argv[1:]
 if args and args[0] in {"-h", "--help"}:
     print(__doc__)
+    print("\nOptions:")
+    print("  --compulsory, --force  Set both latest_version and min_supported_version (mandatory update)")
+    print("  --show                 Inspect current remote config and staged release notes")
+    print("  --off                  Disable gating")
     sys.exit(0)
 
-if args and args[0] == "--show":
+is_compulsory = any(arg in {"--compulsory", "--force", "-f"} for arg in args)
+filtered_args = [arg for arg in args if arg not in {"--compulsory", "--force", "-f"}]
+
+if filtered_args and filtered_args[0] == "--show":
     show("current app_config")
-    # Also print what an arming run would write, so the notes can be eyeballed
-    # before they reach anyone's phone.
     print(f"\nwould arm at        {pubspec_version()}  (app/pubspec.yaml)")
     print("would write notes:")
     for ln in release_notes().splitlines():
         print(f"  {ln}")
     sys.exit(0)
 
-if args and args[0] == "--off":
+if filtered_args and filtered_args[0] == "--off":
     before = show("before")
     put("latest_version", "1.0.0")
     put("latest_version_notes", "")
@@ -170,8 +178,8 @@ if args and args[0] == "--off":
     print("\nmin_supported_version left at", before.get("min_supported_version"))
     sys.exit(0)
 
-if args:
-    target = args[0]
+if filtered_args:
+    target = filtered_args[0]
 else:
     target = pubspec_version()
     print(f"no version given; using app/pubspec.yaml version {target}")
@@ -182,13 +190,22 @@ if not valid(target):
 before = show("before")
 put("latest_version", target)
 put("latest_version_notes", release_notes())
-after = show("after")
 
-print(
-    f"\nSoft-update prompt armed at {target}."
-    f"\nAnyone on a version name below {target} sees the dialog ~2s after the"
-    f"\nhome screen loads, snoozeable for 24h. Anyone on {target} or above sees"
-    f"\nnothing, which is why a device with a newer sideloaded build stays quiet."
-)
-print(f"min_supported_version untouched at {after.get('min_supported_version')} "
-      "(no hard gate).")
+if is_compulsory:
+    put("min_supported_version", target)
+    after = show("after (COMPULSORY UPDATE ARMED)")
+    print(
+        f"\nCOMPULSORY update gate armed at {target}."
+        f"\nmin_supported_version has been set to {target}."
+        f"\nEVERY user on a version below {target} will be blocked by a mandatory"
+        f"\nupdate popup and cannot use the app until updated."
+    )
+else:
+    after = show("after")
+    print(
+        f"\nSoft-update prompt armed at {target}."
+        f"\nAnyone on a version name below {target} sees the dialog ~2s after the"
+        f"\nhome screen loads. Anyone on {target} or above sees nothing."
+    )
+    print(f"min_supported_version untouched at {after.get('min_supported_version')} "
+          "(no hard gate).")

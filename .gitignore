@@ -106,8 +106,17 @@ promo.mp4
 
 # Google Play service-account key (used by the google-play MCP server) — never commit
 secrets/
+ios_secrets/
 *play-service-account*.json
 *-service-account.json
 
 # Browser-automation scratch output
 .playwright-mcp/
+
+# Temporary test captures, dumps, and local tools
+/emu_*.png
+/screen_*.png
+/*.xml
+/scratch/
+/tools/
+
