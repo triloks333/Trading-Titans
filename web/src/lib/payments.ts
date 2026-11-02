@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase, functionsBase } from './supabase'
 import { inCurrency } from './format'
+import { track } from './analytics'
 
 /*
  * Checkout, from the browser's side.
@@ -144,7 +145,8 @@ interface RazorpayOptions {
   subscription_id?: string
   amount?: number
   currency?: string
-  prefill?: { email?: string; name?: string }
+  prefill?: { email?: string; name?: string; contact?: string }
+  retry?: { enabled?: boolean; max_count?: number }
   theme?: { color?: string }
   handler?: (response: Record<string, string>) => void
   modal?: { ondismiss?: () => void }
@@ -197,6 +199,7 @@ interface CheckoutSession {
   keyId: string
   orderId?: string
   subscriptionId?: string
+  isPrepaidOrder?: boolean
   title: string
   currency?: BillingCurrency
   /**
@@ -205,10 +208,14 @@ interface CheckoutSession {
    * to be simultaneous.
    */
   amountPaise: number
+  prefill?: { email?: string; name?: string; contact?: string }
 }
 
 /** Asks the server to open a checkout for this SKU. The server sets the price. */
-async function createSession(sku: string): Promise<CheckoutSession> {
+async function createSession(
+  sku: string,
+  contact?: string | null,
+): Promise<CheckoutSession> {
   const { data: sessionData } = await supabase.auth.getSession()
   const token = sessionData.session?.access_token
   if (!token) throw new Error('You are signed out. Please sign in again.')
@@ -221,7 +228,7 @@ async function createSession(sku: string): Promise<CheckoutSession> {
       // purchase cannot be started on somebody else's behalf.
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ sku }),
+    body: JSON.stringify({ sku, ...(contact ? { contact } : {}) }),
   })
 
   const body = await res.json().catch(() => ({}))
@@ -285,9 +292,20 @@ export type CheckoutOutcome =
  */
 export async function startCheckout(
   sku: string,
-  who: { email?: string | null; name?: string | null } = {},
+  who: { email?: string | null; name?: string | null; contact?: string | null } = {},
 ): Promise<CheckoutOutcome> {
-  const session = await createSession(sku)
+  const session = await createSession(sku, who.contact)
+
+  // GA4 ecommerce shape, so begin_checkout → purchase is a funnel report out of
+  // the box. Amounts come from the server's session, never the plan card.
+  const currency = session.currency ?? 'INR'
+  const ecommerce = {
+    currency,
+    value: session.amountPaise / 100,
+    items: [{ item_id: sku, item_name: session.title, item_category: session.kind }],
+  }
+  track('begin_checkout', ecommerce)
+
   await loadCheckout()
   const Razorpay = window.Razorpay
   if (!Razorpay) throw new Error('Could not load the payment window.')
@@ -306,29 +324,44 @@ export async function startCheckout(
       key: session.keyId,
       name: 'Trading Titans',
       description: session.title,
-      ...(session.kind === 'subscription'
-        ? { subscription_id: session.subscriptionId }
-        : {
+      ...(session.orderId
+        ? {
             order_id: session.orderId,
             amount: session.amountPaise,
             // Must match the order Razorpay already holds, which the server set
             // from the account's residency. Hardcoding 'INR' here made every
             // dollar-billed checkout fail validation.
             currency: session.currency ?? 'INR',
-          }),
-      prefill: { email: who.email ?? undefined, name: who.name ?? undefined },
+          }
+        : { subscription_id: session.subscriptionId }),
+      prefill: {
+        email: who.email ?? session.prefill?.email ?? undefined,
+        name: who.name ?? session.prefill?.name ?? undefined,
+        contact: who.contact ?? session.prefill?.contact ?? undefined,
+      },
+      retry: { enabled: true, max_count: 3 },
       theme: { color: '#B8860B' },
       handler: () => {
         // Note what is NOT here: no grant, no wallet write, no "success" claim
         // based on this callback. All it does is start watching the database.
         settle(() => {
-          void waitForGrant(session).then((granted) =>
-            resolve({ status: granted ? 'granted' : 'confirming' }),
-          )
+          void waitForGrant(session).then((granted) => {
+            // Reporting only. The grant itself is still the webhook's alone.
+            track('purchase', {
+              ...ecommerce,
+              transaction_id: session.orderId ?? session.subscriptionId,
+              grant_confirmed: granted,
+            })
+            resolve({ status: granted ? 'granted' : 'confirming' })
+          })
         })
       },
       modal: {
-        ondismiss: () => settle(() => resolve({ status: 'dismissed' })),
+        ondismiss: () =>
+          settle(() => {
+            track('checkout_dismissed', ecommerce)
+            resolve({ status: 'dismissed' })
+          }),
       },
     })
 
@@ -336,6 +369,7 @@ export async function startCheckout(
       const description =
         (payload as { error?: { description?: string } })?.error?.description ??
         'The payment did not go through. You have not been charged.'
+      track('payment_failed', { ...ecommerce, reason: description })
       settle(() => reject(new Error(description)))
     })
 

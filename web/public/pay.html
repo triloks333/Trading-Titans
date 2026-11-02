@@ -129,6 +129,9 @@
   var amountRaw = pick('amount', /^[1-9][0-9]{0,9}$/);
   // Free text, so it is length-capped and only ever written with textContent.
   var title = (q.get('title') || '').slice(0, 60);
+  var email = (q.get('email') || '').slice(0, 120);
+  var customerName = (q.get('name') || '').slice(0, 80);
+  var contact = pick('contact', /^\+?[0-9]{8,15}$/);
 
   if (!keyId || (!orderId && !subId)) {
     say('bad',
@@ -176,6 +179,12 @@
       key: keyId,
       name: 'Trading Titans',
       description: title || undefined,
+      prefill: {
+        email: email || undefined,
+        name: customerName || undefined,
+        contact: contact || undefined
+      },
+      retry: { enabled: true, max_count: 3 },
       theme: { color: '#B8860B' },
       handler: function () {
         // Deliberately not a success claim. This callback is a UI event that any

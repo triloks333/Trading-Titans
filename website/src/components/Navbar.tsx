@@ -4,12 +4,12 @@ import { Menu, X } from 'lucide-react';
 import { PLAY_STORE_URL } from '../lib/config';
 
 const LINKS = [
-  { label: 'Features', id: 'features', href: '/#features' },
-  { label: 'How it works', id: 'how', href: '/#how' },
+  { label: 'Paper Trading', id: 'paper-trading', href: '/paper-trading-app-india' },
+  { label: 'Options Simulator', id: 'options-sim', href: '/options-trading-simulator' },
+  { label: 'Calculator', id: 'calc', href: '/brokerage-calculator' },
   { label: 'Blog', id: 'blog', href: '/blog' },
-  { label: 'Plans', id: 'plans', href: '/topup' },
+  { label: 'Pricing', id: 'plans', href: '/topup' },
   { label: 'About', id: 'about', href: '/about' },
-  { label: 'Contact', id: 'contact', href: '/contact' },
 ];
 
 const handleNavClick = (id: string, href?: string) => {
@@ -48,8 +48,15 @@ export const Navbar: React.FC = () => {
 
       <nav className="flex items-center justify-between p-3 sm:p-4 px-4 sm:px-6 relative pointer-events-auto">
         {/* Left: logo + wordmark + corporate subtitle */}
-        <button
-          onClick={() => { handleNavClick('top'); setActive('home'); }}
+        <a
+          href="/"
+          onClick={(e) => {
+            if (window.location.pathname === '/') {
+              e.preventDefault();
+              handleNavClick('top');
+              setActive('home');
+            }
+          }}
           className="flex items-center gap-2.5 cursor-pointer select-none text-left"
         >
           <img src="/logo.svg" className="w-8 h-8 rounded-md border border-white/15" alt="Trading Titans" />
@@ -57,20 +64,27 @@ export const Navbar: React.FC = () => {
             <span className="text-white text-xl sm:text-2xl font-playfair italic leading-tight">Trading Titans</span>
             <span className="text-[9px] sm:text-[10px] uppercase tracking-wider text-white/60 font-semibold leading-none">by Kashivwealth Management LLP</span>
           </div>
-        </button>
+        </a>
 
         {/* Center pill */}
         <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 bg-white/15 backdrop-blur-md border border-white/25 rounded-full px-2 py-1.5 items-center gap-1">
           {LINKS.map((l) => (
-            <button
+            <a
               key={l.id}
-              onClick={() => { handleNavClick(l.id, l.href); setActive(l.id); }}
+              href={l.href}
+              onClick={(e) => {
+                if (l.href.startsWith('/#') && window.location.pathname === '/') {
+                  e.preventDefault();
+                  handleNavClick(l.id, l.href);
+                }
+                setActive(l.id);
+              }}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
                 active === l.id ? 'bg-white/20 text-white' : 'text-white/80 hover:bg-white/20 hover:text-white'
               }`}
             >
               {l.label}
-            </button>
+            </a>
           ))}
         </div>
 
@@ -112,13 +126,20 @@ export const Navbar: React.FC = () => {
               </div>
               <div className="flex flex-col p-3 gap-1">
                 {LINKS.map((l) => (
-                  <button
+                  <a
                     key={l.id}
-                    onClick={() => { handleNavClick(l.id, l.href); setIsOpen(false); }}
+                    href={l.href}
+                    onClick={(e) => {
+                      if (l.href.startsWith('/#') && window.location.pathname === '/') {
+                        e.preventDefault();
+                        handleNavClick(l.id, l.href);
+                      }
+                      setIsOpen(false);
+                    }}
                     className="text-left px-4 py-2.5 rounded-xl text-sm font-medium text-white/85 hover:bg-white/10"
                   >
                     {l.label}
-                  </button>
+                  </a>
                 ))}
                 <a
                   href={WEB_APP_URL}

@@ -37,10 +37,6 @@ const SUB_STATUS: Record<string, string> = {
   "subscription.expired": "expired",
 };
 
-/// Thrown for events that will never succeed no matter how often Razorpay
-/// retries — an unattributable subscription, a payment for an order we never
-/// created. Recorded and acknowledged, so the retry queue does not fill up with
-/// something no retry can fix.
 class Unresolvable extends Error {}
 
 Deno.serve(async (req: Request) => {
@@ -48,8 +44,6 @@ Deno.serve(async (req: Request) => {
     return new Response("Method not allowed", { status: 405 });
   }
   if (!WEBHOOK_SECRET) {
-    // Better to reject and let Razorpay retry than to accept unverified money
-    // events during a misconfiguration.
     return new Response("Webhook not configured", { status: 503 });
   }
 
@@ -67,16 +61,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const eventType = String(body.event ?? "");
-  // Razorpay's own event id is the idempotency key. If a delivery ever arrives
-  // without one, fall back to a digest of the body so replays still collapse.
   const eventId = req.headers.get("X-Razorpay-Event-Id") ??
     `sha:${await sha256Hex(raw)}`;
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-  // Claim the event. Upsert (not insert) so a retry hands back the row we
-  // already have instead of failing, and handled_at survives because we do not
-  // list it here.
   const { data: event, error: claimErr } = await supabase
     .from("payment_events")
     .upsert(
@@ -109,8 +98,6 @@ Deno.serve(async (req: Request) => {
     await supabase.from("payment_events")
       .update({
         handler_error: message,
-        // Permanent failures are marked handled so Razorpay stops retrying;
-        // handler_error is what makes them findable afterwards.
         handled_at: permanent ? new Date().toISOString() : null,
       })
       .eq("id", event.id);
@@ -122,7 +109,76 @@ Deno.serve(async (req: Request) => {
 });
 
 // deno-lint-ignore no-explicit-any
+async function recordCustomerContact(supabase: any, payload: Record<string, any>) {
+  try {
+    const payment = payload.payment?.entity;
+    const order = payload.order?.entity;
+    const sub = payload.subscription?.entity;
+    const link = payload.payment_link?.entity;
+
+    const rawContact = payment?.contact ?? link?.customer?.contact;
+    const contact = typeof rawContact === "string" ? rawContact.trim() : "";
+    if (!contact) return;
+
+    const providerOrderId: string | undefined = order?.id ?? payment?.order_id;
+    let userId: string | undefined =
+      payment?.notes?.user_id ??
+      order?.notes?.user_id ??
+      sub?.notes?.user_id ??
+      link?.notes?.user_id;
+
+    if (providerOrderId) {
+      try {
+        await supabase
+          .from("payment_orders")
+          .update({ customer_phone: contact })
+          .eq("provider_order_id", providerOrderId);
+      } catch (_) { /* non-fatal */ }
+
+      if (!userId) {
+        const { data: ordRow } = await supabase
+          .from("payment_orders")
+          .select("user_id")
+          .eq("provider_order_id", providerOrderId)
+          .maybeSingle();
+        if (ordRow?.user_id) userId = ordRow.user_id;
+      }
+    }
+
+    if (!userId && typeof payment?.email === "string" && payment.email.trim()) {
+      const { data: profRow } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", payment.email.trim())
+        .maybeSingle();
+      if (profRow?.id) userId = profRow.id;
+    }
+
+    if (userId) {
+      try {
+        await supabase
+          .from("profiles")
+          .update({ phone: contact })
+          .eq("id", userId);
+      } catch (_) { /* non-fatal */ }
+      try {
+        const { data: u } = await supabase.auth.admin.getUserById(userId);
+        const existingMeta = u?.user?.user_metadata ?? {};
+        if (existingMeta.phone !== contact) {
+          await supabase.auth.admin.updateUserById(userId, {
+            user_metadata: { ...existingMeta, phone: contact },
+          });
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+  } catch (_) {
+    // Contact persistence must never block payment fulfillment
+  }
+}
+
+// deno-lint-ignore no-explicit-any
 async function handle(
+  // deno-lint-ignore no-explicit-any
   supabase: any,
   eventType: string,
   body: Record<string, unknown>,
@@ -130,6 +186,9 @@ async function handle(
 ): Promise<void> {
   // deno-lint-ignore no-explicit-any
   const payload = (body.payload ?? {}) as Record<string, any>;
+
+  // Always capture customer mobile number on every payment event (including payment.failed)
+  await recordCustomerContact(supabase, payload);
 
   if (eventType === "order.paid" || eventType === "payment.captured") {
     const order = payload.order?.entity;
@@ -139,59 +198,81 @@ async function handle(
 
     const { data: row, error } = await supabase
       .from("payment_orders")
-      .select("id, status, amount_paise, currency, credited_at")
+      .select("id, user_id, sku, kind, status, amount_paise, currency, credited_at, provider_subscription_id")
       .eq("provider_order_id", providerOrderId)
       .maybeSingle();
     if (error) throw new Error(error.message);
 
-    // Subscription invoices, and the orders a Payment Link creates for itself,
-    // are Razorpay orders we never made. Nothing to do here; the
-    // subscription.charged and payment_link.paid deliveries carry that money.
+    // Subscription invoices and orders created by a Payment Link are handled by
+    // subscription.charged / payment_link.paid if no direct order row exists.
     if (!row) return;
 
     await supabase.from("payment_events")
       .update({ order_id: row.id }).eq("id", eventRowId);
 
-    await creditTopup(
-      supabase,
-      row,
-      Number(order?.amount_paid ?? payment?.amount ?? 0),
-      order?.currency ?? payment?.currency ?? null,
-      providerOrderId,
-    );
+    const paidMinor = Number(order?.amount_paid ?? payment?.amount ?? 0);
+    const paidCurrency = order?.currency ?? payment?.currency ?? null;
+
+    if (row.kind === "subscription") {
+      await creditSubscriptionOrder(
+        supabase,
+        row,
+        paidMinor,
+        paidCurrency,
+        providerOrderId,
+      );
+    } else {
+      await creditTopup(
+        supabase,
+        row,
+        paidMinor,
+        paidCurrency,
+        providerOrderId,
+      );
+    }
     return;
   }
 
-  // The Android app's checkout. It opens a Razorpay-hosted Payment Link rather
-  // than running the SDK, so this is the delivery that carries the money — the
-  // order.paid that also fires belongs to an order Razorpay created for the link,
-  // which we never inserted, so it finds no row and no-ops above.
   if (eventType === "payment_link.paid") {
     const link = payload.payment_link?.entity;
     const payment = payload.payment?.entity;
     if (!link?.id) throw new Unresolvable("no payment link id in payload");
 
-    const { data: row, error } = await supabase
+    let { data: row, error } = await supabase
       .from("payment_orders")
-      .select("id, status, amount_paise, currency, credited_at")
+      .select("id, user_id, sku, kind, status, amount_paise, currency, credited_at, provider_subscription_id")
       .eq("provider_payment_link_id", link.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    // Unlike a stray order, a link we have no row for cannot be attributed to
-    // anyone — recorded with an error so it is findable, and acknowledged so the
-    // retry queue does not fill with something no retry can fix.
+
+    if (!row) {
+      row = await ensurePaymentLinkOrderRow(supabase, link, payment);
+    }
     if (!row) throw new Unresolvable(`payment link ${link.id} was not created here`);
 
     await supabase.from("payment_events")
       .update({ order_id: row.id }).eq("id", eventRowId);
 
-    await creditTopup(
-      supabase,
-      row,
-      Number(link.amount_paid ?? payment?.amount ?? 0),
-      link.currency ?? payment?.currency ?? null,
-      link.id,
-    );
+    const paidMinor = Number(link.amount_paid ?? payment?.amount ?? 0);
+    const paidCurrency = link.currency ?? payment?.currency ?? null;
+
+    if (row.kind === "subscription") {
+      await creditSubscriptionOrder(
+        supabase,
+        row,
+        paidMinor,
+        paidCurrency,
+        link.id,
+      );
+    } else {
+      await creditTopup(
+        supabase,
+        row,
+        paidMinor,
+        paidCurrency,
+        link.id,
+      );
+    }
     return;
   }
 
@@ -229,32 +310,17 @@ async function handle(
     if (error) throw new Error(error.message);
     return;
   }
-
-  // Anything else (authenticated, updated, payment.failed, refunds) is recorded
-  // in payment_events and deliberately does nothing. Notably
-  // subscription.authenticated means the mandate exists but no money has moved,
-  // so granting there would hand out a paid tier for free.
 }
 
-/// Marks a one-time order paid and credits it, whichever way the money arrived.
-///
-/// Shared by `order.paid`/`payment.captured` (web Checkout) and
-/// `payment_link.paid` (the app's hosted page) so the two guards below hold on
-/// both routes, rather than only on the one that happened to be written first.
 // deno-lint-ignore no-explicit-any
 async function creditTopup(
   // deno-lint-ignore no-explicit-any
   supabase: any,
-  row: { id: string; status: string; amount_paise: number; currency: string | null },
+  row: { id: string; user_id?: string; status: string; amount_paise: number; currency: string | null },
   paidMinor: number,
   paidCurrency: string | null,
   ref: string,
 ): Promise<void> {
-  // `amount_paise` is minor units of the ORDER's currency — paise for INR, cents
-  // for USD — so comparing it against an amount in another currency is
-  // meaningless. Worse, it is meaningless in the dangerous direction: 19900 paise
-  // against a 249-cent order reads as a generous overpayment and would sail
-  // through the check below. Reject the mismatch before comparing, not after.
   const expected = (row.currency ?? "INR").toUpperCase();
   if (paidCurrency && paidCurrency.toUpperCase() !== expected) {
     throw new Unresolvable(
@@ -262,9 +328,6 @@ async function creditTopup(
     );
   }
 
-  // Underpayment must never buy the full grant. Razorpay only marks things paid
-  // at the full amount, so this is a belt on top of a brace — but it is the belt
-  // that holds if a partial-payment flag is ever switched on.
   if (paidMinor < Number(row.amount_paise)) {
     throw new Unresolvable(
       `underpaid: ${paidMinor} < ${row.amount_paise} for ${ref}`,
@@ -280,11 +343,155 @@ async function creditTopup(
 
   const { error } = await supabase.rpc("apply_paid_topup", { p_order_id: row.id });
   if (error) throw new Error(error.message);
+
+  if (row.user_id) {
+    try {
+      await supabase
+        .from("winback_reminder_log")
+        .update({ completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("user_id", row.user_id);
+    } catch (_) { /* non-fatal */ }
+  }
 }
 
-/// A subscription created through our own checkout already has a row. One
-/// created straight from the Razorpay dashboard does not, and would otherwise
-/// fail forever. The notes we attach at creation are what make it recoverable.
+/// Activates a prepaid subscription order (30 days for monthly, 365 days for annual)
+/// and credits the plan's monthly stipend via `apply_subscription_charge`.
+// deno-lint-ignore no-explicit-any
+async function creditSubscriptionOrder(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  row: {
+    id: string;
+    user_id: string;
+    sku: string;
+    status: string;
+    amount_paise: number;
+    currency: string | null;
+    credited_at?: string | null;
+    provider_subscription_id?: string | null;
+  },
+  paidMinor: number,
+  paidCurrency: string | null,
+  ref: string,
+): Promise<void> {
+  const expected = (row.currency ?? "INR").toUpperCase();
+  if (paidCurrency && paidCurrency.toUpperCase() !== expected) {
+    throw new Unresolvable(
+      `currency mismatch on ${ref}: paid ${paidCurrency}, order is ${expected}`,
+    );
+  }
+
+  if (paidMinor < Number(row.amount_paise)) {
+    throw new Unresolvable(
+      `underpaid: ${paidMinor} < ${row.amount_paise} for ${ref}`,
+    );
+  }
+
+  // Idempotency guard if already credited
+  if (row.credited_at) return;
+
+  const { data: plan } = await supabase
+    .from("plan_catalogue")
+    .select("tier, billing_interval")
+    .eq("sku", row.sku)
+    .maybeSingle();
+  if (!plan) throw new Unresolvable(`unknown sku ${row.sku}`);
+
+  const subId = row.provider_subscription_id ?? ref;
+
+  const { data: existingSub } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("provider_subscription_id", subId)
+    .maybeSingle();
+
+  if (!existingSub) {
+    const { error: subInsErr } = await supabase.from("subscriptions").insert({
+      user_id: row.user_id,
+      sku: row.sku,
+      tier: plan.tier,
+      provider_subscription_id: subId,
+      status: "created",
+    });
+    if (subInsErr && !String(subInsErr.message).includes("duplicate key")) {
+      throw new Error(subInsErr.message);
+    }
+  }
+
+  const now = new Date();
+  const durationDays = plan.billing_interval === "annual" ? 365 : 30;
+  const periodEnd = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+  const { error: chargeErr } = await supabase.rpc("apply_subscription_charge", {
+    p_provider_subscription_id: subId,
+    p_period_start: now.toISOString(),
+    p_period_end: periodEnd.toISOString(),
+  });
+  if (chargeErr) throw new Error(chargeErr.message);
+
+  const nowIso = now.toISOString();
+  const { error: updErr } = await supabase
+    .from("payment_orders")
+    .update({ status: "paid", paid_at: nowIso, credited_at: nowIso })
+    .eq("id", row.id);
+  if (updErr) throw new Error(updErr.message);
+
+  try {
+    await supabase
+      .from("winback_reminder_log")
+      .update({ completed_at: nowIso, updated_at: nowIso })
+      .eq("user_id", row.user_id);
+  } catch (_) { /* non-fatal */ }
+}
+
+/// Auto-attributes a Payment Link created via Razorpay MCP or Dashboard when
+/// `notes.user_id` and `notes.sku` are attached to the link.
+// deno-lint-ignore no-explicit-any
+async function ensurePaymentLinkOrderRow(supabase: any, link: any, payment: any) {
+  const userId: string | undefined = link?.notes?.user_id ?? payment?.notes?.user_id;
+  const sku: string | undefined = link?.notes?.sku ?? payment?.notes?.sku;
+  if (!userId || !sku) return null;
+
+  const { data: plan } = await supabase
+    .from("plan_catalogue")
+    .select("sku, tier, kind, price_paise, price_usd_cents")
+    .eq("sku", sku)
+    .maybeSingle();
+  if (!plan) throw new Unresolvable(`unknown sku ${sku}`);
+
+  const currency = String(link?.currency ?? payment?.currency ?? "INR").toUpperCase();
+  const expectedAmount = currency === "USD"
+    ? Number(plan.price_usd_cents ?? link?.amount ?? 0)
+    : Number(plan.price_paise ?? link?.amount ?? 0);
+
+  const insertPayload: Record<string, unknown> = {
+    user_id: userId,
+    sku: plan.sku,
+    kind: plan.kind,
+    provider_payment_link_id: link.id,
+    provider_subscription_id: plan.kind === "subscription" ? link.id : null,
+    amount_paise: expectedAmount,
+    currency,
+    status: "created",
+  };
+
+  const { data: created, error } = await supabase
+    .from("payment_orders")
+    .insert(insertPayload)
+    .select("id, user_id, sku, kind, status, amount_paise, currency, credited_at, provider_subscription_id")
+    .single();
+
+  if (error) {
+    const { data: retry } = await supabase
+      .from("payment_orders")
+      .select("id, user_id, sku, kind, status, amount_paise, currency, credited_at, provider_subscription_id")
+      .eq("provider_payment_link_id", link.id)
+      .maybeSingle();
+    return retry;
+  }
+  return created;
+}
+
 // deno-lint-ignore no-explicit-any
 async function ensureSubscriptionRow(supabase: any, sub: any): Promise<void> {
   const { data: existing } = await supabase.from("subscriptions")
@@ -310,7 +517,6 @@ async function ensureSubscriptionRow(supabase: any, sub: any): Promise<void> {
     provider_subscription_id: sub.id,
     status: "created",
   });
-  // A concurrent delivery may have inserted it first; that is fine.
   if (error && !String(error.message).includes("duplicate key")) {
     throw new Error(error.message);
   }

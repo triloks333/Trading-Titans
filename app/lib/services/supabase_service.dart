@@ -17,7 +17,7 @@ import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
 import 'diagnostics_service.dart';
-import 'plan_service.dart' show PlanOption;
+import 'plan_service.dart' show PlanOption, PaymentSession;
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -1658,20 +1658,96 @@ class SupabaseService {
   /// Throws with the server's own message for the cases a user needs to read:
   /// already subscribed, checkout already in progress, plan withdrawn, too many
   /// attempts.
-  Future<String> startHostedCheckout(String sku) async {
-    DiagnosticsService.noteDbCall('create-payment-order');
-    final data = await _invokeOrderFunction(
-      'create-payment-order',
-      {'sku': sku, 'mode': 'hosted'},
-      fallbackError: 'We could not start the payment. Please try again.',
-    );
-    final url = (data['url'] as String?)?.trim();
-    // https only. A payment handoff is exactly the wrong place to follow whatever
-    // scheme a response happens to contain.
+  Future<String> startHostedCheckout(String sku, {String? contact}) async {
+    final session = await createPaymentSession(sku, contact: contact);
+    final url = session.hostedUrl;
     if (url == null || !url.startsWith('https://')) {
       throw Exception('We could not start the payment. Please try again.');
     }
     return url;
+  }
+
+  /// Creates a Razorpay Order / Subscription server-side and returns the
+  /// [PaymentSession] needed by native `razorpay_flutter` (along with the
+  /// hosted `/app/pay` fallback URL and prefill metadata).
+  Future<PaymentSession> createPaymentSession(
+    String sku, {
+    String? contact,
+  }) async {
+    DiagnosticsService.noteDbCall('create-payment-order');
+    final payload = <String, dynamic>{
+      'sku': sku,
+      'mode': 'hosted',
+      if (contact != null && contact.trim().isNotEmpty)
+        'contact': contact.trim(),
+    };
+    final data = await _invokeOrderFunction(
+      'create-payment-order',
+      payload,
+      fallbackError: 'We could not start the payment. Please try again.',
+    );
+    final session = PaymentSession.fromJson(sku, data);
+    if (session.keyId.isEmpty ||
+        (session.orderId == null && session.subscriptionId == null)) {
+      throw Exception('We could not start the payment. Please try again.');
+    }
+    return session;
+  }
+
+  /// Reads the user's saved mobile number from `auth.users` metadata or `profiles.phone`.
+  Future<String?> getSavedPhoneNumber() async {
+    final user = currentUser;
+    if (user == null) return null;
+    final metaPhone = user.userMetadata?['phone'] as String?;
+    if (metaPhone != null && metaPhone.trim().isNotEmpty) {
+      return metaPhone.trim();
+    }
+    try {
+      final row = await client
+          .from('profiles')
+          .select('phone')
+          .eq('id', user.id)
+          .maybeSingle();
+      final dbPhone = (row?['phone'] as String?)?.trim();
+      if (dbPhone != null && dbPhone.isNotEmpty) return dbPhone;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Polls `payment_orders` / `subscriptions` until `razorpay-webhook` has
+  /// verified the payment signature and credited the user's wallet or tier.
+  Future<bool> waitForPaymentGrant(
+    PaymentSession session, {
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        if (session.kind == 'subscription') {
+          final subId = session.subscriptionId ?? session.orderId;
+          if (subId != null) {
+            final row = await client
+                .from('subscriptions')
+                .select('status')
+                .eq('provider_subscription_id', subId)
+                .maybeSingle();
+            if (row?['status'] == 'active') return true;
+          }
+        }
+        if (session.orderId != null) {
+          final row = await client
+              .from('payment_orders')
+              .select('status, credited_at')
+              .eq('provider_order_id', session.orderId!)
+              .maybeSingle();
+          if (row?['credited_at'] != null || row?['status'] == 'paid') {
+            return true;
+          }
+        }
+      } catch (_) {}
+      await Future.delayed(const Duration(milliseconds: 1500));
+    }
+    return false;
   }
 
   Future<Map<String, dynamic>> getAnalytics() async {

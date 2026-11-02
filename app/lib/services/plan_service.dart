@@ -181,3 +181,58 @@ class PlanOption {
         monthlyStipend: (json['monthly_stipend'] as num?)?.toDouble() ?? 0,
       );
 }
+
+/// Checkout session returned by `create-payment-order` for native in-app
+/// Razorpay Checkout (`razorpay_flutter`) with a hosted fallback URL.
+class PaymentSession {
+  final String sku;
+  final String kind;
+  final String keyId;
+  final String? orderId;
+  final String? subscriptionId;
+  final bool isPrepaidOrder;
+  final String title;
+  final String currency;
+  final int amountPaise;
+  final String? prefillEmail;
+  final String? prefillName;
+  final String? prefillContact;
+  final String? hostedUrl;
+
+  const PaymentSession({
+    required this.sku,
+    required this.kind,
+    required this.keyId,
+    required this.orderId,
+    required this.subscriptionId,
+    required this.isPrepaidOrder,
+    required this.title,
+    required this.currency,
+    required this.amountPaise,
+    required this.prefillEmail,
+    required this.prefillName,
+    required this.prefillContact,
+    required this.hostedUrl,
+  });
+
+  factory PaymentSession.fromJson(String sku, Map<String, dynamic> json) {
+    final prefill = json['prefill'] is Map
+        ? Map<String, dynamic>.from(json['prefill'] as Map)
+        : const <String, dynamic>{};
+    return PaymentSession(
+      sku: sku,
+      kind: (json['kind'] as String?) ?? 'one_time',
+      keyId: (json['keyId'] as String?) ?? '',
+      orderId: json['orderId'] as String?,
+      subscriptionId: json['subscriptionId'] as String?,
+      isPrepaidOrder: json['isPrepaidOrder'] == true,
+      title: (json['title'] as String?) ?? 'Trading Titans',
+      currency: (json['currency'] as String?) ?? 'INR',
+      amountPaise: (json['amountPaise'] as num?)?.toInt() ?? 0,
+      prefillEmail: prefill['email'] as String?,
+      prefillName: prefill['name'] as String?,
+      prefillContact: prefill['contact'] as String?,
+      hostedUrl: (json['url'] as String?)?.trim(),
+    );
+  }
+}

@@ -350,10 +350,27 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       Navigator.pop(context); // Close screen
     } catch (e) {
       if (!mounted) return;
+      final errText = e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
+      final isInsufficient = errText.toLowerCase().contains('insufficient');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to place order: $e'),
+          content: Text(isInsufficient ? errText : 'Failed to place order: $errText'),
           backgroundColor: AppColors.bear,
+          action: isInsufficient
+              ? SnackBarAction(
+                  label: 'TOP UP',
+                  textColor: Colors.white,
+                  onPressed: () async {
+                    final auth = context.read<AuthService>();
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SubscribeScreen(initialTabIndex: 1),
+                      ),
+                    );
+                    if (mounted) await auth.refreshUser();
+                  },
+                )
+              : null,
         ),
       );
     } finally {
@@ -1286,7 +1303,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   Builder(
                     builder: (context) {
                       final marginRequiredInr = Money.inrValueOf(_marginRequired, market: widget.quote.market);
-                      final hasInsufficientBalance = marginRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
+                      final chargesInr = Money.inrValueOf(_chargesPreview['total_charges'] ?? 0.0, market: widget.quote.market);
+                      final totalRequiredInr = marginRequiredInr + (_marginRequired > 0 ? chargesInr : 0.0);
+                      final hasInsufficientBalance = totalRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
                       return Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1388,7 +1407,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          'You need ${Money.wallet(marginRequiredInr - walletBalance)} more to place this order.',
+                                          'You need ${Money.wallet(totalRequiredInr - walletBalance)} more to place this order.',
                                           style: GoogleFonts.inter(
                                             color: AppColors.ink3,
                                             fontSize: 11,
@@ -1399,12 +1418,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.of(context).push(
+                                    onPressed: () async {
+                                      final auth = context.read<AuthService>();
+                                      await Navigator.of(context).push(
                                         MaterialPageRoute(
                                           builder: (context) => const SubscribeScreen(initialTabIndex: 1),
                                         ),
                                       );
+                                      if (mounted) await auth.refreshUser();
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: AppColors.bull,

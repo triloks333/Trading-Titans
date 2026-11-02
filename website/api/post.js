@@ -14,6 +14,8 @@
 // function asked for one. Using the service-role key here would remove that
 // protection and put the only safeguard in this file's own WHERE clause.
 
+import { ANALYTICS_TAGS } from './_analytics-tags.js';
+
 const SUPABASE_URL = (
   process.env.VITE_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
@@ -183,16 +185,19 @@ ${published ? `<meta property="article:published_time" content="${esc(published)
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
     publisher: { '@type': 'Organization', name: 'Trading Titans' },
   })}</script>
+<link rel="sitemap" type="application/xml" title="Sitemap" href="${SITE}/sitemap.xml">
 <style>
 :root{color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:#F4F7FB;color:#0B1B2B;
   font:16px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-header,main,footer{max-width:720px;margin:0 auto;padding:0 20px}
-header{padding-top:32px}
+header,main,footer{max-width:740px;margin:0 auto;padding:0 20px}
+header{padding-top:28px;display:flex;align-items:center;justify-content:space-between}
 a{color:#1A73E8}
-.brand{font-weight:800;text-decoration:none;color:#0B1B2B;font-size:15px}
-h1{font-size:34px;line-height:1.2;margin:24px 0 8px}
+.brand{font-weight:800;text-decoration:none;color:#0B1B2B;font-size:16px}
+.header-cta{background:#e8702a;color:#fff!important;text-decoration:none;padding:6px 14px;
+  border-radius:20px;font-size:12.5px;font-weight:600}
+h1{font-size:32px;line-height:1.25;margin:24px 0 8px}
 .meta{color:#627D98;font-size:13px;margin-bottom:24px}
 .cover{width:100%;height:auto;border-radius:10px;margin:0 0 28px}
 main img{max-width:100%;height:auto;border-radius:8px}
@@ -201,13 +206,22 @@ pre{background:#0B1B2B;color:#F4F7FB;padding:14px 16px;border-radius:8px;
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
 p>code,li>code{background:#E6EEF7;padding:1px 5px;border-radius:4px}
 blockquote{margin:0;padding-left:16px;border-left:3px solid #DDE7F2;color:#334E68}
-footer{padding:48px 20px;color:#627D98;font-size:13px}
-.cta{display:inline-block;margin-top:8px;background:#1A73E8;color:#fff;
-  padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:700}
+footer{padding:48px 20px;color:#627D98;font-size:13px;border-top:1px solid #DDE7F2;margin-top:40px}
+.cta-box{margin-top:36px;padding:24px 28px;background:#fff;border:1px solid #DDE7F2;
+  border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.04);text-align:center}
+.cta-box h3{margin:0 0 8px;font-size:19px;color:#0B1B2B}
+.cta-box p{margin:0 0 16px;color:#486581;font-size:14px;line-height:1.5}
+.cta-btn{display:inline-block;background:#e8702a;color:#fff!important;padding:12px 24px;
+  border-radius:30px;text-decoration:none;font-weight:700;font-size:14px;transition:opacity 0.2s}
+.cta-btn:hover{opacity:0.92}
 </style>
+${ANALYTICS_TAGS}
 </head>
 <body>
-<header><a class="brand" href="${SITE}">Trading Titans</a></header>
+<header>
+  <a class="brand" href="${SITE}">Trading Titans</a>
+  <a class="header-cta" href="https://play.google.com/store/apps/details?id=com.kwm.tradingtitans" target="_blank" rel="noopener">Get Android App</a>
+</header>
 <main>
 <h1>${esc(post.title)}</h1>
 <div class="meta">${published
@@ -216,7 +230,13 @@ footer{padding:48px 20px;color:#627D98;font-size:13px}
     : ''}</div>
 ${post.cover_url ? `<img class="cover" src="${esc(post.cover_url)}" alt="">` : ''}
 ${html}
-<p><a class="cta" href="${SITE}/app">Start trading with virtual money</a></p>
+<div class="cta-box">
+  <h3>Practice Live Markets with Zero Risk</h3>
+  <p>Test the strategies discussed in this report on real Indian stocks, F&amp;O options, US equities &amp; crypto with ₹1,100 starting virtual cash on Trading Titans.</p>
+  <a class="cta-btn" href="https://play.google.com/store/apps/details?id=com.kwm.tradingtitans" target="_blank" rel="noopener">
+    Download Free on Google Play (₹1,100 Demo Cash)
+  </a>
+</div>
 </main>
 <footer>
 <a href="${SITE}/blog">All posts</a> ·

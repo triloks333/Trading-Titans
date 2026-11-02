@@ -10,6 +10,7 @@ export interface Profile {
   id: string
   email: string
   name: string
+  phone?: string | null
   wallet_balance: number
   total_realized_pnl: number
   subscription_active: boolean

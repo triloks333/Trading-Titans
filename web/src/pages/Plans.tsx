@@ -55,7 +55,7 @@ import {
  * fixed to separate Razorpay plans.
  */
 export function Plans() {
-  const { session, profile, isGuest } = useAuth()
+  const { session, profile, isGuest, refreshProfile } = useAuth()
   const billing = billingCurrencyFor(profile?.location)
   const queryClient = useQueryClient()
   const monetisation = useMonetisationEnabled()
@@ -74,6 +74,16 @@ export function Plans() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [reading, setReading] = useState<LegalDoc | null>(null)
+  const [pendingPlan, setPendingPlan] = useState<Plan | null>(null)
+  const [phoneInput, setPhoneInput] = useState<string>(() => {
+    const saved =
+      profile?.phone ||
+      (session?.user?.user_metadata?.phone as string | undefined) ||
+      (typeof window !== 'undefined' ? window.localStorage.getItem('tt_customer_phone') : null) ||
+      ''
+    return saved.replace(/\D/g, '').slice(-10)
+  })
+  const [phoneError, setPhoneError] = useState<string | null>(null)
 
   const plans = useQuery({ queryKey: ['plan-catalogue'], queryFn: fetchPlans })
 
@@ -96,7 +106,7 @@ export function Plans() {
     )
   }
 
-  async function buy(plan: Plan) {
+  function buy(plan: Plan) {
     setError(null)
     setNotice(null)
 
@@ -109,21 +119,43 @@ export function Plans() {
       return
     }
 
+    const existingPhone = (
+      phoneInput ||
+      profile?.phone ||
+      (session?.user?.user_metadata?.phone as string | undefined) ||
+      (typeof window !== 'undefined' ? window.localStorage.getItem('tt_customer_phone') : null) ||
+      ''
+    )
+      .replace(/\D/g, '')
+      .slice(-10)
+
+    setPhoneInput(existingPhone)
+    setPhoneError(null)
+    setPendingPlan(plan)
+  }
+
+  async function confirmPhoneAndBuy() {
+    if (!pendingPlan) return
+    const digits = phoneInput.replace(/\D/g, '')
+    if (digits.length < 10) {
+      setPhoneError('Please enter a valid 10-digit mobile / WhatsApp number.')
+      return
+    }
+    const normalizedPhone = digits.length === 10 ? `+91${digits}` : `+${digits}`
+    try {
+      window.localStorage.setItem('tt_customer_phone', normalizedPhone)
+    } catch {
+      /* ignore */
+    }
+    const plan = pendingPlan
+    setPendingPlan(null)
+    await executeBuy(plan, normalizedPhone)
+  }
+
+  async function executeBuy(plan: Plan, contact: string) {
     setBusySku(plan.sku)
     try {
       // Consent to the payment terms, recorded at the moment of purchase.
-      //
-      // This is the point that matters: nobody should be charged under terms
-      // they were not shown. Doing it here rather than as a blanket re-prompt is
-      // deliberate — what changed in this revision are the payment, renewal and
-      // refund clauses, and those only bind someone who actually pays. Users who
-      // never buy anything do not need to re-accept a refund policy.
-      //
-      // Called directly rather than through `acceptTerms()` from the auth
-      // context: that helper deliberately swallows failures so a bad network
-      // cannot lock someone out of signing in. That is the right call there and
-      // the wrong one here — if the consent did not record, we must not take the
-      // money.
       const { error: consentError } = await supabase.rpc('accept_terms', {
         p_version: TERMS_VERSION,
       })
@@ -137,6 +169,7 @@ export function Plans() {
       const outcome = await startCheckout(plan.sku, {
         email: profile?.email,
         name: profile?.name,
+        contact,
       })
 
       if (outcome.status === 'granted') {
@@ -147,18 +180,15 @@ export function Plans() {
         )
         // The wallet, the tier badge and the plan state all changed server-side.
         await Promise.all([
+          refreshProfile(),
           queryClient.invalidateQueries({ queryKey: ['user-tiers'] }),
           queryClient.invalidateQueries({ queryKey: ['leaderboard'] }),
         ])
       } else if (outcome.status === 'confirming') {
-        // Deliberately not phrased as a failure: the payment very likely went
-        // through and the webhook is just behind. Telling someone who has paid
-        // that it did not work is the worse mistake.
         setNotice(
           'Payment received. We are still confirming it with the bank — this page will catch up within a minute or two.',
         )
       }
-      // 'dismissed' says nothing: the user changed their mind and knows it.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -276,7 +306,7 @@ export function Plans() {
       <Card>
         <CardHeader
           title="Subscriptions"
-          subtitle="Renews automatically. Cancel any time from your Razorpay receipt or by contacting support."
+          subtitle="Instant 30-day or 1-year pass via 1-tap UPI, Card, or Netbanking — no auto-debit mandates required."
           action={
             <div className="flex rounded-md border border-birch bg-cream p-0.5">
               {(['monthly', 'annual'] as BillingInterval[]).map((i) => (
@@ -348,6 +378,61 @@ export function Plans() {
           .
         </p>
       </div>
+
+      {pendingPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl border border-birch bg-pure-white p-6 shadow-xl">
+            <h3 className="text-base font-extrabold text-ink">
+              Enter your mobile / WhatsApp number
+            </h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-3">
+              Enter your 10-digit mobile number for instant UPI checkout and
+              payment receipt confirmation for{' '}
+              <strong className="font-semibold text-ink">{pendingPlan.title}</strong>.
+            </p>
+            <div className="mt-4">
+              <div className="flex items-center rounded-lg border border-birch bg-cream/40 px-3 py-2.5 focus-within:border-brand">
+                <span className="mr-2 text-sm font-bold text-ink-3">+91</span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  autoFocus
+                  value={phoneInput}
+                  onChange={(e) => {
+                    setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))
+                    setPhoneError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void confirmPhoneAndBuy()
+                  }}
+                  placeholder="9876543210"
+                  className="w-full bg-transparent text-sm font-bold tracking-wider text-ink outline-none placeholder:text-ink-4"
+                />
+              </div>
+              {phoneError && (
+                <p className="mt-1.5 text-xs font-medium text-bear">{phoneError}</p>
+              )}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingPlan(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void confirmPhoneAndBuy()}
+              >
+                Continue to Pay {planPrice(pendingPlan, billing)}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LegalSheet doc={reading} onClose={() => setReading(null)} />
     </div>

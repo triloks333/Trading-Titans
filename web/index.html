@@ -19,6 +19,10 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <!-- GA4 loader served by the marketing site on the same domain; see
+         website/api/analytics.js. Absent on trading-titans-web.vercel.app,
+         where it 404s harmlessly. -->
+    <script defer src="/api/analytics"></script>
   </head>
   <body>
     <div id="root"></div>

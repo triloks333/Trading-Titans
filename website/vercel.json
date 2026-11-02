@@ -9,8 +9,16 @@
       "destination": "https://trading-titans-web.vercel.app/app/:path*"
     },
     { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/robots.txt", "destination": "/robots.txt" },
     { "source": "/blog", "destination": "/api/blog" },
     { "source": "/blog/:slug", "destination": "/api/post?slug=:slug" },
+    { "source": "/paper-trading-app-india", "destination": "/api/landing?page=paper-trading" },
+    { "source": "/paper-trading-india", "destination": "/api/landing?page=paper-trading" },
+    { "source": "/options-trading-simulator", "destination": "/api/landing?page=options-simulator" },
+    { "source": "/options-simulator", "destination": "/api/landing?page=options-simulator" },
+    { "source": "/brokerage-calculator", "destination": "/api/landing?page=calculator" },
+    { "source": "/calculator", "destination": "/api/landing?page=calculator" },
     { "source": "/topup", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

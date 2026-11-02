@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../core/currency.dart';
@@ -33,18 +35,64 @@ class SubscribeScreen extends StatefulWidget {
 }
 
 class _SubscribeScreenState extends State<SubscribeScreen> {
+  static const String _phonePrefKey = 'tt_checkout_phone_v1';
+
   late Future<List<PlanOption>> _plans;
   late int _selectedTab;
+  String _billingInterval = 'monthly';
 
   /// The SKU whose checkout is being opened, so its button can show a spinner and
   /// every other one can be disabled.
   String? _busySku;
+
+  Razorpay? _razorpay;
+  PaymentSession? _activeSession;
+  PlanOption? _activeProduct;
+  String? _savedPhone;
 
   @override
   void initState() {
     super.initState();
     _selectedTab = widget.initialTabIndex.clamp(0, 1);
     _plans = SupabaseService().getPlanCatalogue();
+    _initRazorpay();
+    _loadSavedPhone();
+  }
+
+  void _initRazorpay() {
+    if (Platform.isIOS) return;
+    try {
+      final rzp = Razorpay();
+      rzp.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      rzp.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+      rzp.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+      _razorpay = rzp;
+    } catch (e) {
+      debugPrint('SubscribeScreen: Razorpay init fallback: $e');
+    }
+  }
+
+  Future<void> _loadSavedPhone() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final local = prefs.getString(_phonePrefKey)?.trim();
+      if (local != null && local.isNotEmpty && mounted) {
+        setState(() => _savedPhone = local);
+      }
+      final remote = await SupabaseService().getSavedPhoneNumber();
+      if (remote != null && remote.isNotEmpty) {
+        await prefs.setString(_phonePrefKey, remote);
+        if (mounted) setState(() => _savedPhone = remote);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    try {
+      _razorpay?.clear();
+    } catch (_) {}
+    super.dispose();
   }
 
   @override
@@ -90,12 +138,13 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
 
           final all = snapshot.data ?? const <PlanOption>[];
           final topups = all.where((p) => !p.isSubscription).toList()
-            ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)); // Lower price packages on top (199 -> 599 -> 999)
+            ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)); // Lower price packages on top (29 -> 199 -> 599 -> 999)
+          final hasAnnual = all.any((p) => p.isSubscription && p.billingInterval == 'annual');
+          final effectiveInterval = (hasAnnual && _billingInterval == 'annual') ? 'annual' : 'monthly';
           final subscriptions = all
-              .where((p) => p.isSubscription && p.billingInterval == 'monthly')
+              .where((p) => p.isSubscription && p.billingInterval == effectiveInterval)
               .toList()
             ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)); // Lower price packages on top (149 -> 799)
-          final hasAnnual = all.any((p) => p.isSubscription && p.billingInterval == 'annual');
 
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
@@ -376,14 +425,18 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       children: [
         // Hero Mentorship Card
         _heroMentorshipBanner(),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.md),
+
+        if (hasAnnual) ...[
+          _billingCycleToggle(),
+          const SizedBox(height: AppSpacing.md),
+        ],
 
         if (subscriptions.isNotEmpty) ...[
           for (final p in subscriptions) ...[
             _subscriptionCard(p, billing, isCurrent: plan.tier == p.tier),
             const SizedBox(height: AppSpacing.md),
           ],
-          if (hasAnnual) _annualNote(),
         ],
 
         const SizedBox(height: AppSpacing.lg),
@@ -391,6 +444,98 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         const SizedBox(height: AppSpacing.lg),
         _mentorshipFaqSection(),
       ],
+    );
+  }
+
+  Widget _billingCycleToggle() {
+    final isAnnual = _billingInterval == 'annual';
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (_billingInterval != 'monthly') {
+                  HapticFeedback.selectionClick();
+                  setState(() => _billingInterval = 'monthly');
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: !isAnnual ? AppColors.violet.withValues(alpha: 0.1) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Center(
+                  child: Text(
+                    'Monthly Pass',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontWeight: !isAnnual ? FontWeight.w800 : FontWeight.w600,
+                      color: !isAnnual ? AppColors.violet : AppColors.ink3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                if (_billingInterval != 'annual') {
+                  HapticFeedback.selectionClick();
+                  setState(() => _billingInterval = 'annual');
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isAnnual ? AppColors.violet.withValues(alpha: 0.1) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Annual Pass',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: isAnnual ? FontWeight.w800 : FontWeight.w600,
+                        color: isAnnual ? AppColors.violet : AppColors.ink3,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: AppColors.bullLight,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'SAVE 37%',
+                        style: GoogleFonts.inter(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.bull,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -612,7 +757,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     ),
                   ),
                   Text(
-                    approx == null ? 'per month' : 'per month · $approx',
+                    product.billingInterval == 'annual'
+                        ? (approx == null ? 'per year' : 'per year · $approx')
+                        : (approx == null ? 'per month' : 'per month · $approx'),
                     style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5),
                   ),
                 ],
@@ -687,26 +834,6 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             ),
           ),
         ],
-      );
-
-  Widget _annualNote() => Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.xs),
-        child: GestureDetector(
-          onTap: _openAnnualPlans,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.savings_outlined, size: 14, color: AppColors.ink4),
-              const SizedBox(width: 6),
-              Text(
-                'Paying yearly saves up to 40% — compare on our website',
-                style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.ink4, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.open_in_new_rounded, size: 12, color: AppColors.ink4),
-            ],
-          ),
-        ),
       );
 
   // ---------------------------------------------------------------------------
@@ -1118,7 +1245,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Checkout & URL Handling
+  // Checkout & Native In-App Razorpay Handling
   // ---------------------------------------------------------------------------
   Future<void> _openCheckout(PlanOption product) async {
     if (_busySku != null) return;
@@ -1128,56 +1255,355 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       return;
     }
 
-    if (context.read<AuthService>().isGuest) {
+    final auth = context.read<AuthService>();
+    if (auth.isGuest) {
       _tell('Please make your account permanent first — a guest account cannot be recovered, and a purchase on it would be lost.');
       return;
     }
 
+    // Ensure we have the user's mobile number before creating the payment order
+    String? phone = _savedPhone;
+    if (phone == null || phone.trim().length < 10) {
+      phone = await _promptForMobileNumber(product);
+      if (phone == null || !mounted) return;
+    }
+
     setState(() => _busySku = product.sku);
     try {
-      final url = await SupabaseService().startHostedCheckout(product.sku);
-      final uri = Uri.parse(url);
-
-      bool launched;
-      try {
-        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } catch (_) {
-        launched = false;
-      }
+      final session = await SupabaseService().createPaymentSession(
+        product.sku,
+        contact: phone,
+      );
       if (!mounted) return;
-      if (!launched) {
-        _tell('We could not open your browser. Open this link to pay: $url');
+
+      _activeSession = session;
+      _activeProduct = product;
+
+      // Open native in-app Razorpay Checkout if supported
+      if (_razorpay != null) {
+        final userEmail = session.prefillEmail ?? auth.user?.email ?? '';
+        final userName = session.prefillName ?? auth.user?.name ?? '';
+        final userContact = session.prefillContact ?? phone;
+
+        final options = <String, dynamic>{
+          'key': session.keyId,
+          'name': 'Trading Titans',
+          'description': session.title,
+          'theme': {'color': '#B8860B'},
+          'retry': {'enabled': true, 'max_count': 3},
+          'prefill': {
+            if (userContact.isNotEmpty) 'contact': userContact,
+            if (userEmail.isNotEmpty) 'email': userEmail,
+            if (userName.isNotEmpty) 'name': userName,
+          },
+          'notes': {
+            'sku': product.sku,
+            if (auth.user?.id != null) 'user_id': auth.user!.id,
+            if (userContact.isNotEmpty) 'phone': userContact,
+          },
+        };
+
+        if (session.orderId != null && session.orderId!.isNotEmpty) {
+          options['order_id'] = session.orderId;
+          options['amount'] = session.amountPaise;
+          options['currency'] = session.currency;
+        } else if (session.subscriptionId != null) {
+          options['subscription_id'] = session.subscriptionId;
+        }
+
+        _razorpay!.open(options);
         return;
       }
 
-      _tell('Finish the payment in your browser, then return — your balance will update automatically.');
+      // Fallback to hosted browser URL only if native plugin is unavailable
+      await _launchHostedFallback(session);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _busySku = null);
       _tell(_readable(e));
-    } finally {
-      if (mounted) setState(() => _busySku = null);
     }
   }
 
-  String _readable(Object e) =>
-      e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
-
-  Future<void> _openAnnualPlans() async {
-    final base = PlanService.instance.checkoutUrl;
-    final uri = Uri.tryParse(base);
-    if (uri == null) {
-      _tell('We could not open the plans page. Please try again later.');
+  Future<void> _launchHostedFallback(PaymentSession session) async {
+    final url = session.hostedUrl;
+    if (url == null || !url.startsWith('https://')) {
+      if (mounted) setState(() => _busySku = null);
+      _tell('We could not start the payment. Please try again.');
       return;
     }
-    bool launched;
+    final uri = Uri.parse(url);
+    bool launched = false;
     try {
       launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (_) {
       launched = false;
     }
     if (!mounted) return;
-    if (!launched) _tell('We could not open your browser. See $base');
+    setState(() => _busySku = null);
+    if (!launched) {
+      _tell('We could not open your browser. Open this link to pay: $url');
+      return;
+    }
+    _tell('Finish the payment in your browser, then return — your balance will update automatically.');
   }
+
+  Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final session = _activeSession;
+    final product = _activeProduct;
+    if (!mounted) return;
+
+    _tell('Payment received! Confirming and crediting your account...');
+
+    bool granted = false;
+    if (session != null) {
+      granted = await SupabaseService().waitForPaymentGrant(session);
+    }
+
+    if (!mounted) return;
+    final auth = context.read<AuthService>();
+    await auth.refreshUser();
+    await PlanService.instance.refresh();
+
+    if (!mounted) return;
+    setState(() => _busySku = null);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.pureWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                granted ? 'Payment Confirmed!' : 'Payment Received!',
+                style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          product != null && product.isSubscription
+              ? 'Welcome to ${product.title}! Your VIP badge and monthly virtual capital stipend are now active.'
+              : product != null
+                  ? '+${Money.wallet(product.cashGrant)} has been credited to your demo wallet.'
+                  : 'Your account balance and benefits have been updated.',
+          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.ink2, height: 1.45),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.bull,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+            ),
+            child: Text('Start Trading', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    final product = _activeProduct;
+    final session = _activeSession;
+    setState(() => _busySku = null);
+
+    // Code 2 is Razorpay's user-cancelled back press
+    if (response.code == Razorpay.NETWORK_ERROR) {
+      _tell('Network issue during payment. Please check your connection and try again.');
+      return;
+    }
+    if (response.code == Razorpay.PAYMENT_CANCELLED) {
+      _tell('Payment cancelled. You have not been charged.');
+      return;
+    }
+
+    final rawMsg = response.message ?? 'The payment could not be completed. You have not been charged.';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.pureWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Payment Incomplete',
+                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Your payment did not go through ($rawMsg). If you were charged, it will auto-credit or refund shortly.',
+          style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.45),
+        ),
+        actions: [
+          if (session?.hostedUrl != null)
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _launchHostedFallback(session!);
+              },
+              child: Text(
+                'Pay via Browser',
+                style: GoogleFonts.inter(color: AppColors.ink3, fontWeight: FontWeight.w600),
+              ),
+            ),
+          if (product != null)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _openCheckout(product);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.ink,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+              ),
+              child: Text('Retry Payment', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    _tell('Continuing payment in ${response.walletName ?? "external wallet"}...');
+  }
+
+  Future<String?> _promptForMobileNumber(PlanOption product) async {
+    final controller = TextEditingController(text: _savedPhone ?? '');
+    String? errorText;
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                top: AppSpacing.lg,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.goldPale,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.phone_iphone_rounded, color: AppColors.goldDeep, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mobile Number for Instant UPI & Receipt',
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.ink,
+                              ),
+                            ),
+                            Text(
+                              'Pre-fills Razorpay for 1-tap GPay / PhonePe / Paytm checkout',
+                              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.ink4),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    keyboardType: TextInputType.phone,
+                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    decoration: InputDecoration(
+                      labelText: 'Mobile / WhatsApp Number',
+                      hintText: '+91 98765 43210',
+                      errorText: errorText,
+                      prefixIcon: const Icon(Icons.call_outlined, size: 18),
+                      filled: true,
+                      fillColor: AppColors.parchment,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        borderSide: BorderSide(color: AppColors.birch),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final raw = controller.text.replaceAll(RegExp(r'[^\d+]'), '').trim();
+                        final digits = raw.replaceAll('+', '');
+                        if (digits.length < 10 || digits.length > 15) {
+                          setSheetState(() {
+                            errorText = 'Please enter a valid 10-digit mobile number';
+                          });
+                          return;
+                        }
+                        final formatted = digits.length == 10 ? '+91$digits' : (raw.startsWith('+') ? raw : '+$raw');
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString(_phonePrefKey, formatted);
+                        } catch (_) {}
+                        if (mounted) {
+                          setState(() => _savedPhone = formatted);
+                        }
+                        if (ctx.mounted) {
+                          Navigator.of(ctx).pop(formatted);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.ink,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                      ),
+                      child: Text(
+                        'Continue to Checkout · ${product.title}',
+                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _readable(Object e) =>
+      e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
 
   String? _approx(PlanOption product, Currency billing) {
     final charged = product.chargedIn(billing);

@@ -173,11 +173,13 @@ export const BlogPostPage: React.FC<{ slug?: string }> = ({ slug: propSlug }) =>
     const match = excerpt.match(/^\[market:([^\]]+)\]/i);
     if (!match) return null;
     const map: Record<string, { label: string; color: string }> = {
+      stock: { label: 'Indian Stock Market', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
       indian_stock: { label: 'Indian Stock Market', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
       crypto: { label: 'Cryptocurrency', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
       us_stock: { label: 'US Equities', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
       pakistan_stock: { label: 'Pakistan PSX', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
       italy_stock: { label: 'Borsa Italiana', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+      all: { label: 'Global Macro', color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
     };
     return map[match[1].toLowerCase()] || { label: match[1].toUpperCase(), color: 'bg-zinc-800 text-zinc-300 border-zinc-700' };
   };

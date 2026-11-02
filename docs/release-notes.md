@@ -11,6 +11,21 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.12 (versionCode 57)
+
+Native in-app Razorpay checkout with 1-tap UPI app discovery, simplified 1-tap Pro & Titan Monthly/Annual pass activation without auto-debit mandates, instant wallet balance refresh after top-up, and seamless payment retry.
+
+### Play Store "What's new" (paste this)
+
+```
+• Instant In-App UPI Checkout: Pay directly inside the app with 1-tap GPay, PhonePe, Paytm, BHIM & CRED — no external browser redirects.
+• Simplified Pro & Titan Passes: Activate Monthly or Annual passes (Save 37%) with a standard 1-tap UPI or Card payment — no auto-debit mandates required.
+• Faster Wallet Top-Ups: Instant balance refresh after top-up and improved brokerage fee checks on order entry.
+• Seamless Retry: Retry interrupted payments immediately with zero wait time.
+```
+
+---
+
 ## 1.2.11 (versionCode 56)
 
 Reliance & stock futures price loading fix, full-featured Market Intel & News reader with seamless article redirection, zero layout overflows across screen sizes, and synchronized legal compliance.

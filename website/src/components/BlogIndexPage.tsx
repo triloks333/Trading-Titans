@@ -14,7 +14,7 @@ interface BlogPostSummary {
 
 const MARKET_TABS = [
   { id: 'all', label: 'All Markets' },
-  { id: 'indian_stock', label: 'Indian Stocks' },
+  { id: 'stock', label: 'Indian Stocks' },
   { id: 'crypto', label: 'Crypto' },
   { id: 'us_stock', label: 'US Equities' },
   { id: 'pakistan_stock', label: 'Pakistan Stocks' },
@@ -34,7 +34,7 @@ export const BlogIndexPage: React.FC = () => {
           .from('blog_posts')
           .select('slug, title, excerpt, cover_url, published_at')
           .order('published_at', { ascending: false })
-          .limit(50);
+          .limit(500);
 
         if (error) {
           console.error('Error fetching blog posts:', error);
@@ -51,18 +51,20 @@ export const BlogIndexPage: React.FC = () => {
   }, []);
 
   const getMarket = (excerpt: string | null) => {
-    if (!excerpt) return 'general';
+    if (!excerpt) return 'all';
     const match = excerpt.match(/^\[market:([^\]]+)\]/i);
-    return match ? match[1].toLowerCase() : 'general';
+    return match ? match[1].toLowerCase() : 'all';
   };
 
   const getMarketBadge = (market: string) => {
     const map: Record<string, { label: string; color: string }> = {
+      stock: { label: 'Indian Stocks', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
       indian_stock: { label: 'Indian Stocks', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
       crypto: { label: 'Crypto', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
       us_stock: { label: 'US Equities', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
       pakistan_stock: { label: 'Pakistan PSX', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' },
       italy_stock: { label: 'Italy Borsa', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+      all: { label: 'Global Macro', color: 'bg-sky-500/20 text-sky-400 border-sky-500/30' },
     };
     return map[market] || { label: market.toUpperCase(), color: 'bg-zinc-800 text-zinc-300 border-zinc-700' };
   };

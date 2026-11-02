@@ -13,6 +13,9 @@ export const SiteFooter: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <a href="/paper-trading-app-india" className="text-white/70 hover:text-white font-medium transition-colors">Paper Trading</a>
+            <a href="/options-trading-simulator" className="text-white/70 hover:text-white font-medium transition-colors">Options Simulator</a>
+            <a href="/brokerage-calculator" className="text-white/70 hover:text-white font-medium transition-colors">Brokerage Calculator</a>
             <a href="/blog" className="text-white/70 hover:text-white font-medium transition-colors">Blog</a>
             <a href="/about" className="text-white/70 hover:text-white font-medium transition-colors">About Us</a>
             <a href="/contact" className="text-white/70 hover:text-white font-medium transition-colors">Contact</a>
