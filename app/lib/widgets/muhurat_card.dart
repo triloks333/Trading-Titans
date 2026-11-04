@@ -33,17 +33,17 @@ class _MuhuratCardState extends State<MuhuratCard> {
     final gold = AppColors.titanGold;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 10),
       child: Material(
-        color: AppColors.titanGoldSoft,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg), side: BorderSide(color: gold)),
+        color: AppColors.pureWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: gold)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MuhuratScreen())),
           child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
+            padding: const EdgeInsets.all(14),
             child: Row(children: [
-              Icon(Icons.local_fire_department_rounded, size: 32, color: gold),
+              Icon(Icons.local_fire_department_rounded, size: 40, color: gold),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -54,7 +54,8 @@ class _MuhuratCardState extends State<MuhuratCard> {
                     TextSpan(
                         text: countdownLabel((live ? s.end : s.start).difference(now)),
                         style: AppFonts.mono(size: 12, weight: FontWeight.w600, color: gold)),
-                  ])),
+                    if (!live) const TextSpan(text: ' · Muhurat League & reward'),
+                  ]), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ]),
               ),
               Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
