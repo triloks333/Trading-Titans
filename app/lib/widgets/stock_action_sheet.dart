@@ -258,7 +258,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                           else if (_quote != null) ...[
                             Text(
                               Money.instrument(_quote!.price, market: widget.market),
-                              style: GoogleFonts.ibmPlexSans(
+                              style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: _quote!.change >= 0
@@ -269,7 +269,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                             const SizedBox(width: AppSpacing.xs),
                             Text(
                               '${_quote!.change >= 0 ? '+' : ''}${Money.instrument(_quote!.change, market: widget.market)} (${_quote!.changePct.toStringAsFixed(2)}%)',
-                              style: GoogleFonts.ibmPlexSans(
+                              style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                 fontSize: 12,
                                 color: _quote!.change >= 0
                                     ? AppColors.bull
@@ -537,7 +537,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
           ),
           Text(
             value,
-            style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
+            style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 13, color: AppColors.ink),
           ),
         ],
       ),

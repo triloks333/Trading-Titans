@@ -457,7 +457,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       '${_formatSigned(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
-                                      style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+                                      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
                                     ),
                                   ],
                                 ),
@@ -552,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(holding.symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
-                                        Text('${holding.quantity.toStringAsFixed(holding.market == 'crypto' ? 4 : 0)} units · avg ${_formatValue(holding.avgPrice)}', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
+                                        Text('${holding.quantity.toStringAsFixed(holding.market == 'crypto' ? 4 : 0)} units · avg ${_formatValue(holding.avgPrice)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: AppColors.ink4)),
                                       ],
                                     ),
                                   ),
@@ -594,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(_formatValue(quote.price), style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text(_formatValue(quote.price), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontWeight: FontWeight.bold, color: AppColors.ink)),
                                       Text('${quote.changePct >= 0 ? '+' : ''}${quote.changePct.toStringAsFixed(2)}%', style: TextStyle(color: quote.changePct >= 0 ? AppColors.bull : AppColors.bear)),
                                     ],
                                   ),
@@ -655,7 +655,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          Text(value, style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
         ],
       ),
     );

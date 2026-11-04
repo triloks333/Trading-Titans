@@ -686,7 +686,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               ),
               Text(
                 Money.instrument(grandTotal.abs(), market: widget.quote.market),
-                style: GoogleFonts.ibmPlexSans(
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
                   color: widget.isExitOrder
@@ -753,7 +753,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         ),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: isMain ? 12 : 11,
             fontWeight: isMain ? FontWeight.w700 : FontWeight.w600,
             color: valueColor,
@@ -793,7 +793,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             if (widget.instrumentType == 'OPTION')
               Text(
                 '${widget.optionType} | Strike: ${Money.wallet(widget.strikePrice ?? 0, decimals: 0)} | Exp: ${widget.expiryDate}',
-                style: GoogleFonts.ibmPlexSans(
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                   color: AppColors.ink4,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
@@ -825,7 +825,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '$_exchangeLabel  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
-                  style: GoogleFonts.ibmPlexSans(
+                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                     color: AppColors.ink,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
@@ -921,7 +921,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 const SizedBox(height: 6),
                                 Text(
                                   'Your margin blocked: ${Money.wallet(widget.marginUsed!, decimals: 0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
-                                  style: GoogleFonts.ibmPlexSans(
+                                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                     fontSize: 10,
                                     color: AppColors.ink3,
                                     fontStyle: FontStyle.italic,
@@ -969,7 +969,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 'You will get ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
+                                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, color: AppColors.ink4),
                               ),
                             ],
                           ),
@@ -1317,12 +1317,12 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   children: [
                                     Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                                     Flexible(
-                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexSans(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: color, fontWeight: FontWeight.bold, fontSize: 14)),
                                     ),
                                     Text(' • ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
                                     Text('Avail. ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                                     Flexible(
-                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.ibmPlexSans(color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
+                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
                                     ),
                                   ],
                                 ),
@@ -1347,7 +1347,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   'You will receive ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                  style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
+                                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
                                 ),
                               ],
                             ),
@@ -1408,7 +1408,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                         const SizedBox(height: 2),
                                         Text(
                                           'You need ${Money.wallet(totalRequiredInr - walletBalance)} more to place this order.',
-                                          style: GoogleFonts.ibmPlexSans(
+                                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                             color: AppColors.ink3,
                                             fontSize: 11,
                                           ),

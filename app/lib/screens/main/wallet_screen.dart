@@ -171,7 +171,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           const SizedBox(height: AppSpacing.sm),
                           // Follows the user's display currency. The stored
                           // balance is always INR, hence the INR source.
-                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexSans(fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: -0.5)),
+                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: -0.5)),
                           const SizedBox(height: AppSpacing.md),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
@@ -473,13 +473,13 @@ class _WalletScreenState extends State<WalletScreen> {
               // Ledger amounts are stored in INR, so the wallet source is right.
               Text(
                 Money.signedWallet(amount, decimals: 2),
-                style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 14, fontWeight: FontWeight.w700, color: color),
               ),
               if (balanceAfter != null) ...[
                 const SizedBox(height: 2),
                 // The running balance is what lets a user reconcile the list
                 // against the figure at the top of the screen.
-                Text('Bal ${Money.wallet(balanceAfter)}', style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
+                Text('Bal ${Money.wallet(balanceAfter)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 11, color: AppColors.ink4)),
               ],
             ],
           ),

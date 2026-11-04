@@ -232,41 +232,29 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
-  Widget _buildPriceCard(Quote q) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.name, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(Money.instrument(q.price, market: q.market),
-              style:       TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppColors.ink)),
+  /// Quote header: name, big monospace price, arrowed change pill.
+  Widget _buildPriceCard(Quote q) => Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: AppCard.primary,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(widget.name, style: AppText.bodySmall),
+          const SizedBox(height: AppSpacing.xs),
+          Text(Money.instrument(q.price, market: q.market), style: AppText.valueLarge),
           const SizedBox(height: AppSpacing.sm),
           Row(children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 6),
-              decoration: BoxDecoration(
-                color: _isUp ? AppColors.bullLight : AppColors.bearLight,
-                borderRadius: BorderRadius.circular(AppRadius.tag),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
+              decoration: AppCard.badge(_isUp ? AppColors.bullLight : AppColors.bearLight),
               child: Text(
-                '${_isUp ? '+' : ''}${Money.instrument(q.change, market: widget.market)} (${q.changePct.toStringAsFixed(2)}%)',
-                style: TextStyle(color: _changeColor),
+                '${_isUp ? '▲ +' : '▼ '}${Money.instrument(q.change, market: widget.market)} (${q.changePct.toStringAsFixed(2)}%)',
+                style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: _changeColor),
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
-            Text(q.market.toUpperCase(), style:       TextStyle(color: AppColors.ink4)),
+            Text(q.market.toUpperCase(), style: AppText.badge.copyWith(color: AppColors.ink4)),
           ]),
-        ],
-      ),
-    );
-  }
+        ]),
+      );
 
   Widget _buildChartCard(Quote q) {
     return Container(
@@ -318,69 +306,39 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
+  /// Key stats as a two-column grid of label/value cells.
   Widget _buildStatsCard(Quote q) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.birch),
+    String px(double v) => Money.instrument(v, market: q.market);
+    final stats = <(String, String, Color?)>[
+      ('Prev close', px(q.previousClose), null),
+      if (q.open != null) ('Open', px(q.open!), null),
+      if (q.dayHigh != null) ('Day high', px(q.dayHigh!), null),
+      if (q.dayLow != null) ('Day low', px(q.dayLow!), null),
+      if (q.volume != null && q.volume! > 0) ('Volume', q.volume!.toString(), null),
+      ('Day change', '${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%', _changeColor),
+      ('Market', q.market == 'crypto' ? 'Crypto' : 'NSE/BSE', null),
+      ('Currency', q.currency, null),
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('KEY STATS', style: AppText.sectionLabel),
+      const SizedBox(height: AppSpacing.sm),
+      Container(
+        decoration: AppCard.primary,
+        child: LayoutBuilder(builder: (context, c) => Wrap(children: [
+              for (final (label, value, color) in stats)
+                Container(
+                  width: c.maxWidth / 2,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(label, style: AppText.bodySmall),
+                    const SizedBox(height: 2),
+                    Text(value, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: color ?? AppColors.ink)),
+                  ]),
+                ),
+            ])),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-                Text('Key Stats',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
-          const SizedBox(height: AppSpacing.md),
-          _statRow('Previous Close', Money.instrument(q.previousClose, market: q.market)),
-          _divider(),
-          if (q.open != null) ...[
-            _statRow('Open', Money.instrument(q.open!, market: q.market)),
-            _divider(),
-          ],
-          if (q.dayHigh != null) ...[
-            _statRow('High', Money.instrument(q.dayHigh!, market: q.market)),
-            _divider(),
-          ],
-          if (q.dayLow != null) ...[
-            _statRow('Low', Money.instrument(q.dayLow!, market: q.market)),
-            _divider(),
-          ],
-          if (q.volume != null && q.volume! > 0) ...[
-            _statRow('Volume', q.volume!.toString()),
-            _divider(),
-          ],
-          _statRow('Day Change',
-              '${_isUp ? '+' : ''}${Money.instrument(q.change, market: widget.market)} (${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%)',
-              valueColor: _changeColor),
-          _divider(),
-          _statRow('Market', q.market == 'crypto' ? 'Crypto' : 'NSE/BSE'),
-          _divider(),
-          _statRow('Currency', q.currency),
-        ],
-      ),
-    );
-  }
-
-  Widget _statRow(String label, String value, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style:       TextStyle(color: AppColors.ink4, fontSize: 13)),
-          Text(value,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? AppColors.ink,
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _divider() {
-    return Divider(height: 1, color: AppColors.cream);
+    ]);
   }
 
   Widget _buildPositionCard() {
@@ -491,99 +449,38 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
-  Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.warmWhite,
-        border:       Border(top: BorderSide(color: AppColors.birch)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.06), offset: const Offset(0, -2), blurRadius: 8),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _quote == null ? null : () async {
-                    final bool isFuture = widget.symbol.toUpperCase().contains('FUT') || widget.symbol.toUpperCase().contains('FUTURE');
-                    final bool isOption = widget.symbol.toUpperCase().contains('-CE') || widget.symbol.toUpperCase().contains('-PE');
-                    final instType = isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY');
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OrderEntryScreen(
-                          quote: _quote!,
-                          isBuy: true,
-                          instrumentType: instType,
-                        ),
-                      ),
-                    );
-                    _loadData();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.bull,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                  ),
-                  child: Text(
-                    'BUY',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.pureWhite,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+  /// Sticky Buy / Sell bar. Both open the same order ticket on a side.
+  Widget _buildBottomBar() => Container(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
+        decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
+        child: SafeArea(
+          child: Row(children: [
+            Expanded(child: _sideButton(isBuy: true)),
             const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _quote == null ? null : () async {
-                    final bool isFuture = widget.symbol.toUpperCase().contains('FUT') || widget.symbol.toUpperCase().contains('FUTURE');
-                    final bool isOption = widget.symbol.toUpperCase().contains('-CE') || widget.symbol.toUpperCase().contains('-PE');
-                    final instType = isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY');
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OrderEntryScreen(
-                          quote: _quote!,
-                          isBuy: false,
-                          instrumentType: instType,
-                        ),
-                      ),
-                    );
-                    _loadData();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.bear,
-                    disabledBackgroundColor: AppColors.bear.withAlpha(76),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                  ),
-                  child: Text(
-                    'SELL',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.pureWhite,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+            Expanded(child: _sideButton(isBuy: false)),
+          ]),
         ),
-      ),
-    );
+      );
+
+  Widget _sideButton({required bool isBuy}) => SizedBox(
+        height: 52,
+        child: ElevatedButton(
+          onPressed: _quote == null ? null : () => _openOrder(isBuy),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: isBuy ? AppColors.bull : AppColors.bear, foregroundColor: Colors.white),
+          child: Text(isBuy ? 'Buy' : 'Sell', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: Colors.white)),
+        ),
+      );
+
+  Future<void> _openOrder(bool isBuy) async {
+    final sym = widget.symbol.toUpperCase();
+    final isOption = sym.contains('-CE') || sym.contains('-PE');
+    final isFuture = sym.contains('FUT') || sym.contains('FUTURE');
+    await Navigator.push(context, MaterialPageRoute(
+      builder: (_) => OrderEntryScreen(
+        quote: _quote!, isBuy: isBuy, instrumentType: isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY')),
+    ));
+    _loadData();
   }
 }
 
@@ -745,7 +642,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
             const SizedBox(height: 4),
             Text(
               '${widget.displayName}  •  Current ${Money.wallet(widget.currentPrice, decimals: 2)}',
-              style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
+              style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 13, color: AppColors.ink4),
             ),
             const SizedBox(height: 20),
 
@@ -861,7 +758,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
           Expanded(
             child: Text(
               'When price goes ${a.direction} ${Money.instrument(a.targetPrice, market: widget.market)}',
-              style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
+              style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
             ),
           ),
           GestureDetector(

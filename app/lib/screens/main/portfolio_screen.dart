@@ -368,7 +368,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           children: [
                             Text('DEPLOYED CAPITAL', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                             const SizedBox(height: 4),
-                            Text(_fmt(_totalInvested), style: GoogleFonts.ibmPlexSans(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
+                            Text(_fmt(_totalInvested), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
                             const SizedBox(height: AppSpacing.lg),
                             Row(
                               children: [
@@ -635,7 +635,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)} ${h.isShort ? 'units short' : 'shares'}',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, color: AppColors.ink4),
                         ),
                       ],
                     ),
@@ -645,7 +645,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     children: [
                       Text(
                         'LTP ${Money.instrument(h.displayCurrentPrice, market: h.market)}',
-                        style: GoogleFonts.ibmPlexSans(
+                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                           fontWeight: FontWeight.bold,
                           color: AppColors.ink,
                           fontSize: 13,
@@ -668,7 +668,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                               TrendArrow(isPositive: isPctPositive, size: 16),
                               Text(
                                 '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
-                                style: GoogleFonts.ibmPlexSans(
+                                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: isPctPositive ? AppColors.bull : AppColors.bear,
@@ -871,7 +871,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 children: [
                   Text(
                     'LTP ${Money.wallet(estPrice, decimals: 2)}',
-                    style: GoogleFonts.ibmPlexSans(
+                    style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                       fontWeight: FontWeight.bold,
                       color: AppColors.ink,
                       fontSize: 13,
@@ -884,7 +884,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       TrendArrow(isPositive: isPositive, size: 16),
                       Text(
                         '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.ibmPlexSans(
+                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: isPositive ? AppColors.bull : AppColors.bear,

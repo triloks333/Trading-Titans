@@ -55,7 +55,7 @@ class StatCell extends StatelessWidget {
         SizedBox(height: gap),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: valueSize,
             fontWeight: valueWeight,
             color: valueColor ?? defaultValueColor ?? AppColors.ink2,

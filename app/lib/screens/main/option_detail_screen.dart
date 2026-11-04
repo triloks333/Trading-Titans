@@ -916,7 +916,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           const SizedBox(height: 4),
           Text(
             '${value.toStringAsFixed(decimals)}$suffix',
-            style: GoogleFonts.ibmPlexSans(
+            style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: accentColor,
@@ -1186,7 +1186,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               final pnlUp = positionPnl >= 0;
               return Text(
                 'P&L: ${pnlUp ? '+' : ''}${Money.wallet(positionPnl, decimals: 2)} (${pnlPct.toStringAsFixed(2)}%)',
-                style: GoogleFonts.ibmPlexSans(
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: pnlUp ? AppColors.bull : AppColors.bear,

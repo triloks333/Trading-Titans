@@ -381,12 +381,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.ibmPlexSans(color: AppColors.ink3)),
+                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: AppColors.ink3)),
                               const SizedBox(height: 2),
                               _buildLtpWidget(order),
                             ],
                           ),
-                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, color: AppColors.ink)),
+                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontWeight: FontWeight.w600, color: AppColors.ink)),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xs),
@@ -643,7 +643,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         children: [
                           Text(
                             '${Money.quantity(order.quantity, market: order.market)} × ${Money.instrument(order.displayPrice, market: order.market)}',
-                            style: GoogleFonts.ibmPlexSans(
+                            style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink2,
@@ -651,7 +651,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           ),
                           Text(
                             Money.instrument(order.displayTotal, market: order.market),
-                            style: GoogleFonts.ibmPlexSans(
+                            style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: AppColors.ink,
@@ -869,7 +869,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final isPositive = quote.changePct >= 0;
     return Text(
       'LTP: ${Money.instrument(quote.price, market: quote.market)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
-      style: GoogleFonts.ibmPlexSans(
+      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
         fontSize: 11,
         fontWeight: FontWeight.w600,
         color: isPositive ? AppColors.bull : AppColors.bear,
@@ -1067,7 +1067,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 14,
             fontWeight: FontWeight.bold,
             color: valueColor ?? AppColors.ink,
@@ -1091,7 +1091,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: isTotal ? 13 : 12,
             fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
             color: isTotal ? AppColors.ink : AppColors.ink2,

@@ -319,7 +319,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 13,
             fontWeight: FontWeight.w800,
             color: accent,
@@ -369,7 +369,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 const SizedBox(width: 6),
                 Text(
                   '${Money.instrument(_spotPrice, market: widget.market)}  |  ${isUp ? '+' : ''}${Money.instrument(_change, market: widget.market)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
-                  style: GoogleFonts.ibmPlexSans(
+                  style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -511,7 +511,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                             ),
                             Text(
                               '${callOiChangePct >= 0 ? '+' : ''}${callOiChangePct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.bold, color: callOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                              style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 9, fontWeight: FontWeight.bold, color: callOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
                             ),
                           ],
                         ),
@@ -536,11 +536,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   children: [
                     Text(
                       Money.wallet(callPrice, decimals: 2),
-                      style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
                       '${callChangePct >= 0 ? '+' : ''}${callChangePct.toStringAsFixed(2)}%',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.w600, color: callChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                      style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 9, fontWeight: FontWeight.w600, color: callChangePct >= 0 ? AppColors.bull : AppColors.bear),
                     ),
                   ],
                 ),
@@ -563,7 +563,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
               children: [
                 Text(
                   strike.toStringAsFixed(0),
-                  style: GoogleFonts.ibmPlexSans(
+                  style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
                     fontWeight: isAtm ? FontWeight.w800 : FontWeight.w700,
                     color: isAtm ? AppColors.goldDeep : AppColors.ink,
                     fontSize: isAtm ? 12 : 11,
@@ -610,11 +610,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   children: [
                     Text(
                       Money.wallet(putPrice, decimals: 2),
-                      style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
                       '${putChangePct >= 0 ? '+' : ''}${putChangePct.toStringAsFixed(2)}%',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.w600, color: putChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                      style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 9, fontWeight: FontWeight.w600, color: putChangePct >= 0 ? AppColors.bull : AppColors.bear),
                     ),
                   ],
                 ),
@@ -657,7 +657,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                             ),
                             Text(
                               '${putOiChangePct >= 0 ? '+' : ''}${putOiChangePct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.bold, color: putOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                              style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 9, fontWeight: FontWeight.bold, color: putOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
                             ),
                           ],
                         ),
@@ -1123,7 +1123,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     children: [
                       Text(
                         '${future['currency'] == 'INR' ? '₹' : (future['currency'] as String? ?? 'USDT')} ${price.toStringAsFixed(price < 10 ? 4 : 2)}',
-                        style: GoogleFonts.ibmPlexSans(
+                        style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink,
@@ -1132,7 +1132,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       const SizedBox(height: 3),
                       Text(
                         '${isUp ? '+' : ''}${changePct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.ibmPlexSans(
+                        style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: isUp ? AppColors.bull : AppColors.bear,
@@ -1254,7 +1254,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 12,
             color: AppColors.ink,
             fontWeight: FontWeight.w700,

@@ -634,7 +634,7 @@ class _LivePrice extends StatelessWidget {
             ],
             Text(
               Money.instrument(q.price, market: market),
-              style: GoogleFonts.ibmPlexSans(
+              style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: isStale ? AppColors.ink4 : AppColors.ink,
@@ -645,7 +645,7 @@ class _LivePrice extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           '${isPositive ? '+' : ''}${q.changePct.toStringAsFixed(2)}%',
-          style: GoogleFonts.ibmPlexSans(
+          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: isPositive ? AppColors.bull : AppColors.bear,
