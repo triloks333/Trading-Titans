@@ -139,32 +139,26 @@ void main() {
   });
 
   group('MarketNavBar', () {
-    testWidgets('shows the label for the active tab only', (tester) async {
+    testWidgets('shows every market label as an equal segment', (tester) async {
       await tester.pumpWidget(_wrap(MarketNavBar(
         selectedKey: 'stock',
         onSelected: (_) {},
       )));
 
-      expect(find.text('India'), findsOneWidget);
-      expect(find.text('Crypto'), findsNothing);
-      expect(find.text('US Stocks'), findsNothing);
-
-      // All three icons stay visible even when collapsed.
-      expect(find.byIcon(Icons.currency_rupee), findsOneWidget);
-      expect(find.byIcon(Icons.attach_money), findsOneWidget);
-      expect(find.byIcon(Icons.currency_bitcoin), findsOneWidget);
+      for (final label in ['India', 'US Stocks', 'Crypto']) {
+        expect(find.text(label), findsOneWidget);
+      }
     });
 
-    testWidgets('label follows the selection', (tester) async {
+    testWidgets('selection is announced on the chosen segment only', (tester) async {
       await tester.pumpWidget(_wrap(MarketNavBar(
         selectedKey: 'us_stock',
         onSelected: (_) {},
       )));
       await tester.pumpAndSettle();
 
-      expect(find.text('US Stocks'), findsOneWidget);
-      expect(find.text('India'), findsNothing);
-      expect(find.text('Crypto'), findsNothing);
+      expect(tester.getSemantics(find.bySemanticsLabel('US Stocks')), containsSemantics(isSelected: true));
+      expect(tester.getSemantics(find.bySemanticsLabel('India')), containsSemantics(isSelected: false));
     });
 
     testWidgets('reports the tapped market key', (tester) async {
@@ -174,8 +168,8 @@ void main() {
         onSelected: tapped.add,
       )));
 
-      await tester.tap(find.byIcon(Icons.currency_bitcoin));
-      await tester.tap(find.byIcon(Icons.attach_money));
+      await tester.tap(find.text('Crypto'));
+      await tester.tap(find.text('US Stocks'));
 
       expect(tapped, ['crypto', 'us_stock']);
     });
@@ -188,8 +182,7 @@ void main() {
         onSelected: (_) {},
       )));
 
-      // Collapsed tabs are icon-only, so the semantic label is the only name a
-      // screen reader has to work with.
+      // The dot is visual only, so the semantic label carries "coming soon".
       expect(
         find.bySemanticsLabel('US Stocks, coming soon'),
         findsOneWidget,

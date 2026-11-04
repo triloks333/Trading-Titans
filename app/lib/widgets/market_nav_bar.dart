@@ -132,6 +132,7 @@ class MarketNavBar extends StatelessWidget {
       button: true,
       selected: selected,
       label: label,
+      excludeSemantics: true, // the visible label would otherwise be read twice
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onSelected(tab.key),

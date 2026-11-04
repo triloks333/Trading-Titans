@@ -151,11 +151,9 @@ void main() {
       )));
       await tester.pumpAndSettle();
 
-      // Crypto is selected, so it is the only labelled tab.
-      expect(find.text('Crypto'), findsOneWidget);
-      // And it sits left of the others.
-      final crypto = tester.getTopLeft(find.byIcon(Icons.currency_bitcoin)).dx;
-      final india = tester.getTopLeft(find.byIcon(Icons.currency_rupee)).dx;
+      // The preferred market sits left of the others.
+      final crypto = tester.getTopLeft(find.text('Crypto')).dx;
+      final india = tester.getTopLeft(find.text('India')).dx;
       expect(crypto, lessThan(india));
     });
   });
