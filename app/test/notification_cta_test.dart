@@ -146,11 +146,15 @@ void main() {
       expect(instrumentSymbolFor('order', {'symbol': '  INFY '}), 'INFY');
     });
 
-    test('only order types open an instrument', () {
+    test('a price alert opens its instrument (the user set it, not a campaign)', () {
+      expect(instrumentSymbolFor('price_alert', {'symbol': 'RELIANCE', 'market': 'stock'}), 'RELIANCE');
+    });
+
+    test('only order and price-alert types open an instrument', () {
       // A broadcast that happens to carry a symbol must still open the sheet,
       // otherwise an admin campaign would silently navigate people away from the
       // message they were trying to read.
-      for (final t in ['broadcast', 'custom', 'reward', 'price_alert', null, '']) {
+      for (final t in ['broadcast', 'custom', 'reward', null, '']) {
         expect(instrumentSymbolFor(t, {'symbol': 'RELIANCE'}), isNull,
             reason: 'action_type $t must not hijack the tap');
       }

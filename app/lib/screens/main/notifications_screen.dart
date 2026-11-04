@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_constants.dart';
 import '../../core/theme.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
 import 'chat_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -47,6 +48,13 @@ const Set<String> kNotificationCtaRoutes = {
   'trade', 'notifications', 'chat', 'blog',
 };
 
+/// `cta_route` without case, padding or a leading slash: the chat trigger and the
+/// win-back job write '/chat' and '/subscribe', which the allow-list spells bare.
+String normalizedRoute(Map<String, dynamic>? data) {
+  final r = (data?['cta_route'] as String?)?.trim().toLowerCase() ?? '';
+  return r.startsWith('/') ? r.substring(1) : r;
+}
+
 /// The call-to-action button's text, or null when there should be no button.
 ///
 /// Returns null unless there is BOTH a label and somewhere real to send the user:
@@ -61,8 +69,7 @@ String? ctaLabel(Map<String, dynamic>? data) {
   final label = (data?['cta_label'] as String?)?.trim();
   if (label == null || label.isEmpty) return null;
 
-  final route = (data?['cta_route'] as String?)?.trim().toLowerCase() ?? '';
-  if (kNotificationCtaRoutes.contains(route)) return label;
+  if (kNotificationCtaRoutes.contains(normalizedRoute(data))) return label;
 
   final url = (data?['cta_url'] as String?)?.trim() ?? '';
   return url.startsWith('https://') ? label : null;
@@ -83,9 +90,70 @@ String? ctaLabel(Map<String, dynamic>? data) {
 /// sheet — so a payload missing a field degrades to the readable view instead of
 /// swallowing the tap.
 String? instrumentSymbolFor(String? actionType, Map<String, dynamic>? actionData) {
-  if (actionType != 'order' && actionType != 'order_pending') return null;
+  if (actionType != 'order' && actionType != 'order_pending' && actionType != 'price_alert') return null;
   final symbol = (actionData?['symbol'] as String?)?.trim();
   return (symbol == null || symbol.isEmpty) ? null : symbol;
+}
+
+/// The filter tabs, in design order. [all] is not a category of its own.
+enum NoticeKind { all, diwali, chat, price, orders, league, rewards, news, other }
+
+const Map<NoticeKind, String> kNoticeKindLabels = {
+  NoticeKind.all: 'All', NoticeKind.diwali: 'Diwali', NoticeKind.chat: 'Chat', NoticeKind.price: 'Price',
+  NoticeKind.orders: 'Orders', NoticeKind.league: 'League', NoticeKind.rewards: 'Rewards', NoticeKind.news: 'News',
+};
+
+/// Which tab a notification row belongs to, from what the backend actually writes:
+/// `chat` (Titans Room trigger), `price_alert`, `order` / `order_pending` /
+/// `expiry` / `audit_hold`, `reward` / `guest_upgrade`, and admin `broadcast` /
+/// `custom` rows, which are sorted by where their button points or what they say.
+NoticeKind noticeKindOf(Map<String, dynamic> n) {
+  final type = (n['action_type'] as String?)?.trim().toLowerCase() ?? '';
+  final data = parseActionData(n['action_data']);
+  final text = '${n['title'] ?? ''} ${n['body'] ?? ''}'.toLowerCase();
+  if (RegExp(r'diwali|muhurat|deepavali|samvat').hasMatch(text)) return NoticeKind.diwali;
+  switch (type) {
+    case 'chat':
+      return NoticeKind.chat;
+    case 'price_alert':
+      return NoticeKind.price;
+    case 'order':
+    case 'order_pending':
+    case 'expiry':
+    case 'audit_hold':
+    case 'trade':
+      return NoticeKind.orders;
+    case 'reward':
+    case 'guest_upgrade':
+      return NoticeKind.rewards;
+  }
+  switch (normalizedRoute(data)) {
+    case 'league':
+    case 'leaderboard':
+      return NoticeKind.league;
+    case 'blog':
+      return NoticeKind.news;
+    case 'chat':
+    case 'wishlist':
+    case 'feature':
+      return NoticeKind.chat;
+  }
+  if (RegExp(r'\bleague\b|\brank\b|leaderboard').hasMatch(text)) return NoticeKind.league;
+  if (RegExp(r'\bnews\b|\bblog\b|headline').hasMatch(text)) return NoticeKind.news;
+  if (RegExp(r'reward|challenge|bonus|cash added').hasMatch(text)) return NoticeKind.rewards;
+  return NoticeKind.other;
+}
+
+/// "Just now", "5m ago", "3h ago", "Yesterday", "3 days ago".
+String noticeAge(String? createdAt, {DateTime? now}) {
+  final dt = DateTime.tryParse(createdAt ?? '');
+  if (dt == null) return '';
+  final d = (now ?? DateTime.now()).toUtc().difference(dt.toUtc());
+  if (d.inMinutes < 1) return 'Just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  if (d.inDays == 1) return 'Yesterday';
+  return '${d.inDays} days ago';
 }
 
 class NotificationsScreen extends StatefulWidget {
@@ -98,6 +166,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Map<String, dynamic>> _notifications = [];
   bool _loading = true;
+  NoticeKind _filter = NoticeKind.all;
 
   @override
   void initState() {
@@ -116,11 +185,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
       if (mounted) {
-        setState(() {
-          _notifications = (rows as List<dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-        });
+        setState(() => _notifications = (rows as List<dynamic>).map((e) => Map<String, dynamic>.from(e as Map)).toList());
       }
     } catch (_) {
     } finally {
@@ -128,447 +193,348 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  /// Optimistic: dots clear at once, and come back if the write fails.
   Future<void> _markAllAsRead() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
-    await Supabase.instance.client
-        .from('notifications')
-        .update({'is_read': true})
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-    await _load();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All notifications marked as read')),
-      );
+    final unread = _notifications.where((n) => n['is_read'] != true).toList();
+    setState(() {
+      for (final n in unread) {
+        n['is_read'] = true;
+      }
+    });
+    try {
+      await Supabase.instance.client
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('All notifications marked as read')));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final n in unread) {
+          n['is_read'] = false;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not mark as read. Try again.')));
     }
   }
 
-  /// Marks one notification read, updating the row in place.
-  ///
-  /// Deliberately NOT `await _load()`. Refetching set `_loading = true`, which
-  /// replaced the whole list with a full-screen spinner and re-queried every row
-  /// from Postgres — on every single tap, to learn one boolean the caller already
-  /// knew. The tap is not awaited by the caller either, so the sheet was opening
-  /// over a list that was busy rebuilding itself underneath it.
+  /// Marks one notification read in place (no full refetch), restoring the dot if
+  /// the database write fails.
   Future<void> _markAsRead(String id) async {
     final i = _notifications.indexWhere((n) => n['id'] == id);
     if (i == -1) return;
     if (mounted) setState(() => _notifications[i]['is_read'] = true);
     try {
-      await Supabase.instance.client
-          .from('notifications')
-          .update({'is_read': true}).eq('id', id);
+      await Supabase.instance.client.from('notifications').update({'is_read': true}).eq('id', id);
     } catch (_) {
-      // Put the dot back rather than leave the badge claiming a row was read
-      // when the database still says it was not.
       if (mounted) setState(() => _notifications[i]['is_read'] = false);
     }
   }
 
-  int get _unreadCount =>
-      _notifications.where((n) => n['is_read'] != true).length;
+  int get _unreadCount => _notifications.where((n) => n['is_read'] != true).length;
 
   @override
   Widget build(BuildContext context) {
+    final visible = _filter == NoticeKind.all
+        ? _notifications
+        : _notifications.where((n) => noticeKindOf(n) == _filter).toList();
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Notifications',
-          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          if (_unreadCount > 0)
-            TextButton(
-              onPressed: _markAllAsRead,
-              child: Text(
-                'Mark all read',
-                style: GoogleFonts.ibmPlexSans(
-                  color: AppColors.imperialGold,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+      body: SafeArea(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              if (Navigator.of(context).canPop()) ...[
+                AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).pop()),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Text('Notifications', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              OutlinedButton(
+                onPressed: _unreadCount == 0 ? null : _markAllAsRead,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  foregroundColor: AppColors.ink3,
+                  side: BorderSide(color: AppColors.birch),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+                  textStyle: AppFonts.sans(size: 13, weight: FontWeight.w500),
+                ),
+                child: const Text('Mark all read'),
+              ),
+              const SizedBox(width: 10),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
                 ),
               ),
-            ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _notifications.isEmpty
-                ? const EmptyState(
-                    icon: Icons.notifications_none_rounded,
-                    title: 'You\'re all caught up',
-                    message: 'Order fills, price alerts, and announcements will appear here.',
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                    itemCount: _notifications.length,
-                    itemBuilder: (context, index) =>
-                        _buildNotificationTile(_notifications[index]),
+            ]),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+            child: Row(
+              children: [
+                for (final e in kNoticeKindLabels.entries)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: ChoiceChip(
+                      label: Text(e.value),
+                      selected: _filter == e.key,
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      labelStyle: AppFonts.sans(
+                          size: 13, weight: FontWeight.w500, color: _filter == e.key ? AppColors.goldMid : AppColors.ink3),
+                      side: BorderSide(color: _filter == e.key ? AppColors.goldMid : AppColors.birch),
+                      onSelected: (_) => setState(() => _filter = e.key),
+                    ),
                   ),
+              ],
+            ),
+          ),
+          Divider(color: AppColors.birch),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : visible.isEmpty
+                      ? ListView(children: [
+                          const SizedBox(height: 80),
+                          EmptyState(
+                            icon: Icons.notifications_none_rounded,
+                            title: _filter == NoticeKind.all
+                                ? "You're all caught up"
+                                : 'No ${kNoticeKindLabels[_filter]!.toLowerCase()} notifications',
+                            message: 'Order fills, price alerts, chat mentions and announcements will appear here.',
+                          ),
+                        ])
+                      : ListView.builder(
+                          itemCount: visible.length,
+                          itemBuilder: (context, i) => _tile(visible[i]),
+                        ),
+            ),
+          ),
+        ]),
       ),
     );
   }
 
-  Widget _buildNotificationTile(Map<String, dynamic> n) {
-    final isRead = n['is_read'] == true;
-    final title = n['title'] as String? ?? '';
-    final body = n['body'] as String? ?? '';
-    final createdAt = n['created_at'] as String?;
-    final id = n['id'] as String;
-
-    Map<String, dynamic>? actionDataMap;
-    final rawActionData = n['action_data'];
-    if (rawActionData != null) {
-      if (rawActionData is Map) {
-        actionDataMap = Map<String, dynamic>.from(rawActionData);
-      } else if (rawActionData is String) {
-        try {
-          actionDataMap = Map<String, dynamic>.from(jsonDecode(rawActionData));
-        } catch (_) {}
-      }
+  /// Icon and its tinted square, per category, as in the design.
+  (IconData, Color fg, Color bg) _style(Map<String, dynamic> n, NoticeKind kind) {
+    final text = '${n['title'] ?? ''} ${n['body'] ?? ''}'.toLowerCase();
+    final data = parseActionData(n['action_data']);
+    switch (kind) {
+      case NoticeKind.diwali:
+        return (text.contains('sale') ? Icons.card_giftcard_rounded : Icons.campaign_outlined,
+            AppColors.titanGold, AppColors.titanGoldSoft);
+      case NoticeKind.chat:
+        return data?['is_everyone'] == true
+            ? (Icons.campaign_outlined, AppColors.titanGold, AppColors.titanGoldSoft)
+            : (Icons.chat_bubble_outline_rounded, AppColors.goldMid, AppColors.goldPale);
+      case NoticeKind.price:
+        final down = RegExp(r'fell|below|dropped|down').hasMatch(text);
+        return (Icons.notifications_active_outlined, down ? AppColors.bear : AppColors.bull,
+            down ? AppColors.bearLight : AppColors.bullLight);
+      case NoticeKind.orders:
+        if (RegExp(r'cancel|expired|rejected').hasMatch(text)) return (Icons.cancel_outlined, AppColors.ink3, AppColors.cream);
+        if (text.contains('pending')) return (Icons.schedule_rounded, AppColors.goldMid, AppColors.goldPale);
+        return (Icons.check_rounded, AppColors.goldMid, AppColors.goldPale);
+      case NoticeKind.league:
+        return (Icons.emoji_events_outlined, AppColors.titanGold, AppColors.titanGoldSoft);
+      case NoticeKind.rewards:
+        return (Icons.card_giftcard_rounded, AppColors.titanGold, AppColors.titanGoldSoft);
+      case NoticeKind.news:
+        return (Icons.article_outlined, AppColors.ink3, AppColors.cream);
+      case NoticeKind.all:
+      case NoticeKind.other:
+        return (Icons.notifications_none_rounded, AppColors.ink3, AppColors.cream);
     }
-    final imageUrl = actionDataMap?['image_url'] as String?;
+  }
 
-    String timeAgo = '';
-    if (createdAt != null) {
-      final dt = DateTime.tryParse(createdAt);
-      if (dt != null) {
-        final diff = DateTime.now().toUtc().difference(dt);
-        if (diff.inMinutes < 1) {
-          timeAgo = 'Just now';
-        } else if (diff.inMinutes < 60) {
-          timeAgo = '${diff.inMinutes}m ago';
-        } else if (diff.inHours < 24) {
-          timeAgo = '${diff.inHours}h ago';
-        } else {
-          timeAgo = '${diff.inDays}d ago';
-        }
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: isRead ? AppColors.pureWhite : AppColors.goldPale,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: isRead ? AppColors.birch : AppColors.goldBorder,
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color:
-                isRead ? AppColors.cream : AppColors.imperialGold.withAlpha(25),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            _iconForTitle(title),
-            size: 20,
-            color: isRead ? AppColors.ink4 : AppColors.imperialGold,
-          ),
-        ),
-        title: Text(
-          title,
-          style: GoogleFonts.ibmPlexSans(
-            fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
-            fontSize: 14,
-            color: AppColors.ink,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 2),
-            Text(
-              body,
-              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
+  Widget _tile(Map<String, dynamic> n) {
+    final unread = n['is_read'] != true;
+    final kind = noticeKindOf(n);
+    final (icon, fg, bg) = _style(n, kind);
+    final imageUrl = parseActionData(n['action_data'])?['image_url'] as String?;
+    return Material(
+      color: unread ? AppColors.pureWhite : Colors.transparent,
+      child: InkWell(
+        onTap: () => _open(n),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.sm)),
+              child: Icon(icon, size: 20, color: fg),
             ),
-            if (imageUrl != null && imageUrl.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => Dialog(
-                      backgroundColor: Colors.transparent,
-                      insetPadding: const EdgeInsets.all(AppSpacing.md),
-                      child: Stack(
-                        alignment: Alignment.topRight,
-                        children: [
-                          InteractiveViewer(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(imageUrl, fit: BoxFit.contain),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
-                      ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${n['title'] ?? ''}', style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
+                if ('${n['body'] ?? ''}'.isNotEmpty)
+                  Text('${n['body']}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppFonts.sans(size: 13, color: AppColors.ink3, height: 1.35)),
+                if (imageUrl != null && imageUrl.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      child: AppNetworkImage(url: imageUrl, height: 120, width: double.infinity),
                     ),
-                  );
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: AppNetworkImage(
-                    url: imageUrl,
-                    height: 150,
-                    width: double.infinity,
                   ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              timeAgo,
-              style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5),
+                const SizedBox(height: 4),
+                Text(noticeAge(n['created_at'] as String?), style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+              ]),
             ),
-          ],
-        ),
-        trailing: !isRead
-            ? GestureDetector(
-                onTap: () => _markAsRead(id),
+            if (unread)
+              Semantics(
+                label: 'Unread',
                 child: Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(
-                    color: AppColors.imperialGold,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              )
-            : null,
-        onTap: () {
-          if (!isRead) _markAsRead(id);
-          // 'order_pending' is the pending-order alert (it carries its own
-          // channel/sound); it must stay tappable like an executed 'order' one,
-          // otherwise changing the type would silently drop the tap-through to
-          // the stock screen. See instrumentSymbolFor for why the symbol, and
-          // not the action type, is what decides this.
-          final symbol =
-              instrumentSymbolFor(n['action_type'] as String?, actionDataMap);
-          if (symbol != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => StockDetailScreen(
-                  symbol: symbol,
-                  market: actionDataMap?['market'] as String? ?? 'stock',
-                  name: symbol,
+                  margin: const EdgeInsets.only(top: 6, left: AppSpacing.sm),
+                  decoration: BoxDecoration(color: AppColors.goldMid, shape: BoxShape.circle),
                 ),
               ),
-            );
-          } else {
-            // Show full notification details in a premium modal bottom sheet
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: AppColors.pureWhite,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-              ),
-              builder: (context) => SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                            decoration: BoxDecoration(
-                              color: AppColors.birch,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration:       BoxDecoration(
-                                color: AppColors.goldPale,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(Icons.notifications_outlined, size: 16, color: AppColors.goldDeep),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(
-                              timeAgo,
-                              style: GoogleFonts.ibmPlexSans(
-                                fontSize: 12,
-                                color: AppColors.ink4,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          title,
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.35,
-                          ),
-                          child: SingleChildScrollView(
-                            child: Text(
-                              body,
-                              style: GoogleFonts.ibmPlexSans(
-                                fontSize: 14,
-                                color: AppColors.ink2,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.lg),
-                          GestureDetector(
-                            onTap: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  insetPadding: const EdgeInsets.all(AppSpacing.md),
-                                  child: Stack(
-                                    alignment: Alignment.topRight,
-                                    children: [
-                                      InteractiveViewer(
-                                        child: ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Image.network(imageUrl, fit: BoxFit.contain),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                                        onPressed: () => Navigator.of(context).pop(),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: AppNetworkImage(
-                                url: imageUrl,
-                                width: double.infinity,
-                              ),
-                            ),
-                          ),
-                        ],
-                        // Optional call to action, carried by the notification
-                        // itself rather than hardcoded per campaign: any row with
-                        // action_data.cta_label plus a cta_route or cta_url gets a
-                        // button here. Without this a broadcast could only ever
-                        // *describe* where to go and leave the user to find it.
-                        if (_ctaLabel(n) != null) ...[
-                          const SizedBox(height: AppSpacing.xl),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _openCta(n);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.imperialGold,
-                                foregroundColor: AppColors.pureWhite,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppRadius.md),
-                                ),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              child: Text(
-                                _ctaLabel(n)!,
-                                style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.sm),
-                        ] else
-                          const SizedBox(height: AppSpacing.xl),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              side:       BorderSide(color: AppColors.birch),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppRadius.md),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                            ),
-                            child: Text(
-                              'Close',
-                              style: GoogleFonts.ibmPlexSans(
-                                color: AppColors.ink,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-        },
+          ]),
+        ),
       ),
     );
   }
 
-  Map<String, dynamic>? _actionData(Map<String, dynamic> n) =>
-      parseActionData(n['action_data']);
+  /// Tapping marks the row read, then goes where it points: the instrument for
+  /// order and price alerts, the Orders list for an expired order, Titans Room for
+  /// chat. Everything else (announcements, rewards, settlements) opens the detail
+  /// sheet, which carries the campaign's own button.
+  void _open(Map<String, dynamic> n) {
+    if (n['is_read'] != true) _markAsRead(n['id'] as String);
+    final data = _actionData(n);
+    final type = n['action_type'] as String?;
+    final symbol = instrumentSymbolFor(type, data);
+    Widget? screen;
+    if (symbol != null) {
+      screen = StockDetailScreen(symbol: symbol, market: data?['market'] as String? ?? 'stock', name: symbol);
+    } else if (data?['view'] == 'orders') {
+      screen = const OrdersScreen();
+    } else if (type == 'chat') {
+      screen = const ChatScreen();
+    }
+    if (screen != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen!));
+    } else {
+      _showDetail(n);
+    }
+  }
+
+  void _showDetail(Map<String, dynamic> n) {
+    final kind = noticeKindOf(n);
+    final (icon, fg, bg) = _style(n, kind);
+    final imageUrl = _actionData(n)?['image_url'] as String?;
+    final cta = _ctaLabel(n);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.lg),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                child: Icon(icon, size: 18, color: fg),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              if (kind != NoticeKind.other) ...[
+                Text(kNoticeKindLabels[kind]!.toUpperCase(), style: AppText.sectionLabel),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Text(noticeAge(n['created_at'] as String?), style: AppText.bodySmall),
+            ]),
+            const SizedBox(height: AppSpacing.md),
+            Text('${n['title'] ?? ''}', style: AppFonts.sans(size: 18, weight: FontWeight.w700, color: AppColors.ink)),
+            const SizedBox(height: AppSpacing.sm),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(sheet).size.height * 0.35),
+              child: SingleChildScrollView(
+                child: Text('${n['body'] ?? ''}', style: AppFonts.sans(size: 14, color: AppColors.ink2, height: 1.5)),
+              ),
+            ),
+            if (imageUrl != null && imageUrl.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.lg),
+              GestureDetector(
+                onTap: () => showDialog(
+                  context: sheet,
+                  builder: (d) => Dialog(
+                    backgroundColor: Colors.transparent,
+                    insetPadding: const EdgeInsets.all(AppSpacing.md),
+                    child: Stack(alignment: Alignment.topRight, children: [
+                      InteractiveViewer(
+                        child: ClipRRect(
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            child: Image.network(imageUrl, fit: BoxFit.contain)),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                        onPressed: () => Navigator.of(d).pop(),
+                      ),
+                    ]),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                  child: AppNetworkImage(url: imageUrl, width: double.infinity),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            // The notification's own call to action (cta_label + an allow-listed
+            // cta_route or an https cta_url), so a broadcast can send people somewhere.
+            if (cta != null) ...[
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(sheet);
+                  _openCta(n);
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                child: Text(cta),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            OutlinedButton(
+              onPressed: () => Navigator.pop(sheet),
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              child: const Text('Close'),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic>? _actionData(Map<String, dynamic> n) => parseActionData(n['action_data']);
 
   String? _ctaLabel(Map<String, dynamic> n) => ctaLabel(_actionData(n));
 
-  Future<void> _openCta(Map<String, dynamic> n) =>
-      openNotificationCta(context, _actionData(n));
-
-  IconData _iconForTitle(String title) {
-    final t = title.toLowerCase();
-    if (t.contains('executed') || t.contains('filled')) {
-      return Icons.check_circle_outline;
-    }
-    if (t.contains('pending') || t.contains('placed')) {
-      return Icons.schedule;
-    }
-    if (t.contains('cancel')) return Icons.cancel_outlined;
-    return Icons.notifications_outlined;
-  }
+  Future<void> _openCta(Map<String, dynamic> n) => openNotificationCta(context, _actionData(n));
 }
 
 /// Follows a notification's call to action.
@@ -593,9 +559,7 @@ Future<void> openNotificationCta(
   Map<String, dynamic>? data, {
   bool fallbackToList = false,
 }) async {
-  final route = (data?['cta_route'] as String?)?.trim().toLowerCase();
-
-  switch (route) {
+  switch (normalizedRoute(data)) {
     case 'plans':
     case 'topup':
     case 'subscribe':
