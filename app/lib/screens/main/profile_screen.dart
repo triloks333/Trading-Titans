@@ -17,7 +17,6 @@ import '../../services/plan_service.dart';
 import '../../services/currency_service.dart';
 import '../../core/countries.dart';
 import '../../core/currency.dart';
-import '../../widgets/crown_logo.dart';
 import '../../widgets/plan_badge.dart';
 import 'subscribe_screen.dart';
 import 'convert_account_screen.dart';
@@ -52,7 +51,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.watch<ThemeService>(); // rebuild on theme change
     // Watched so the row subtitles and every money figure on this screen update
     // the moment the preference changes.
-    context.watch<CurrencyService>();
+    final currency = context.watch<CurrencyService>();
     
 
     return Scaffold(
@@ -60,146 +59,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            const SizedBox(height: AppSpacing.xl),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              decoration: AppCard.primary,
-              child: Column(
-                children: [
-                  const CrownLogo(size: 56, withRing: true),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          user?.name ?? 'Titan',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // The plan sits next to the name, which is where a user
-                      // looks for it and where it appears on the leaderboard.
-                      if (monetized && plan.isPaid) ...[
-                        const SizedBox(width: AppSpacing.sm),
-                        PlanBadge(tier: plan.tier),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    user == null
-                        ? 'you@domain.com'
-                        : (user.email.endsWith(AppConstants.guestEmailDomain)
-                            ? 'Guest account'
-                            : user.email),
-                    style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  // Reads the derived tier, not `profiles.subscription_active`.
-                  // That column defaults to true at signup and no payment path
-                  // has ever written it, so it labelled brand-new free accounts
-                  // "ACTIVE".
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                    decoration: AppCard.badge(
-                        monetized && plan.isPaid ? AppColors.bullLight : AppColors.cream),
-                    child: Text(
-                      monetized
-                          ? (plan.isPaid ? '${plan.tier.toUpperCase()} PLAN' : 'FREE PLAN')
-                          : 'FREE ACCESS',
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: monetized && plan.isPaid
-                              ? AppColors.bull
-                              : AppColors.ink4,
-                          letterSpacing: 0.5),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  _detailRow('Wallet Balance', Money.wallet(user?.walletBalance ?? 0)),
-                  const SizedBox(height: AppSpacing.sm),
-                  _detailRow('P&L', Money.wallet(user?.totalRealizedPnl ?? 0),
-                      valueColor: (user?.totalRealizedPnl ?? 0) >= 0 ? AppColors.bull : AppColors.bear),
-                  const SizedBox(height: AppSpacing.sm),
-                  _detailRow('Member Since', user != null ? user.createdAt.toLocal().toShortDateString() : '-'),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            if (auth.isGuest) ...[
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final authService = context.read<AuthService>();
-                  await Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const ConvertAccountScreen()));
-                  await authService.refreshUser();
-                },
-                icon: Icon(Icons.lock_open_outlined,
-                    size: 18, color: AppColors.pureWhite),
-                label: Text('Make account permanent \u2014 get \u20b91,100',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.pureWhite,
-                        letterSpacing: 0.3)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.ink,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md)),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
-            ElevatedButton(
-              onPressed: () async {
-                final authService = context.read<AuthService>();
-                await Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const ChallengesScreen()));
-                await authService.refreshUser();
-              },
-              style: ElevatedButton.styleFrom(
+            // Identity: avatar, name, email and plan tags in one row.
+            Row(children: [
+              CircleAvatar(
+                radius: 30,
                 backgroundColor: AppColors.imperialGold,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                child: Text((user?.name ?? 'T').trim().characters.firstOrNull?.toUpperCase() ?? 'T',
+                    style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: Colors.white)),
               ),
-              child: Text('Challenges & Rewards',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.pureWhite,
-                      letterSpacing: 0.5)),
-            ),
-            if (monetized) ...[
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton(
-                onPressed: () async {
-                  final authService = context.read<AuthService>();
-                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen()));
-                  await authService.refreshUser();
-                },
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: AppColors.birch),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                ),
-                child: Text('Plans & top-ups',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(user?.name ?? 'Titan', overflow: TextOverflow.ellipsis,
+                      style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink)),
+                  Text(
+                    user == null ? 'you@domain.com'
+                        : (user.email.endsWith(AppConstants.guestEmailDomain) ? 'Guest account' : user.email),
+                    overflow: TextOverflow.ellipsis, style: AppText.bodySmall),
+                  const SizedBox(height: 6),
+                  // Reads the derived tier, not `profiles.subscription_active`, which
+                  // defaults to true at signup and labelled free accounts "ACTIVE".
+                  Wrap(spacing: 6, children: [
+                    if (monetized && plan.isPaid) PlanBadge(tier: plan.tier)
+                    else _tag(monetized ? 'FREE PLAN' : 'FREE ACCESS'),
+                    if (auth.isGuest) _tag('GUEST', gold: true),
+                  ]),
+                ]),
               ),
-            ],
+            ]),
             const SizedBox(height: AppSpacing.lg),
-            
-            
-            if (auth.isGuest)
-              _group('Account', [
-                _row(context, Icons.lock_open_outlined, 'Make account permanent', screen: const ConvertAccountScreen()),
+            // Stats: 2 x 2 grid, monospace values.
+            Container(
+              decoration: AppCard.primary,
+              child: Column(children: [
+                Row(children: [
+                  _stat('Wallet balance', Money.wallet(user?.walletBalance ?? 0)),
+                  _stat('P&L', Money.wallet((user?.totalRealizedPnl ?? 0)), color: (user?.totalRealizedPnl ?? 0) >= 0 ? AppColors.bull : AppColors.bear),
+                ]),
+                Divider(color: AppColors.birch),
+                Row(children: [
+                  _stat('Member since', user != null ? user.createdAt.toLocal().toShortDateString() : '-'),
+                  _stat('Trading from', _locationSummary(currency), onTap: () => _showLocationSelector(context)),
+                ]),
               ]),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            if (auth.isGuest)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: Material(
+                  color: AppColors.titanGoldSoft,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.lg), side: BorderSide(color: AppColors.titanGold)),
+                  child: ListTile(
+                    onTap: () async {
+                      final authService = context.read<AuthService>();
+                      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConvertAccountScreen()));
+                      await authService.refreshUser();
+                    },
+                    leading: Icon(Icons.lock_open_outlined, color: AppColors.titanGold),
+                    title: Text('Make account permanent — get ₹1,100', style: AppText.bodyBold),
+                    subtitle: Text('Guest progress is lost if you uninstall', style: AppText.bodySmall),
+                  ),
+                ),
+              ),
+            _group('Account', [
+              _row(context, Icons.emoji_events_outlined, 'Challenges & rewards', screen: const ChallengesScreen()),
+              if (monetized)
+                _row(context, Icons.workspace_premium_outlined, 'Plans & top-ups', screen: const SubscribeScreen()),
+            ]),
             _group('Trading', [
               _row(context, Icons.star_outline_rounded, 'Watchlists', screen: const WatchlistScreen()),
               _row(context, Icons.receipt_long, 'Order history', screen: const OrdersScreen()),
@@ -292,6 +220,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _tag(String text, {bool gold = false}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(gold ? AppColors.titanGoldSoft : AppColors.cream),
+        child: Text(text, style: AppText.badge.copyWith(color: gold ? AppColors.titanGold : AppColors.ink3)),
+      );
+
+  Widget _stat(String label, String value, {Color? color, VoidCallback? onTap}) => Expanded(
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: AppText.bodySmall),
+              const SizedBox(height: 2),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: color ?? AppColors.ink)),
+            ]),
+          ),
+        ),
+      );
+
   /// One grouped-list row. [screen] pushes a page and refreshes the user on
   /// return; otherwise [onTap] runs.
   Widget _row(BuildContext context, IconData icon, String label,
@@ -344,8 +293,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const modes = {ThemeMode.dark: 'Dark', ThemeMode.light: 'Light', ThemeMode.system: 'System default'};
               return ListView(padding: const EdgeInsets.all(AppSpacing.lg), children: [
                 _group('Appearance', [
-                  _row(ctx, Icons.palette_outlined, 'App theme',
-                      subtitle: modes[ThemeService().themeMode], onTap: () => _showThemeSelector(context)),
+                  // Inline theme switch: one tap, no sheet.
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: SegmentedButton<ThemeMode>(
+                      showSelectedIcon: false,
+                      style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor: AppColors.goldPale,
+                        selectedForegroundColor: AppColors.goldMid,
+                        side: BorderSide(color: AppColors.birch),
+                        textStyle: AppFonts.sans(size: 13, weight: FontWeight.w600),
+                      ),
+                      segments: [
+                        for (final m in const [ThemeMode.system, ThemeMode.light, ThemeMode.dark])
+                          ButtonSegment(value: m, label: Text(modes[m]!.split(' ').first)),
+                      ],
+                      selected: {ThemeService().themeMode},
+                      onSelectionChanged: (sel) => ThemeService().setThemeMode(sel.first),
+                    ),
+                  ),
                   _row(ctx, Icons.currency_exchange_outlined, 'Display currency',
                       subtitle: currency.displayCurrency.label, onTap: () => _showCurrencySelector(context)),
                 ]),
@@ -354,6 +320,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       subtitle: _marketsSummary(currency.preferredMarkets), onTap: () => _showMarketsSelector(context)),
                   _row(ctx, Icons.public_outlined, 'Trading from',
                       subtitle: _locationSummary(currency), onTap: () => _showLocationSelector(context)),
+                ]),
+                _group('Notifications', [
+                  _row(ctx, Icons.notifications_outlined, 'All notifications', screen: const NotificationsScreen()),
+                  _row(ctx, Icons.forum_outlined, 'Titans Room chat',
+                      subtitle: '@everyone and @mentions always notify', screen: const ChatScreen()),
                 ]),
                 _group('Help & about', [
                   _row(ctx, Icons.replay_circle_filled_outlined, 'Replay app tour', onTap: () => _replayTour(context)),
@@ -733,80 +704,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
 
-  void _showThemeSelector(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      builder: (context) {
-        final themeService = context.watch<ThemeService>();
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: AppColors.birch,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  'Choose Theme',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _themeOption(
-                  context,
-                  icon: Icons.light_mode_outlined,
-                  title: 'Light Mode',
-                  isSelected: themeService.themeMode == ThemeMode.light,
-                  onTap: () {
-                    themeService.setThemeMode(ThemeMode.light);
-                    Navigator.pop(context);
-                  },
-                ),
-                _themeOption(
-                  context,
-                  icon: Icons.dark_mode_outlined,
-                  title: 'Dark Mode',
-                  isSelected: themeService.themeMode == ThemeMode.dark,
-                  onTap: () {
-                    themeService.setThemeMode(ThemeMode.dark);
-                    Navigator.pop(context);
-                  },
-                ),
-                _themeOption(
-                  context,
-                  icon: Icons.settings_brightness_outlined,
-                  title: 'System Default',
-                  isSelected: themeService.themeMode == ThemeMode.system,
-                  onTap: () {
-                    themeService.setThemeMode(ThemeMode.system);
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _themeOption(
     BuildContext context, {
     required IconData icon,
@@ -861,15 +758,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
 
-  Widget _detailRow(String label, String value, {Color? valueColor}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 13)),
-        Text(value, style: GoogleFonts.ibmPlexSans(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
-      ],
-    );
-  }
 }
 
 extension on DateTime {
