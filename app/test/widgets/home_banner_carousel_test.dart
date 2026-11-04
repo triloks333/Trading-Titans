@@ -43,20 +43,24 @@ void main() {
     // Initial frame: Slide 1 is visible
     expect(find.text('Boost Your Capital'), findsOneWidget);
 
-    // Fling to Slide 2
-    await tester.fling(find.byType(PageView), const Offset(-800, 0), 1000);
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pump(const Duration(milliseconds: 200));
+    // Swipe to Slide 2. Pumped frame by frame until the page snap ends: a
+    // PageView still settling swallows taps, and with 4 slides it no longer
+    // stops dead against the last page.
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // Verify Slide 2 (Titan Pro Mentorship)
     expect(find.text('Titan Pro Membership'), findsOneWidget);
     expect(find.text('FOUNDER MENTORSHIP · ₹1L+/MO VALUE'), findsOneWidget);
     expect(find.text('Join for ₹999'), findsOneWidget);
 
-    // Fling to Slide 3
-    await tester.fling(find.byType(PageView), const Offset(-800, 0), 1000);
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pump(const Duration(milliseconds: 200));
+    // Swipe to Slide 3
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     // Verify Slide 3 (Glossary Hub)
     expect(find.text('Master Trading Terms'), findsOneWidget);
@@ -67,5 +71,20 @@ void main() {
     await tester.tap(find.text('Explore Glossary'));
     await tester.pump();
     expect(glossaryTapped, isTrue);
+
+    // Slide 4: feedback, moved up from Settings
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Request a feature'), findsOneWidget);
+    expect(find.text('Report an issue'), findsOneWidget);
+
+    // It opens the same report sheet as Settings.
+    await tester.tap(find.text('Report an issue'));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Report an Issue'), findsOneWidget);
   });
 }

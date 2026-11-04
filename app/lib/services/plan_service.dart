@@ -46,8 +46,43 @@ class PlanService extends ChangeNotifier {
   bool get isLoaded => _loaded;
   String get checkoutUrl => _checkoutUrl;
 
+  bool _saleActive = false;
+  DateTime? _saleEndsAt;
+
+  /// True while `plan_catalogue` has sale prices. See
+  /// 20261103010000_diwali_sale_half_price.sql.
+  bool get saleActive => _saleActive;
+  DateTime? get saleEndsAt => _saleEndsAt;
+
+  /// A rupee figure in marketing copy ("from ₹199"), at sale price while a sale
+  /// runs. Real prices come from [PlanOption]; this is only for banner text.
+  /// shortcut: assumes a 50% sale rounded down, like the migration. Read the
+  /// ratio from the catalogue if a sale ever uses another discount.
+  String marketingRupees(int full) => '₹${_saleActive ? full ~/ 2 : full}';
+
   Future<void> refresh() async {
     final client = Supabase.instance.client;
+
+    // Before the signed-out check: the catalogue is public and the sale banner
+    // shows to everyone.
+    try {
+      final row = await client
+          .from('plan_catalogue')
+          .select('sale_ends_at')
+          .eq('is_active', true)
+          .not('compare_at_paise', 'is', null)
+          .limit(1)
+          .maybeSingle();
+      final active = row != null;
+      final ends = DateTime.tryParse(row?['sale_ends_at'] as String? ?? '')?.toLocal();
+      if (active != _saleActive || ends != _saleEndsAt) {
+        _saleActive = active;
+        _saleEndsAt = ends;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('PlanService: could not read sale state: $e');
+    }
 
     // Signed out: reset, or a badge would linger from the previous account.
     if (client.auth.currentUser == null) {
@@ -111,6 +146,12 @@ class PlanOption {
   final double cashGrant;
   final double monthlyStipend;
 
+  /// The pre-sale price, set only while a sale is running. Shown struck through
+  /// next to [priceLabel]; the charge is always the plain price.
+  final int? compareAtPaise;
+  final int? compareAtUsdCents;
+  final DateTime? saleEndsAt;
+
   const PlanOption({
     required this.sku,
     required this.tier,
@@ -121,9 +162,20 @@ class PlanOption {
     required this.billingInterval,
     required this.cashGrant,
     required this.monthlyStipend,
+    this.compareAtPaise,
+    this.compareAtUsdCents,
+    this.saleEndsAt,
   });
 
   bool get isSubscription => kind == 'subscription';
+
+  bool get onSale => compareAtPaise != null;
+
+  /// The old price, struck through by callers, or null when not on sale.
+  String? wasPriceLabel(Currency billing) {
+    final minor = chargedIn(billing) == Currency.usd ? compareAtUsdCents : compareAtPaise;
+    return minor == null ? null : _formatMinor(minor, chargedIn(billing).symbol);
+  }
 
   /// Rupees, for display. Prices are held in paise so no money is ever a double
   /// in transit; this is the only place it becomes one, and only to be printed.
@@ -179,6 +231,9 @@ class PlanOption {
         billingInterval: json['billing_interval'] as String?,
         cashGrant: (json['cash_grant'] as num?)?.toDouble() ?? 0,
         monthlyStipend: (json['monthly_stipend'] as num?)?.toDouble() ?? 0,
+        compareAtPaise: (json['compare_at_paise'] as num?)?.toInt(),
+        compareAtUsdCents: (json['compare_at_usd_cents'] as num?)?.toInt(),
+        saleEndsAt: DateTime.tryParse(json['sale_ends_at'] as String? ?? '')?.toLocal(),
       );
 }
 

@@ -5,11 +5,13 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  TickMarkType,
   createChart,
   createTextWatermark,
   type IChartApi,
   type ISeriesApi,
   type SeriesType,
+  type Time,
   type UTCTimestamp,
 } from 'lightweight-charts'
 
@@ -253,8 +255,45 @@ export function createTitanChart(
         rightOffset: 8,
         barSpacing: 9,
         minBarSpacing: 0.6,
+        tickMarkFormatter: (t: Time, type: TickMarkType) =>
+          clock(
+            t,
+            type === TickMarkType.Year
+              ? { year: 'numeric' }
+              : type === TickMarkType.Month
+                ? { month: 'short' }
+                : type === TickMarkType.DayOfMonth
+                  ? { day: 'numeric' }
+                  : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+          ),
+      },
+      localization: {
+        // The crosshair's time label.
+        timeFormatter: (t: Time) =>
+          clock(
+            t,
+            TIMEFRAME_SECONDS[timeframe] < TIMEFRAME_SECONDS['1d']
+              ? { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+              : { day: 'numeric', month: 'short', year: '2-digit' },
+          ),
       },
     }
+  }
+
+  /**
+   * A bar time in the reader's own clock.
+   *
+   * lightweight-charts labels in UTC, which put 17:00 under a 22:30 IST candle.
+   * Intraday uses the device's zone, so it is IST in India and local time for
+   * anyone abroad. Daily and coarser bars stay in UTC: they are stamped at UTC
+   * midnight, and a zone behind UTC would label each day with the day before.
+   */
+  function clock(t: Time, opts: Intl.DateTimeFormatOptions): string {
+    const intraday = TIMEFRAME_SECONDS[timeframe] < TIMEFRAME_SECONDS['1d']
+    return new Date((t as number) * 1000).toLocaleString('en-GB', {
+      ...opts,
+      timeZone: intraday ? undefined : 'UTC',
+    })
   }
 
   /**

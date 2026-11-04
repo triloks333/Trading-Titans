@@ -4,9 +4,45 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme.dart';
+import '../screens/main/news_list_screen.dart';
 import '../screens/main/news_reader_screen.dart';
 import '../services/currency_service.dart';
 import '../services/supabase_service.dart';
+
+/// News markets as tagged in `blog_posts.excerpt` (`[market:crypto] ...`).
+/// Shared with [NewsListScreen], which filters on the same keys.
+const Map<String, String> newsMarketLabels = {
+  'all': 'Global Markets',
+  'stock': 'Indian Stocks',
+  'us_stock': 'US Stocks',
+  'crypto': 'Crypto',
+  'pakistan_stock': 'Pakistan Stocks',
+  'italy_stock': 'Italy Stocks',
+};
+
+const Map<String, Color> newsMarketColors = {
+  'all': Color(0xFF3B82F6),
+  'stock': Color(0xFF10B981),
+  'us_stock': Color(0xFF6366F1),
+  'crypto': Color(0xFFF59E0B),
+  'pakistan_stock': Color(0xFF059669),
+  'italy_stock': Color(0xFF0284C7),
+};
+
+/// Splits the `[market:key]` tag off an excerpt. Untagged posts are global.
+({String marketKey, String cleanExcerpt}) parseNewsExcerpt(String? raw) {
+  if (raw == null || raw.isEmpty) {
+    return (marketKey: 'all', cleanExcerpt: '');
+  }
+  final match = RegExp(r'^\[market:([a-z_]+)\]\s*(.*)$', dotAll: true).firstMatch(raw);
+  if (match != null) {
+    return (
+      marketKey: match.group(1) ?? 'all',
+      cleanExcerpt: match.group(2) ?? '',
+    );
+  }
+  return (marketKey: 'all', cleanExcerpt: raw);
+}
 
 /// Animated market news and intelligence section on the Home Dashboard.
 ///
@@ -25,28 +61,12 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
+  static const int _homeLimit = 12;
+
   Timer? _autoSlideTimer;
   int _currentPage = 0;
   bool _loading = true;
   List<Map<String, dynamic>> _allPosts = [];
-
-  static const Map<String, String> _marketLabels = {
-    'all': 'Global Markets',
-    'stock': 'Indian Stocks',
-    'us_stock': 'US Stocks',
-    'crypto': 'Crypto',
-    'pakistan_stock': 'Pakistan Stocks',
-    'italy_stock': 'Italy Stocks',
-  };
-
-  static const Map<String, Color> _marketColors = {
-    'all': Color(0xFF3B82F6),
-    'stock': Color(0xFF10B981),
-    'us_stock': Color(0xFF6366F1),
-    'crypto': Color(0xFFF59E0B),
-    'pakistan_stock': Color(0xFF059669),
-    'italy_stock': Color(0xFF0284C7),
-  };
 
   @override
   void initState() {
@@ -107,33 +127,20 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
     });
   }
 
-  ({String marketKey, String cleanExcerpt}) _parseExcerpt(String? raw) {
-    if (raw == null || raw.isEmpty) {
-      return (marketKey: 'all', cleanExcerpt: '');
-    }
-    final match = RegExp(r'^\[market:([a-z_]+)\]\s*(.*)$', dotAll: true).firstMatch(raw);
-    if (match != null) {
-      return (
-        marketKey: match.group(1) ?? 'all',
-        cleanExcerpt: match.group(2) ?? '',
-      );
-    }
-    return (marketKey: 'all', cleanExcerpt: raw);
-  }
-
   List<Map<String, dynamic>> _getFilteredPosts() {
     if (_allPosts.isEmpty) return const [];
     final preferred = CurrencyService.instance.preferredMarkets;
 
     final matched = _allPosts.where((post) {
       final rawExcerpt = post['excerpt'] as String?;
-      final parsed = _parseExcerpt(rawExcerpt);
+      final parsed = parseNewsExcerpt(rawExcerpt);
       if (parsed.marketKey == 'all') return true;
       return preferred.contains(parsed.marketKey);
     }).toList();
 
-    // If user's preferred filter returned empty, fallback to all published
-    return matched.isNotEmpty ? matched : _allPosts;
+    // If user's preferred filter returned empty, fallback to all published.
+    // Capped so the dot row fits on a phone; the rest live behind "View more".
+    return (matched.isNotEmpty ? matched : _allPosts).take(_homeLimit).toList();
   }
 
   @override
@@ -190,27 +197,34 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                 ),
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.cream,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.birch),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => NewsListScreen(posts: _allPosts)),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.flash_on_rounded, size: 12, color: AppColors.imperialGold),
-                    const SizedBox(width: 3),
-                    Text(
-                      'Curated for You',
-                      style: GoogleFonts.inter(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink2,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.birch),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View more',
+                        style: GoogleFonts.inter(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.imperialGold,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 3),
+                      const Icon(Icons.arrow_forward_rounded, size: 13, color: AppColors.imperialGold),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -264,11 +278,11 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
     final rawExcerpt = post['excerpt'] as String?;
     final publishedAt = post['published_at'] as String?;
 
-    final parsed = _parseExcerpt(rawExcerpt);
+    final parsed = parseNewsExcerpt(rawExcerpt);
     final marketKey = parsed.marketKey;
     final cleanExcerpt = parsed.cleanExcerpt;
-    final marketLabel = _marketLabels[marketKey] ?? 'Market News';
-    final tagColor = _marketColors[marketKey] ?? AppColors.imperialGold;
+    final marketLabel = newsMarketLabels[marketKey] ?? 'Market News';
+    final tagColor = newsMarketColors[marketKey] ?? AppColors.imperialGold;
 
     DateTime? publishDate;
     if (publishedAt != null) {

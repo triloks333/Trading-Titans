@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme.dart';
 import '../../core/money.dart';
 import '../../core/app_constants.dart';
+import '../../widgets/diwali_sale_banner.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
 import '../../widgets/skeleton.dart';
@@ -379,6 +380,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: AppSpacing.lg),
+                      // Renders nothing unless a sale is running.
+                      const DiwaliSaleBanner(),
                       TitanShowcase(
                         showcaseKey: _totalValueKey,
                         title: 'Portfolio Value',

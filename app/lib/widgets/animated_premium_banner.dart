@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../services/plan_service.dart';
 
 /// A luxury, animated hero promotional banner for Trading Titans.
 /// Features:
@@ -231,7 +232,9 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  'START FROM ₹199',
+                                  PlanService.instance.saleActive
+                                      ? '50% OFF · FROM ${PlanService.instance.marketingRupees(199)}'
+                                      : 'START FROM ₹199',
                                   style: GoogleFonts.inter(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,

@@ -40,6 +40,8 @@ export { cleanName, forDisplay, MAX_NAME_LENGTH } from './core/templates'
 export { fetchHistory } from './data/history'
 export { fetchLiveQuote } from './data/quote'
 export type { LiveQuote } from './data/quote'
+export { streamLive } from './data/stream'
+export type { LiveStream } from './data/stream'
 
 export { fxFactor, isHonestCandleTimeframe, scalePrices } from './core/aggregate'
 export { cacheKeyFor, historySymbol } from './core/symbols'

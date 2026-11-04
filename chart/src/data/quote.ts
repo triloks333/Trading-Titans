@@ -84,8 +84,9 @@ async function fromQuotesCache(symbol: string, market: Market): Promise<LiveQuot
   }
 }
 
-/** Live fetch, for symbols the refresh job does not cover. */
-async function fromMarketQuote(symbol: string, market: Market): Promise<LiveQuote | null> {
+/** Live fetch, for symbols the refresh job does not cover. Also the stock leg of
+ * data/stream.ts, which needs fresher than the cache's once a minute. */
+export async function fromMarketQuote(symbol: string, market: Market): Promise<LiveQuote | null> {
   const q = new URLSearchParams({ symbol, market })
   const data = await getJson<Record<string, unknown>>(
     `${functionsBase}/market-quote?${q}`,

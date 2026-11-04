@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../services/plan_service.dart';
 import '../screens/main/subscribe_screen.dart';
 import '../screens/main/glossary_screen.dart';
 import 'animated_premium_banner.dart';
+import 'report_issue_sheet.dart';
+import 'request_feature_sheet.dart';
 
 /// A 3-slide auto-sliding carousel on the home dashboard.
 /// Automatically slides every 4.5 seconds, with manual swipe support and page dots.
@@ -14,6 +17,7 @@ import 'animated_premium_banner.dart';
 /// 1. Quick Capital Boost (Top-up starting ₹199) -> SubscribeScreen
 /// 2. Titan Pro ₹999 Pack (Twice-weekly live founder mentorship + ₹1L+/mo value) -> SubscribeScreen
 /// 3. Trading Glossary & Quiz (Options, Greeks, plain English) -> GlossaryScreen
+/// 4. Request a feature / Report an issue -> the same sheets as Settings
 class HomeBannerCarousel extends StatefulWidget {
   final VoidCallback? onSubscribeTap;
   final VoidCallback? onGlossaryTap;
@@ -34,7 +38,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   late final PageController _pageController;
   int _currentPage = 0;
   Timer? _autoSlideTimer;
-  static const int _bannerCount = 3;
+  static const int _bannerCount = 4;
 
   @override
   void initState() {
@@ -125,6 +129,9 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
               _GlossaryBanner(
                 onTap: _navigateToGlossary,
               ),
+
+              // Slide 4: Feedback, moved up from the bottom of Settings
+              const _FeedbackBanner(),
             ],
           ),
         ),
@@ -469,7 +476,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Join for ₹999',
+                                  'Join for ${PlanService.instance.marketingRupees(999)}',
                                   style: GoogleFonts.inter(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
@@ -931,6 +938,165 @@ class _GlossaryBannerState extends State<_GlossaryBanner>
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Slide 4: the two feedback sheets, one tap from home.
+///
+/// They used to live only at the bottom of Settings, where almost nobody found
+/// them. Opens the exact sheets the profile menu does, so there is one form each.
+class _FeedbackBanner extends StatefulWidget {
+  const _FeedbackBanner();
+
+  @override
+  State<_FeedbackBanner> createState() => _FeedbackBannerState();
+}
+
+class _FeedbackBannerState extends State<_FeedbackBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _glow = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _glow.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _glow,
+      builder: (context, child) {
+        final t = Curves.easeInOutSine.transform(_glow.value);
+        return Container(
+          height: 170,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF0F1B33),
+                Color.lerp(const Color(0xFF1E3A8A), const Color(0xFF0E7490), t)!,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF38BDF8).withValues(alpha: 0.12 + 0.18 * t),
+                blurRadius: 18,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.forum_rounded, color: Color(0xFF7DD3FC), size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'HELP US BUILD TRADING TITANS',
+                style: GoogleFonts.inter(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.6,
+                  color: const Color(0xFF7DD3FC),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Have an idea or spotted a bug?',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'We read every one. Good ideas can earn a reward.',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: _action(
+                  Icons.rocket_launch_rounded,
+                  'Request a feature',
+                  () => showRequestFeatureSheet(context),
+                  filled: true,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: _action(
+                  Icons.bug_report_rounded,
+                  'Report an issue',
+                  () => showReportIssueSheet(context),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _action(IconData icon, String label, VoidCallback onTap, {bool filled = false}) {
+    return Material(
+      color: filled ? const Color(0xFFFFD700) : Colors.white.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          decoration: filled
+              ? null
+              : BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: Colors.white24),
+                ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: filled ? const Color(0xFF0F1B33) : Colors.white),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: filled ? const Color(0xFF0F1B33) : Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

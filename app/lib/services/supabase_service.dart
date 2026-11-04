@@ -1915,6 +1915,59 @@ class SupabaseService {
         .eq('market', market);
   }
 
+  /// The user's watchlists, first one first. Creates "My Watchlist" when there
+  /// are none, so a user always has a first list to hold stocks starred without
+  /// one (`watchlist_id` null). See 20261103020000_multiple_watchlists.sql.
+  Future<List<Map<String, dynamic>>> getWatchlists() async {
+    final user = currentUser;
+    if (user == null) return [];
+    List<Map<String, dynamic>> read(dynamic rows) =>
+        (rows as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    var lists = read(await client
+        .from('watchlists')
+        .select()
+        .eq('user_id', user.id)
+        // ascending is not the default in postgrest-dart. The first list must
+        // stay first: it is where stocks starred without a list go.
+        .order('sort_order', ascending: true)
+        .order('created_at', ascending: true));
+    if (lists.isEmpty) {
+      lists = read(await client
+          .from('watchlists')
+          .insert({'user_id': user.id, 'name': 'My Watchlist'})
+          .select());
+    }
+    return lists;
+  }
+
+  Future<void> saveWatchlist({String? id, required String name, required String color}) async {
+    final user = currentUser;
+    if (user == null) return;
+    if (id == null) {
+      await client.from('watchlists').insert({
+        'user_id': user.id,
+        'name': name,
+        'color': color,
+        'sort_order': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+    } else {
+      await client.from('watchlists').update({'name': name, 'color': color}).eq('id', id);
+    }
+  }
+
+  /// Deletes a list and every stock in it.
+  Future<void> deleteWatchlist(String id) =>
+      client.from('watchlists').delete().eq('id', id);
+
+  /// Moves a watched stock to another list and/or section. Pass [section] as an
+  /// empty string to take it out of any section.
+  Future<void> updateWatchlistItem(String itemId, {String? watchlistId, String? section}) {
+    return client.from('watchlist').update({
+      'watchlist_id': ?watchlistId,
+      if (section != null) 'section': section.trim().isEmpty ? null : section.trim(),
+    }).eq('id', itemId);
+  }
+
   // ── Price Alerts ──────────────────────────────────────────────────────────
 
   /// Creates a price alert. [direction] is 'above' or 'below'. The reference
@@ -4196,6 +4249,8 @@ class SupabaseService {
       final rows = await client
           .from('blog_posts')
           .select('id, slug, title, excerpt, body_markdown, cover_url, published_at')
+          // Removed from the app by an admin; the website still serves it.
+          .eq('hidden_in_app', false)
           .order('created_at', ascending: false);
       return (rows as List)
           .map((r) => Map<String, dynamic>.from(r as Map))
@@ -4265,9 +4320,11 @@ class SupabaseService {
     }
   }
 
+  /// Hides a post from the app. The website keeps serving it, because those
+  /// pages earn search traffic. See 20261103000000_blog_posts_hide_in_app.sql.
   Future<bool> deleteBlogPost(String id) async {
     try {
-      await client.from('blog_posts').delete().eq('id', id);
+      await client.from('blog_posts').update({'hidden_in_app': true}).eq('id', id);
       return true;
     } catch (e) {
       debugPrint('deleteBlogPost failed: $e');

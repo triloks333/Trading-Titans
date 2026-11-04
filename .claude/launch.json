@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chart",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "chart", "run", "dev"],
+      "port": 5180
+    }
+  ]
+}

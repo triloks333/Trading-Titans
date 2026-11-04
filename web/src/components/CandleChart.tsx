@@ -16,8 +16,10 @@ import {
   readLegend,
   renameTemplate,
   saveTemplate,
+  streamLive,
   toggleDefault,
   type ChartTemplate,
+  type LiveStream,
   type HoverState,
   type IndicatorResult,
   type IndicatorSpec,
@@ -156,6 +158,7 @@ export function CandleChart({
     const chart = chartRef.current
     if (!chart) return
     let cancelled = false
+    let stream: LiveStream | null = null
     setState('loading')
     chart.setCurrency(mkt === 'us_stock' ? 'USD' : 'INR')
     chart.setTimeframe(period.interval)
@@ -169,6 +172,8 @@ export function CandleChart({
         if (cancelled || !chartRef.current) return
         chart.setCandles(candles)
         if (quote) chart.pushTick({ time: quote.time, price: quote.price })
+        // The live edge; without it this chart froze at whatever loaded.
+        stream = streamLive(symbol, mkt, (tick) => chart.pushTick(tick), quote?.price)
         applyIndicators(chart, active)
         setState(candles.length === 0 ? 'empty' : 'ready')
       })
@@ -178,6 +183,7 @@ export function CandleChart({
 
     return () => {
       cancelled = true
+      stream?.stop()
     }
   }, [symbol, mkt, period, active, applyIndicators])
 

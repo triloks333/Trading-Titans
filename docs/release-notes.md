@@ -11,6 +11,37 @@ entry here, at the top, before arming.
 
 ---
 
+## 1.2.14 (versionCode 59)
+
+Diwali sale banner (50% off every pack, struck-through old prices, ends 10 Nov), multiple watchlists with names, colours and sections, a full news page with date and market filters, feedback buttons on home, and admin news removal that keeps posts on the website. Includes 1.2.13's live charts.
+
+### Play Store "What's new" (paste this)
+
+```
+• Diwali Sale: 50% off every pack, Pro, Titan and top-ups, until 10 Nov.
+• Multiple watchlists: name them, pick a colour and group stocks into sections.
+• News: see all stories in one place and filter by date and market.
+• Request a feature or report an issue right from the home screen.
+• Live charts that update every second or two, with times in your local timezone.
+```
+
+---
+
+## 1.2.13 (versionCode 58)
+
+Live charts: the current candle now updates every second or two (crypto from a live trade stream, stocks from a fast live quote) instead of once a minute, and chart times show in the phone's own timezone (IST in India) instead of UTC.
+
+### Play Store "What's new" (paste this)
+
+```
+• Live charts: candles now move live, just like a real trading terminal — no more waiting a minute for the price to update.
+• Crypto charts stream every trade as it happens; stock charts refresh every couple of seconds while the market is open.
+• Chart times now show in your local time (IST in India) instead of UTC.
+• Fixes the chart occasionally appearing frozen.
+```
+
+---
+
 ## 1.2.12 (versionCode 57)
 
 Native in-app Razorpay checkout with 1-tap UPI app discovery, simplified 1-tap Pro & Titan Monthly/Annual pass activation without auto-debit mandates, instant wallet balance refresh after top-up, and seamless payment retry.

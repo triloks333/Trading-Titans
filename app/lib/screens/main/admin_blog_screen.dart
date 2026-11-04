@@ -204,12 +204,12 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
       context: context,
       builder: (dialog) => AlertDialog(
         backgroundColor: AppColors.pureWhite,
-        title: Text('Delete this post?',
+        title: Text('Remove from the app?',
             style: GoogleFonts.inter(
                 fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
         content: Text(
-          'Anyone who has the link, and Google, will start getting a 404. This '
-          'cannot be undone.',
+          'It disappears from the app\'s news feed. The website keeps the article, '
+          'so its search traffic is not lost.',
           style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.5),
         ),
         actions: [
@@ -218,14 +218,14 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
               child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(dialog, true),
-              child: const Text('Delete',
+              child: const Text('Remove',
                   style: TextStyle(color: AppColors.bear))),
         ],
       ),
     );
     if (confirmed != true) return;
     final ok = await SupabaseService().deleteBlogPost('${post['id']}');
-    _tell(ok ? 'Post deleted.' : 'That could not be deleted.');
+    _tell(ok ? 'Removed from the app. Still live on the website.' : 'That could not be removed.');
     if (ok) await _load();
   }
 

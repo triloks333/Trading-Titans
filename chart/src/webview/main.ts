@@ -8,6 +8,7 @@ import { sanitise, type TemplateEntry } from '../core/templates'
 import { cacheKeyFor } from '../core/symbols'
 import { fetchHistory } from '../data/history'
 import { fetchLiveQuote } from '../data/quote'
+import { streamLive, type LiveStream } from '../data/stream'
 import { mountControls, setActiveEntries } from './controls'
 import { compactValue, readLegend } from '../core/chart'
 import { fxFactor, scalePrices } from '../core/aggregate'
@@ -89,6 +90,28 @@ let loadToken = 0
 let display: Currency = 'INR'
 /** Rupees per dollar, from the host. 0 means unknown, so do not convert. */
 let usdInr = 0
+/** The fast feed for the open symbol. See data/stream.ts. */
+let stream: LiveStream | null = null
+
+/**
+ * True while the fast feed is answering. The host's own ticks come from the
+ * once-a-minute cache, so letting them in alongside would drag the candle back
+ * to a minute-old price between live trades. They resume if the feed goes quiet.
+ */
+function streamIsLive(): boolean {
+  return stream !== null && Date.now() - stream.lastSeen() < 15_000
+}
+
+let legendQueued = false
+/** A trade stream can print many times a frame; the legend needs once per frame. */
+function queueLegend(): void {
+  if (legendQueued) return
+  legendQueued = true
+  requestAnimationFrame(() => {
+    legendQueued = false
+    renderLegend(lastHover)
+  })
+}
 
 /**
  * The currency this instrument's own prices arrive in.
@@ -273,6 +296,8 @@ function paintIndicators(): void {
 async function load(): Promise<void> {
   if (!symbol) return
   const token = ++loadToken
+  stream?.stop()
+  stream = null
   const period = periodFor(market, periodId)
   const c = ensureChart()
   c.setCurrency(shownCurrency())
@@ -300,6 +325,18 @@ async function load(): Promise<void> {
     const k = factor()
     c.setCandles(scalePrices(candles, k))
     if (quote) c.pushTick({ time: quote.time, price: quote.price * k })
+    stream = streamLive(
+      symbol,
+      market,
+      (tick) => {
+        if (token !== loadToken) return
+        // factor() read per tick, not captured: a currency change mid-stream
+        // reloads, but the rate can arrive a moment after this starts.
+        c.pushTick({ time: tick.time, price: tick.price * factor() })
+        queueLegend()
+      },
+      quote?.price,
+    )
     paintIndicators()
     // After the series, so the price scale exists to place anchors against.
     restoreDrawings()
@@ -407,7 +444,7 @@ window.ttChart = {
   },
 
   refreshQuote() {
-    if (!symbol) return
+    if (!symbol || streamIsLive()) return
     void fetchLiveQuote(symbol, market)
       .then((q) => {
         if (!q || !chart) return
@@ -423,7 +460,7 @@ window.ttChart = {
   },
 
   pushTick(price: number, time?: number) {
-    if (!chart || price <= 0) return
+    if (!chart || price <= 0 || streamIsLive()) return
     const t = time ?? Math.floor(Date.now() / 1000)
     chart.pushTick({ time: t, price: price * factor() })
     renderLegend(lastHover)

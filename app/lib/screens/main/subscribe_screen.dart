@@ -748,6 +748,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (product.onSale) _wasPrice(product, billing),
                   Text(
                     product.priceLabel(billing),
                     style: GoogleFonts.inter(
@@ -982,7 +983,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     border: Border.all(color: const Color(0xFFBAE6FD)),
                   ),
                   child: Text(
-                    '⚡ MINI BOOST · ₹29 ONLY',
+                    '⚡ MINI BOOST · ${product.priceLabel(billing)} ONLY',
                     style: GoogleFonts.inter(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
@@ -1060,6 +1061,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (product.onSale) _wasPrice(product, billing),
                   Text(
                     product.priceLabel(billing),
                     style: GoogleFonts.inter(
@@ -1621,4 +1623,36 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       ),
     );
   }
+}
+
+/// The pre-sale price, struck through, with the discount beside it.
+Widget _wasPrice(PlanOption product, Currency billing) {
+  final now = product.chargedMinor(billing);
+  final was = product.chargedIn(billing) == Currency.usd ? product.compareAtUsdCents : product.compareAtPaise;
+  final off = was == null || was <= 0 ? 0 : (100 - now * 100 / was).floor();
+  return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFE4B5),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            '$off% OFF',
+            style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF9A3412)),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          product.wasPriceLabel(billing) ?? '',
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: AppColors.ink4,
+            decoration: TextDecoration.lineThrough,
+          ),
+        ),
+      ],
+    );
 }
