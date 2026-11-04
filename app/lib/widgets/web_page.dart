@@ -82,7 +82,7 @@ class _BrandPanel extends StatelessWidget {
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 38,
                 height: 1.15,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w700,
                 color: AppColors.pureWhite,
               ),
             ),

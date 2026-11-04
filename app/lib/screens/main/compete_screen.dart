@@ -148,7 +148,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
           Text('Weekly League',
               style: GoogleFonts.ibmPlexSans(
                   fontSize: 28,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                   letterSpacing: -0.5)),
           const SizedBox(height: 2),
@@ -309,7 +309,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
         child: Text(initial,
             style: GoogleFonts.ibmPlexSans(
                 fontSize: size * 0.42,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: accent)),
       ),
     );

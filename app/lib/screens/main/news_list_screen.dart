@@ -65,7 +65,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
               children: [
                 Text('Filter news',
                     style: GoogleFonts.ibmPlexSans(
-                        fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: AppSpacing.md),
                 Text('Dates',
                     style: GoogleFonts.ibmPlexSans(
@@ -152,7 +152,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
         backgroundColor: AppColors.cream,
         elevation: 0,
         title: Text('Market Intel & News',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
         actions: [
           IconButton(
             tooltip: 'Filter',

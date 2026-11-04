@@ -174,7 +174,7 @@ class AuthDisclaimer extends StatelessWidget {
                 'VIRTUAL TRADING ONLY',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: 0.6,
                   color: AppColors.bear,
                 ),

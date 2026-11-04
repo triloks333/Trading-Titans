@@ -74,7 +74,7 @@ class ChatRouteMeta {
       subtitle: 'Live holdings, F&O positions & day P&L',
       icon: Icons.pie_chart_outline_rounded,
       buttonLabel: 'View Portfolio',
-      accentColor: const Color(0xFF2563EB),
+      accentColor: AppColors.imperialGold,
       onOpen: (context) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const PortfolioScreen()),
       ),
@@ -118,7 +118,7 @@ class ChatRouteMeta {
       subtitle: 'Simulate trades before market execution',
       icon: Icons.lightbulb_outline_rounded,
       buttonLabel: 'Open What-If',
-      accentColor: const Color(0xFFD97706),
+      accentColor: AppColors.titanGold,
       onOpen: (context) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const WhatIfScreen()),
       ),
@@ -140,7 +140,7 @@ class ChatRouteMeta {
       subtitle: 'Win rate, Sharpe ratio & trade stats',
       icon: Icons.bar_chart_rounded,
       buttonLabel: 'View Analytics',
-      accentColor: const Color(0xFF4F46E5),
+      accentColor: AppColors.violet,
       onOpen: (context) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
       ),

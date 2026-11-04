@@ -170,7 +170,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           'Delete Account?',
-          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, color: AppColors.bear),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.bear),
         ),
         content: Text(
           'Are you sure you want to permanently delete your Trading Titans account? '

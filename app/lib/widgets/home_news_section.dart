@@ -20,13 +20,13 @@ const Map<String, String> newsMarketLabels = {
   'italy_stock': 'Italy Stocks',
 };
 
-const Map<String, Color> newsMarketColors = {
-  'all': Color(0xFF3B82F6),
-  'stock': Color(0xFF10B981),
-  'us_stock': Color(0xFF6366F1),
+Map<String, Color> newsMarketColors = {
+  'all': AppColors.imperialGold,
+  'stock': AppColors.bull,
+  'us_stock': AppColors.violet,
   'crypto': AppColors.crown,
-  'pakistan_stock': Color(0xFF059669),
-  'italy_stock': Color(0xFF0284C7),
+  'pakistan_stock': AppColors.bull,
+  'italy_stock': AppColors.imperialGold,
 };
 
 /// Splits the `[market:key]` tag off an excerpt. Untagged posts are global.
@@ -190,7 +190,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                     letterSpacing: -0.2,
                   ),

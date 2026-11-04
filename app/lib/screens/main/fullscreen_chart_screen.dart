@@ -109,7 +109,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                   height: 38,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
+                    color: AppColors.cream,
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Row(
@@ -137,7 +137,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                 height: 34,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  border: Border.all(color: AppColors.birch),
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
@@ -168,9 +168,9 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE5E7EB), width: 0.5)),
+          border: Border(top: BorderSide(color: AppColors.birch, width: 0.5)),
         ),
         child: SafeArea(
           child: Row(
@@ -207,11 +207,11 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB), // Premium Groww/Zerodha Blue
+                    color: AppColors.imperialGold, // Premium Groww/Zerodha Blue
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                        color: AppColors.imperialGold.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -237,11 +237,11 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDC2626), // Premium Groww/Zerodha Red
+                    color: AppColors.bear, // Premium Groww/Zerodha Red
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFDC2626).withValues(alpha: 0.3),
+                        color: AppColors.bear.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),

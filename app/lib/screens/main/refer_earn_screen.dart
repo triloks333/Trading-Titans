@@ -142,7 +142,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                           style: GoogleFonts.ibmPlexSans(
                             color: AppColors.pureWhite,
                             fontSize: 24,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.5,
                           ),
                         ),

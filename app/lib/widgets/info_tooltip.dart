@@ -108,7 +108,7 @@ void showTermSheet(BuildContext context, String term) {
                     entry.term,
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 20,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),

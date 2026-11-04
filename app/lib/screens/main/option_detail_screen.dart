@@ -177,10 +177,10 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           } else {
             _expiryCountdownText = 'Expires Today (${diff.inMinutes}m)';
           }
-          _expiryCountdownColor = const Color(0xFFE65100); // deep orange
+          _expiryCountdownColor = AppColors.titanGold; // deep orange
         } else if (diff.inHours < 24) {
           _expiryCountdownText = 'Expires in ${diff.inHours}h ${diff.inMinutes % 60}m';
-          _expiryCountdownColor = const Color(0xFFE65100);
+          _expiryCountdownColor = AppColors.titanGold;
         } else {
           _expiryCountdownText = 'Expires in ${diff.inDays}d ${diff.inHours % 24}h';
           _expiryCountdownColor = AppColors.ink4;
@@ -220,7 +220,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       case 'ITM':
         return AppColors.bullLight;
       case 'ATM':
-        return const Color(0xFFFFF8E1); // light gold
+        return AppColors.titanGoldSoft; // light gold
       case 'OTM':
         return AppColors.bearLight;
       default:
@@ -604,7 +604,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       decoration: BoxDecoration(
         // The chart page's own dark surface, so the frame and the chart do not
         // meet in two different shades at the rounded corners.
-        color: const Color(0xFF162544),
+        color: AppColors.pureWhite,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
@@ -961,7 +961,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                     'Option Greeks & Pricing Model',
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -1076,7 +1076,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   symbol,
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: color,
                   ),
                 ),
@@ -1226,7 +1226,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE65100), // deep orange for urgency
+                backgroundColor: AppColors.titanGold, // deep orange for urgency
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(

@@ -29,10 +29,14 @@ class DiwaliSaleBanner extends StatefulWidget {
 
 class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _clock = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 3600),
-  )..repeat();
+  // Created on first paint of the banner, not eagerly: a hidden banner (no sale
+  // running) must not tick. dispose() only touches it if it exists, because
+  // creating a ticker during dispose looks up a deactivated ancestor and throws.
+  AnimationController? _clockOrNull;
+  AnimationController get _clock => _clockOrNull ??= AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 3600),
+      )..repeat();
 
   static const _gold = Color(0xFFFFD86B);
   static const _night = Color(0xFF1B0B2E);
@@ -40,7 +44,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
 
   @override
   void dispose() {
-    _clock.dispose();
+    _clockOrNull?.dispose();
     super.dispose();
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -166,7 +167,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
                             subtitle,
                             style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
-                              color: const Color(0xFFCBD5E1),
+                              color: AppColors.ink5,
                             ),
                           ),
                       ],

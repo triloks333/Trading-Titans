@@ -406,7 +406,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   'TAG A MEMBER · ADMIN ONLY',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.imperialGold,
                     letterSpacing: 0.4,
                   ),
@@ -452,7 +452,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           '@everyone',
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.imperialGold,
                           ),
                         ),
@@ -468,7 +468,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             'BYPASSES MUTE',
                             style: GoogleFonts.ibmPlexSans(
                               fontSize: 9,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               color: Colors.white,
                               letterSpacing: 0.3,
                             ),
@@ -492,7 +492,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       radius: 14,
                       backgroundColor: u.isAdmin
                           ? AppColors.imperialGold.withValues(alpha: 0.2)
-                          : const Color(0xFF6366F1).withValues(alpha: 0.15),
+                          : AppColors.violet.withValues(alpha: 0.15),
                       child: Text(
                         u.name.isNotEmpty ? u.name[0].toUpperCase() : 'T',
                         style: GoogleFonts.ibmPlexSans(
@@ -570,7 +570,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   'ATTACH APP PAGE · ADMIN ONLY',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.imperialGold,
                     letterSpacing: 0.4,
                   ),
@@ -870,7 +870,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'ADMIN',
         style: GoogleFonts.ibmPlexSans(
           fontSize: 8.5,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
           color: Colors.white,
         ),
@@ -1221,7 +1221,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   '@everyone',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 12,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.imperialGold,
                   ),
                 ),
@@ -1422,7 +1422,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         '@',
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.imperialGold,
                         ),
                       ),

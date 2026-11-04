@@ -17,7 +17,7 @@ class MaintenanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
+    final inkColor = isDark ? AppColors.cream : Palette.dark.card;
     const goldColor = Color(0xFFF1C40F);
 
     // Self-safe: tolerate an empty/whitespace message by showing the default
@@ -58,7 +58,7 @@ class MaintenanceScreen extends StatelessWidget {
                 displayMessage,
                 style: TextStyle(
                   fontSize: 16,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark ? AppColors.ink4 : AppColors.ink4,
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
@@ -145,7 +145,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
+    final inkColor = isDark ? AppColors.cream : Palette.dark.card;
     final releaseNotes = widget.releaseNotes;
 
     return Scaffold(
@@ -184,7 +184,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 15,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                    color: isDark ? AppColors.ink4 : AppColors.ink4,
                     height: 1.4,
                   ),
                 ),
@@ -206,10 +206,10 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                      color: isDark ? Palette.dark.card2 : AppColors.warmWhite,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        color: isDark ? const Color(0xFF334155) : AppColors.birch,
                       ),
                     ),
                     child: Column(
@@ -235,7 +235,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                                         style: TextStyle(
                                           fontSize: 13,
                                           height: 1.4,
-                                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
+                                          color: isDark ? AppColors.ink5 : const Color(0xFF334155),
                                         ),
                                       ),
                                     ),
@@ -327,7 +327,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
+    final inkColor = isDark ? AppColors.cream : Palette.dark.card;
     final releaseNotes = widget.releaseNotes;
 
     return PopScope(
@@ -336,7 +336,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        backgroundColor: isDark ? Palette.dark.card : Colors.white,
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -368,7 +368,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
                 'A new version of Trading Titans is required to continue. Please update now to access the latest market features and improvements.',
                 style: TextStyle(
                   fontSize: 14,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  color: isDark ? AppColors.ink4 : AppColors.ink4,
                   height: 1.4,
                 ),
               ),
@@ -409,7 +409,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
                                         style: TextStyle(
                                           fontSize: 12,
                                           height: 1.3,
-                                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                          color: isDark ? AppColors.ink5 : const Color(0xFF475569),
                                         ),
                                       ),
                                     ),
@@ -515,13 +515,13 @@ class _RateAppDialogState extends State<RateAppDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inkColor = isDark ? const Color(0xFFF9F9FB) : const Color(0xFF0F172A);
+    final inkColor = isDark ? AppColors.cream : Palette.dark.card;
     final bodyColor =
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        isDark ? AppColors.ink4 : AppColors.ink4;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+      backgroundColor: isDark ? Palette.dark.card : Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(

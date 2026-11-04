@@ -563,7 +563,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 'ORDER SUMMARY',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: color,
                   letterSpacing: 0.7,
                 ),
@@ -572,15 +572,15 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3E0),
+                  color: AppColors.titanGoldSoft,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   'VIRTUAL MONEY',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                    color: const Color(0xFFE65100),
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.titanGold,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -650,7 +650,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                     : ((!widget.isBuy && !isDeriv && _marginRequired <= 0) ? 'You Receive (approx.)' : 'Total Payable'),
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.ink,
                 ),
               ),
@@ -1342,7 +1342,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     'CONTRACT EXPIRED',
                                     style: GoogleFonts.ibmPlexSans(
                                       color: AppColors.bear,
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w700,
                                       fontSize: 13,
                                       letterSpacing: 0.8,
                                     ),

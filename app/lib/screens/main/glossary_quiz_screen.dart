@@ -128,7 +128,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Glossary quiz',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w900, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
         backgroundColor: AppColors.pureWhite,
         foregroundColor: AppColors.ink,
         elevation: 0,
@@ -170,7 +170,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
         const SizedBox(height: AppSpacing.xs),
         Text('What does "${q.term}" mean?',
             style: GoogleFonts.ibmPlexSans(
-                fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: AppSpacing.lg),
         for (var i = 0; i < q.options.length; i++) _buildOption(q, i),
         const SizedBox(height: AppSpacing.md),
@@ -263,7 +263,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
             const SizedBox(height: AppSpacing.lg),
             Text('$_correct / ${_questions.length} correct',
                 style: GoogleFonts.ibmPlexSans(
-                    fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                    fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
             const SizedBox(height: AppSpacing.xs),
             Text(
               passed

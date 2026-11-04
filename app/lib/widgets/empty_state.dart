@@ -55,7 +55,7 @@ class EmptyState extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 17,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),

@@ -57,7 +57,7 @@ class AnalyticsScreen extends StatelessWidget {
                       'TOTAL REALIZED P&L',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink4,
                         letterSpacing: 1.0,
                       ),
@@ -69,7 +69,7 @@ class AnalyticsScreen extends StatelessWidget {
                           isProfit ? '+${Money.wallet(pnl, decimals: 2)}' : '-${Money.wallet(pnl.abs(), decimals: 2)}',
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 32,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w700,
                             color: isProfit ? AppColors.bull : AppColors.bear,
                           ),
                         ),
@@ -258,7 +258,7 @@ class AnalyticsScreen extends StatelessWidget {
             label.toUpperCase(),
             style: GoogleFonts.ibmPlexSans(
               fontSize: 10,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: isWin ? AppColors.bull : AppColors.bear,
               letterSpacing: 0.5,
             ),
@@ -275,7 +275,7 @@ class AnalyticsScreen extends StatelessWidget {
                 : '--',
             style: GoogleFonts.ibmPlexSans(
               fontSize: 14,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: isWin ? AppColors.bull : AppColors.bear,
             ),
           ),

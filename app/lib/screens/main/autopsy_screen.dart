@@ -266,7 +266,7 @@ class AutopsyScreen extends StatelessWidget {
                                           'DEMO ONLY',
                                           style: GoogleFonts.ibmPlexSans(
                                             fontSize: 8,
-                                            fontWeight: FontWeight.w800,
+                                            fontWeight: FontWeight.w700,
                                             color: AppColors.ink4,
                                           ),
                                         ),
@@ -299,7 +299,7 @@ class AutopsyScreen extends StatelessWidget {
                                       : '-${Money.wallet(netPnl.abs(), decimals: 2)}', 
                                     style: GoogleFonts.ibmPlexSans(
                                       color: isNetProfit ? AppColors.bull : AppColors.bear, 
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w700,
                                       fontSize: 15,
                                     )
                                   ),
@@ -371,7 +371,7 @@ class AutopsyScreen extends StatelessWidget {
                             'LESSON & ADVICE',
                             style: GoogleFonts.ibmPlexSans(
                               fontSize: 9,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: isProfit ? AppColors.bull : AppColors.bear,
                               letterSpacing: 0.8,
                             ),

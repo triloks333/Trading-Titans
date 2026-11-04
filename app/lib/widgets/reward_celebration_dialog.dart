@@ -128,7 +128,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                   'Congratulations! 🎉',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),
@@ -157,7 +157,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                         '+ ${Money.wallet(widget.amount, decimals: 0)}',
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 26,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.bull,
                         ),
                       ),

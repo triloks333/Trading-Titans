@@ -410,15 +410,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [Color(0xFFE5A93C), Color(0xFFC48818)],
+                                        gradient: LinearGradient(
+                                          colors: [AppColors.titanGold, AppColors.titanGold],
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
                                         ),
                                         borderRadius: BorderRadius.circular(16),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: const Color(0xFFE5A93C).withValues(alpha: 0.35),
+                                            color: AppColors.titanGold.withValues(alpha: 0.35),
                                             blurRadius: 6,
                                             offset: const Offset(0, 2),
                                           ),
@@ -433,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             'TOP UP',
                                             style: GoogleFonts.ibmPlexSans(
                                               fontSize: 10.5,
-                                              fontWeight: FontWeight.w800,
+                                              fontWeight: FontWeight.w700,
                                               color: Colors.white,
                                               letterSpacing: 0.5,
                                             ),
@@ -646,7 +646,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     '+ ADD',
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 8,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                       letterSpacing: 0.5,
                     ),

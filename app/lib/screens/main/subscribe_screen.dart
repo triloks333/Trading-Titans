@@ -54,7 +54,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTabIndex.clamp(0, 1);
-    _plans = SupabaseService().getPlanCatalogue();
+    _plans = SupabaseService().getPlanCatalogue()..ignore();
     _initRazorpay();
     _loadSavedPhone();
   }
@@ -131,7 +131,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             return ErrorState(
               message: "We couldn't load the plans. Check your connection and try again.",
               onRetry: () => setState(() {
-                _plans = SupabaseService().getPlanCatalogue();
+                _plans = SupabaseService().getPlanCatalogue()..ignore();
               }),
             );
           }
@@ -212,7 +212,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   AppBar _bar() => AppBar(
         title: Text(
           'Plans & Top-Ups',
-          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.ink),
         ),
         backgroundColor: AppColors.parchment,
         elevation: 0,
@@ -382,7 +382,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 title,
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                   color: isSelected ? AppColors.ink : AppColors.ink3,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -399,7 +399,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 badge,
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 8.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: isSelected ? activeColor : AppColors.ink4,
                   letterSpacing: 0.4,
                 ),
@@ -478,7 +478,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     'Monthly Pass',
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 12.5,
-                      fontWeight: !isAnnual ? FontWeight.w800 : FontWeight.w600,
+                      fontWeight: !isAnnual ? FontWeight.w700 : FontWeight.w600,
                       color: !isAnnual ? AppColors.violet : AppColors.ink3,
                     ),
                   ),
@@ -509,7 +509,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       'Annual Pass',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 12.5,
-                        fontWeight: isAnnual ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: isAnnual ? FontWeight.w700 : FontWeight.w600,
                         color: isAnnual ? AppColors.violet : AppColors.ink3,
                       ),
                     ),
@@ -524,7 +524,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                         'SAVE 37%',
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 8.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: AppColors.bull,
                         ),
                       ),
@@ -560,7 +560,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   '★ FLAGSHIP PROGRAM · ₹1L+/MO VALUE',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.crown,
                     letterSpacing: 0.6,
                   ),
@@ -575,7 +575,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             'Live Founder Mentorship & Pro Setups',
             style: GoogleFonts.ibmPlexSans(
               fontSize: 18,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               color: Colors.white,
             ),
           ),
@@ -683,7 +683,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 '★ MOST POPULAR · INCLUDES LIVE FOUNDER SESSIONS',
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.violet,
                   letterSpacing: 0.5,
                 ),
@@ -703,7 +703,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                           product.title,
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.ink,
                           ),
                         ),
@@ -740,7 +740,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     product.priceLabel(billing),
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -883,7 +883,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   'INSTANT CAPITAL BOOST',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.goldDeep,
                     letterSpacing: 0.5,
                   ),
@@ -955,7 +955,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     '⚡ BEST VALUE · 10X CAPITAL',
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.goldDeep,
                       letterSpacing: 0.5,
                     ),
@@ -1053,7 +1053,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     product.priceLabel(billing),
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -1368,7 +1368,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             Expanded(
               child: Text(
                 granted ? 'Payment Confirmed!' : 'Payment Received!',
-                style: GoogleFonts.ibmPlexSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
             ),
           ],
@@ -1425,7 +1425,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             Expanded(
               child: Text(
                 'Payment Incomplete',
-                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
               ),
             ),
           ],
@@ -1513,7 +1513,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                               'Mobile Number for Instant UPI & Receipt',
                               style: GoogleFonts.ibmPlexSans(
                                 fontSize: 15,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.ink,
                               ),
                             ),
@@ -1578,7 +1578,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       ),
                       child: Text(
                         'Continue to Checkout · ${product.title}',
-                        style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),

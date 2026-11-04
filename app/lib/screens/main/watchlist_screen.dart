@@ -111,7 +111,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(list == null ? 'New watchlist' : 'Edit watchlist',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: name,
@@ -218,7 +218,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800)),
+              title: Text(symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700)),
             ),
             ListTile(
               leading: const Icon(Icons.segment_rounded),

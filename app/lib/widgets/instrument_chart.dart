@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../core/theme.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import 'native_candle_chart.dart';
@@ -81,7 +82,7 @@ class _InstrumentChartState extends State<InstrumentChart> {
 
   /// Matches `--surface` in the chart page, so the gap before the first paint is
   /// not a different colour from the chart that replaces it.
-  Color get _surface => _isDark ? const Color(0xFF162544) : Colors.white;
+  Color get _surface => _isDark ? AppColors.pureWhite : Colors.white;
 
   @override
   void initState() {
@@ -276,8 +277,8 @@ class _InstrumentChartState extends State<InstrumentChart> {
         if (_phase == _Phase.loading)
           ColoredBox(
             color: _surface,
-            child: const Center(
-              child: CircularProgressIndicator(color: Color(0xFF1A73E8), strokeWidth: 2),
+            child: Center(
+              child: CircularProgressIndicator(color: AppColors.imperialGold, strokeWidth: 2),
             ),
           ),
         if (_phase == _Phase.failed || _phase == _Phase.empty)

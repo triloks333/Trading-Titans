@@ -262,7 +262,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       decoration: BoxDecoration(
         // The chart page's own dark surface, so the frame and the chart do not
         // meet in two different shades at the rounded corners.
-        color: const Color(0xFF162544),
+        color: AppColors.pureWhite,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
@@ -635,7 +635,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
                 const SizedBox(width: 8),
                 Text(
                   'Price Alert',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
               ],
             ),

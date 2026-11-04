@@ -53,7 +53,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
         title: Text(
           'Trading Glossary',
           style: GoogleFonts.ibmPlexSans(
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
         ),
@@ -212,8 +212,8 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
   Widget _buildQuizCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+        gradient: LinearGradient(
+          colors: [Palette.dark.card, Palette.dark.card2],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -257,7 +257,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                       'Test Your Knowledge',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),
@@ -265,18 +265,18 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                        color: AppColors.bull.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                         border: Border.all(
-                          color: const Color(0xFF22C55E).withValues(alpha: 0.6),
+                          color: AppColors.bull.withValues(alpha: 0.6),
                         ),
                       ),
                       child: Text(
                         '+₹750 CASH',
                         style: GoogleFonts.ibmPlexSans(
                           fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF22C55E),
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.bull,
                         ),
                       ),
                     ),
@@ -287,7 +287,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                   'Score 4/5 on the 5-question quiz to earn a demo cash reward!',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
-                    color: const Color(0xFF94A3B8),
+                    color: AppColors.ink4,
                     height: 1.3,
                   ),
                 ),
@@ -314,7 +314,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
               'Quiz',
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 12,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -331,15 +331,15 @@ class _GlossaryCard extends StatelessWidget {
   Color _categoryColor(String category) {
     switch (category) {
       case 'Greeks':
-        return const Color(0xFF8B5CF6);
+        return AppColors.violet;
       case 'Options':
-        return const Color(0xFF0284C7);
+        return AppColors.imperialGold;
       case 'Futures & Margin':
-        return const Color(0xFFD97706);
+        return AppColors.titanGold;
       case 'Orders & Risk':
-        return const Color(0xFFE11D48);
+        return AppColors.bear;
       default:
-        return const Color(0xFF059669);
+        return AppColors.bull;
     }
   }
 
@@ -373,7 +373,7 @@ class _GlossaryCard extends StatelessWidget {
                   term.term,
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),

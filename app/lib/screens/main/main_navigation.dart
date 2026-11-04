@@ -371,7 +371,7 @@ class _DesktopSidebar extends StatelessWidget {
                     'Trading Titans',
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                     ),
                   ),
@@ -414,7 +414,7 @@ class _DesktopSidebar extends StatelessWidget {
                   Money.wallet(user?.walletBalance ?? 0),
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 17,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),

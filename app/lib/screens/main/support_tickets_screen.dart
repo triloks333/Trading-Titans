@@ -176,7 +176,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(count, style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+            Text(count, style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w700, color: color)),
             Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink4)),
           ],
         ),
@@ -250,7 +250,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                       isResolved ? 'RESOLVED' : 'OPEN',
                       style: GoogleFonts.ibmPlexSans(
                         fontSize: 8,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: isResolved ? AppColors.bull : AppColors.bear,
                       ),
                     ),

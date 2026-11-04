@@ -629,7 +629,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                   'CLOSED',
                                   style: GoogleFonts.ibmPlexSans(
                                     fontSize: 8,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                     color: AppColors.ink3,
                                   ),
                                 ),
@@ -647,7 +647,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                   'SHORT',
                                   style: GoogleFonts.ibmPlexSans(
                                     fontSize: 8,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w700,
                                     color: AppColors.bear,
                                   ),
                                 ),

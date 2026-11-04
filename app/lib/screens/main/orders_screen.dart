@@ -531,7 +531,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           order.side.toUpperCase(),
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: isBuy ? AppColors.bull : AppColors.bear,
                           ),
                         ),
@@ -628,7 +628,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               'VIRTUAL CASH',
                               style: GoogleFonts.ibmPlexSans(
                                 fontSize: 9,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                                 color: AppColors.titanGold,
                                 letterSpacing: 0.5,
                               ),
@@ -1085,7 +1085,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           label,
           style: GoogleFonts.ibmPlexSans(
             fontSize: isTotal ? 13 : 12,
-            fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
+            fontWeight: isTotal ? FontWeight.w700 : FontWeight.w500,
             color: isTotal ? AppColors.ink : AppColors.ink3,
           ),
         ),
@@ -1093,7 +1093,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           value,
           style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: isTotal ? 13 : 12,
-            fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
+            fontWeight: isTotal ? FontWeight.w700 : FontWeight.w600,
             color: isTotal ? AppColors.ink : AppColors.ink2,
           ),
         ),

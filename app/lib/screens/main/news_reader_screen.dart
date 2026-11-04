@@ -35,13 +35,13 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
     'italy_stock': 'Italy Stocks',
   };
 
-  static const Map<String, Color> _marketColors = {
-    'all': Color(0xFF3B82F6),
-    'stock': Color(0xFF10B981),
-    'us_stock': Color(0xFF6366F1),
+  static Map<String, Color> get _marketColors => {
+    'all': AppColors.imperialGold,
+    'stock': AppColors.bull,
+    'us_stock': AppColors.violet,
     'crypto': AppColors.crown,
-    'pakistan_stock': Color(0xFF059669),
-    'italy_stock': Color(0xFF0284C7),
+    'pakistan_stock': AppColors.bull,
+    'italy_stock': AppColors.imperialGold,
   };
 
   ({String marketKey, String cleanExcerpt}) _parseExcerpt(String? raw) {
@@ -248,7 +248,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                     title,
                     style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       color: AppColors.ink,
                       height: 1.3,
                     ),
@@ -325,7 +325,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
           trimmed.substring(2),
           style: GoogleFonts.ibmPlexSans(
             fontSize: 20,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
         ),
@@ -473,7 +473,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                   textAlign: TextAlign.center,
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 18,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: AppColors.ink,
                   ),
                 ),

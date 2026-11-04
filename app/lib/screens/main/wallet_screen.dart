@@ -215,7 +215,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                   'Top Up Demo Capital',
                                   style: GoogleFonts.ibmPlexSans(
                                     fontSize: 14.5,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w700,
                                     color: Colors.white,
                                     letterSpacing: 0.3,
                                   ),
@@ -324,7 +324,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                             '₹1L+/MO',
                                             style: GoogleFonts.ibmPlexSans(
                                               fontSize: 8.5,
-                                              fontWeight: FontWeight.w800,
+                                              fontWeight: FontWeight.w700,
                                               color: AppColors.crown,
                                             ),
                                           ),
@@ -387,7 +387,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 child: Icon(Icons.receipt_long_rounded, size: 34, color: AppColors.imperialGold),
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              Text('No wallet activity yet', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                              Text('No wallet activity yet', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
                               const SizedBox(height: 4),
                               Text(
                                 'Rewards, referral bonuses and the cash impact of your trades will appear here.',

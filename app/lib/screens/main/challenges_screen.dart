@@ -66,7 +66,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Challenges',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w900, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
         backgroundColor: AppColors.pureWhite,
         foregroundColor: AppColors.ink,
         elevation: 0,
@@ -239,7 +239,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               children: [
                 Text(c.title,
                     style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(c.description,
                     style: GoogleFonts.ibmPlexSans(
