@@ -3,10 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
 
-import '../../widgets/stock_action_sheet.dart';
-import '../../widgets/skeleton.dart';
-import '../../widgets/empty_state.dart';
+import '../../core/money.dart';
+import '../../models/quote.dart';
+import '../../services/market_service.dart';
 import '../../services/nav_tab_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/skeleton.dart';
+import '../../widgets/stock_action_sheet.dart';
 
 /// Several named, coloured watchlists, each grouped into sections.
 ///
@@ -34,6 +39,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   List<Map<String, dynamic>> _items = [];
   String? _selected;
   bool _loading = true;
+  Map<String, Quote> _quotes = const {};
+  final Map<String, List<double>> _spark = {};
 
   @override
   void initState() {
@@ -60,6 +67,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
         }
         _loading = false;
       });
+      _refreshPrices();
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -333,84 +341,157 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
         ),
       );
 
+  // ── Prices ───────────────────────────────────────────────────────────────
+
+  /// Live quotes for every row, keyed `symbol\x1Fmarket` like [MarketService.quotes].
+  Future<void> _refreshPrices() async {
+    final pairs = [
+      for (final i in _items) (symbol: i['symbol'] as String? ?? '', market: i['market'] as String? ?? 'stock'),
+    ].where((p) => p.symbol.isNotEmpty).toList();
+    if (pairs.isEmpty) return;
+    try {
+      final fetched = await MarketService.quotes(pairs);
+      if (mounted) setState(() => _quotes = {..._quotes, ...fetched});
+    } catch (_) {}
+    // 5-day closes, fetched once per symbol for the sparkline column.
+    for (final p in pairs) {
+      final key = '${p.symbol}\x1F${p.market}';
+      if (_spark.containsKey(key)) continue;
+      _spark[key] = const [];
+      SupabaseService().getHistory(p.symbol, p.market, '5d').then((pts) {
+        if (mounted) setState(() => _spark[key] = [for (final x in pts) if (x['v'] is num) (x['v'] as num).toDouble()]);
+      }).catchError((_) {});
+    }
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final current = _lists.where((l) => l['id'] == _selected).firstOrNull;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Watchlists', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.parchment,
-        foregroundColor: AppColors.ink,
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: 'New watchlist',
-            icon: const Icon(Icons.add_rounded),
-            onPressed: _loading ? null : () => _editList(),
-          ),
-        ],
-      ),
       body: SafeArea(
-        child: _loading
-            ? const ListSkeleton()
-            : Column(
-                children: [
-                  if (_lists.isNotEmpty) _tabs(),
-                  Expanded(child: _body()),
-                ],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Watchlists', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+              AuthIconButton(
+                icon: Icons.edit_outlined,
+                label: 'Edit list',
+                onTap: _loading || current == null ? () {} : () => _editList(current),
               ),
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          if (_loading) const Expanded(child: ListSkeleton()) else ...[
+            _tabs(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+              child: Row(children: [
+                Text('INSTRUMENT', style: AppText.sectionLabel),
+                Expanded(child: Text('5D', textAlign: TextAlign.center, style: AppText.sectionLabel)),
+                Text('LTP · CHG', style: AppText.sectionLabel),
+              ]),
+            ),
+            Expanded(child: _body()),
+          ],
+        ]),
       ),
     );
   }
 
-  Widget _tabs() {
-    return SizedBox(
-      height: 60,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
-        children: [
-          for (final l in _lists)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
+  Widget _chip({required Widget label, required bool on, required VoidCallback onTap, VoidCallback? onLongPress}) =>
+      Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Material(
+          color: on ? AppColors.goldPale : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            side: BorderSide(color: on ? AppColors.goldMid : AppColors.birch),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(height: 32, padding: const EdgeInsets.symmetric(horizontal: 12), alignment: Alignment.center, child: label),
+          ),
+        ),
+      );
+
+  Widget _tabs() => Container(
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+          child: Row(children: [
+            for (final l in _lists)
+              _chip(
+                on: l['id'] == _selected,
+                onTap: () => setState(() => _selected = l['id'] as String),
                 onLongPress: () => _editList(l),
-                child: ChoiceChip(
-                  // The colour dot is the list's identity; a checkmark would cover it.
-                  showCheckmark: false,
-                  avatar: CircleAvatar(radius: 6, backgroundColor: _hex(l['color'] as String?)),
-                  label: Text('${l['name']} · ${_itemsIn(l['id'] as String).length}'),
-                  selected: l['id'] == _selected,
-                  selectedColor: _hex(l['color'] as String?).withValues(alpha: 0.18),
-                  onSelected: (_) => setState(() => _selected = l['id'] as String),
-                ),
+                label: Row(mainAxisSize: MainAxisSize.min, children: [
+                  // The colour dot keeps each list's identity from the old design.
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: _hex(l['color'] as String?), shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text('${l['name']}',
+                      style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: l['id'] == _selected ? AppColors.goldMid : AppColors.ink3)),
+                  const SizedBox(width: 6),
+                  Text('${_itemsIn(l['id'] as String).length}', style: AppFonts.mono(size: 13, color: AppColors.ink4)),
+                ]),
               ),
+            _chip(
+              on: false,
+              onTap: () => _editList(),
+              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add_rounded, size: 16, color: AppColors.ink3),
+                const SizedBox(width: 4),
+                Text('New list', style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: AppColors.ink3)),
+              ]),
             ),
-          if (_selected != null)
-            IconButton(
-              tooltip: 'Edit this watchlist',
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              onPressed: () => _editList(_lists.firstWhere((l) => l['id'] == _selected)),
-            ),
-        ],
-      ),
-    );
+          ]),
+        ),
+      );
+
+  void _browse() {
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    NavTabService.goToTab(NavTabService.trade);
   }
 
   Widget _body() {
     final items = _itemsIn(_selected);
+    final add = Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(backgroundColor: AppColors.cream),
+        onPressed: _browse,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Add instrument'),
+      ),
+    );
     if (items.isEmpty) {
-      return EmptyState(
-        icon: Icons.star_border_rounded,
-        title: 'No stocks in this list',
-        message: 'Star stocks and crypto to track them here, then move them between lists.',
-        actionLabel: 'Browse stocks',
-        onAction: () {
-          Navigator.of(context).popUntil((r) => r.isFirst);
-          NavTabService.goToTab(NavTabService.trade);
-        },
-      );
+      return ListView(children: [
+        SizedBox(
+          height: 260,
+          child: EmptyState(
+            icon: Icons.star_border_rounded,
+            title: 'No stocks in this list',
+            message: 'Star stocks and crypto to track them here, then move them between lists.',
+          ),
+        ),
+        add,
+      ]);
     }
 
     // Unsectioned first, then sections A–Z.
@@ -422,62 +503,117 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       ..sort((a, b) => a == null ? -1 : b == null ? 1 : a.toLowerCase().compareTo(b.toLowerCase()));
 
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () async {
+        await _load();
+        await _refreshPrices();
+      },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+        physics: const AlwaysScrollableScrollPhysics(),
         children: [
           for (final key in keys) ...[
             if (key != null)
               Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.xs),
+                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
                 child: Text(key.toUpperCase(), style: AppText.sectionLabel),
               ),
-            for (final item in groups[key]!) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _tile(item),
-            ],
+            for (final item in groups[key]!) _tile(item),
           ],
+          add,
         ],
       ),
     );
   }
 
+  /// Exchange tag under the symbol.
+  static String _exchange(String symbol, String market) => switch (market) {
+        'crypto' => 'CRYPTO',
+        'us_stock' => 'US',
+        'pakistan_stock' => 'PSX',
+        'italy_stock' => 'MIL',
+        _ => RegExp(r'FUT|\d+(CE|PE)$|-(CE|PE)$').hasMatch(symbol) ? 'NFO' : 'NSE',
+      };
+
   Widget _tile(Map<String, dynamic> item) {
     final symbol = item['symbol'] as String? ?? '';
     final market = item['market'] as String? ?? 'stock';
     final name = item['name'] as String? ?? symbol;
-    return GestureDetector(
+    final key = '$symbol\x1F$market';
+    final q = _quotes[key];
+    final up = (q?.changePct ?? 0) >= 0;
+    final tone = up ? AppColors.bull : AppColors.bear;
+    final spark = _spark[key] ?? const [];
+    return InkWell(
       onTap: () => StockActionSheet.show(context, symbol: symbol, market: market, name: name, onRefresh: _load),
       onLongPress: () => _itemMenu(item),
       child: Container(
-        padding: const EdgeInsets.only(left: AppSpacing.md),
-        decoration: AppCard.secondary,
-        child: Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
-                    Text(name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 13)),
-                  ],
-                ),
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, 4, 12),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          SizedBox(
+            width: 112,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold),
+              const SizedBox(height: 2),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: AppCard.badge(AppColors.cream),
+                child: Text(_exchange(symbol, market), style: AppText.badge.copyWith(color: AppColors.ink3)),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: Semantics(
+              label: '$symbol five-day trend',
+              child: SizedBox(
+                height: 24,
+                child: spark.length < 2
+                    ? null
+                    : CustomPaint(painter: _Spark(spark, spark.last >= spark.first ? AppColors.bull : AppColors.bear)),
               ),
             ),
-            Text(market.toUpperCase(), style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5)),
-            IconButton(
-              tooltip: 'Move or remove',
-              icon: Icon(Icons.more_vert_rounded, color: AppColors.ink4),
-              onPressed: () => _itemMenu(item),
-            ),
-          ],
-        ),
+          ),
+          SizedBox(
+            width: 104,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(q == null ? '—' : Money.instrument(q.price, market: market),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+              Text(q == null ? ' ' : '${up ? '▲ +' : '▼ −'}${q.changePct.abs().toStringAsFixed(2)}%',
+                  style: AppFonts.mono(size: 12, color: tone)),
+            ]),
+          ),
+          IconButton(
+            tooltip: 'Move or remove $symbol',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.more_vert_rounded, size: 18, color: AppColors.ink4),
+            onPressed: () => _itemMenu(item),
+          ),
+        ]),
       ),
     );
   }
+}
+
+/// 5-day closing prices as a thin line, scaled to its own range.
+class _Spark extends CustomPainter {
+  _Spark(this.values, this.color);
+  final List<double> values;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final lo = values.reduce((a, b) => a < b ? a : b), hi = values.reduce((a, b) => a > b ? a : b);
+    final span = hi == lo ? 1.0 : hi - lo;
+    final path = Path();
+    for (var i = 0; i < values.length; i++) {
+      final p = Offset(size.width * i / (values.length - 1), 2 + (size.height - 4) * (1 - (values[i] - lo) / span));
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(path, Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6);
+  }
+
+  @override
+  bool shouldRepaint(_Spark old) => old.values != values || old.color != color;
 }
