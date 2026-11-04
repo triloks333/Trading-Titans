@@ -123,15 +123,8 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                   // Hero Referral Card
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppColors.goldDeep, AppColors.imperialGold],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(AppRadius.lg),
-                      boxShadow: AppShadows.md,
-                    ),
+                    // Flat action blue: Titan Terminal avoids gradient washes.
+                    decoration: BoxDecoration(color: AppColors.goldDeep, borderRadius: BorderRadius.circular(AppRadius.lg)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -289,9 +282,9 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   AppFormat.formatINR(_claimedBalance),
-                                  style: GoogleFonts.ibmPlexSans(
+                                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                                     fontSize: 20,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w600,
                                     color: AppColors.bull,
                                   ),
                                 ),

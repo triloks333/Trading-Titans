@@ -166,7 +166,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
     final ahead = index;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppCard.primary,
+      decoration: AppCard.primary.copyWith(color: AppColors.titanGoldSoft, border: Border.all(color: AppColors.titanGold)),
       child: Row(
         children: [
           _rankMedal(index, large: true),
@@ -194,11 +194,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 children: [
                   TrendArrow(isPositive: pnl >= 0, size: 18),
                   Text(Money.wallet(pnl.abs()),
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: pnl >= 0 ? AppColors.bull : AppColors.bear,
-                          letterSpacing: -0.3)),
+                      style: AppFonts.mono(size: 18, weight: FontWeight.w600, color: pnl >= 0 ? AppColors.bull : AppColors.bear)),
                 ],
               ),
               Text('realised', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5)),
@@ -258,10 +254,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
             width: 26,
             child: Text('${index + 1}',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.ibmPlexSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink4)),
+                style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink4)),
           ),
           const SizedBox(width: AppSpacing.sm),
           _avatar(row['name'] as String?, AppColors.imperialGold, size: 32),
@@ -295,10 +288,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
               size: large ? 26 : 22, color: accent)
           : Center(
               child: Text('${index + 1}',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: large ? 18 : 15,
-                      fontWeight: FontWeight.w900,
-                      color: onPodium ? accent : AppColors.ink4)),
+                  style: AppFonts.mono(size: large ? 18 : 15, weight: FontWeight.w600, color: onPodium ? accent : AppColors.ink4)),
             ),
     );
   }
@@ -373,9 +363,9 @@ class _CompeteScreenState extends State<CompeteScreen> {
           children: [
             TrendArrow(isPositive: positive, size: compact ? 14 : 16),
             Text(Money.wallet(pnl.abs()),
-                style: GoogleFonts.ibmPlexSans(
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                     fontSize: compact ? 13 : 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: positive ? AppColors.bull : AppColors.bear)),
           ],
         ),
@@ -403,9 +393,9 @@ class _CompeteScreenState extends State<CompeteScreen> {
       case 0:
         return AppColors.crown;
       case 1:
-        return const Color(0xFF8E9AA8);
+        return AppColors.isDark ? const Color(0xFFC9D3E0) : const Color(0xFF5B677A);
       case 2:
-        return const Color(0xFFB1703C);
+        return AppColors.isDark ? const Color(0xFFD99A6C) : const Color(0xFF8C4B1F);
       default:
         return AppColors.imperialGold;
     }

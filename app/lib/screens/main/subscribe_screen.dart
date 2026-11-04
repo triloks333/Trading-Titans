@@ -174,7 +174,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                         child: Text(
                           'Charges are in ${billing.label}s.'
                           '${Money.rate == null ? '' : ' Amounts marked \u2248 are today\u2019s equivalent in ${Money.display.label}s.'}',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 11, color: AppColors.ink4),
                         ),
                       ),
                     ],
@@ -266,9 +266,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 const SizedBox(height: 1),
                 Text(
                   Money.wallet(wallet),
-                  style: GoogleFonts.ibmPlexSans(
+                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                     fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w600,
                     color: AppColors.ink,
                   ),
                 ),
@@ -542,21 +542,8 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   Widget _heroMentorshipBanner() {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+      // Flagship card: theme-independent dark surface with a crown border.
+      decoration: AppCard.darkCta.copyWith(border: Border.all(color: AppColors.crown), boxShadow: const []),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -930,7 +917,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         color: AppColors.pureWhite,
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(
-          color: isMax ? AppColors.imperialGold : (isMini ? const Color(0xFF38BDF8) : AppColors.birch),
+          color: isMax ? AppColors.imperialGold : (isMini ? AppColors.goldMid : AppColors.birch),
           width: isMax || isMini ? 1.8 : 1.0,
         ),
         boxShadow: isMax
@@ -978,16 +965,16 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE0F2FE),
+                    color: AppColors.goldPale,
                     borderRadius: BorderRadius.circular(AppRadius.tag),
-                    border: Border.all(color: const Color(0xFFBAE6FD)),
+                    border: Border.all(color: AppColors.goldBorder),
                   ),
                   child: Text(
                     '⚡ MINI BOOST · ${product.priceLabel(billing)} ONLY',
-                    style: GoogleFonts.ibmPlexSans(
+                    style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                       fontSize: 9.5,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0284C7),
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.goldMid,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -1045,9 +1032,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   children: [
                     Text(
                       '+${Money.wallet(product.cashGrant)}',
-                      style: GoogleFonts.ibmPlexSans(
+                      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                         fontSize: 24,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w600,
                         color: isMax ? AppColors.goldDeep : AppColors.ink,
                       ),
                     ),
@@ -1099,9 +1086,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     )
                   : Text(
                       'Get ${Money.wallet(product.cashGrant)} for ${product.priceLabel(billing)}',
-                      style: GoogleFonts.ibmPlexSans(
+                      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                         fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
                     ),
@@ -1636,12 +1623,12 @@ Widget _wasPrice(PlanOption product, Currency billing) {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
           decoration: BoxDecoration(
-            color: const Color(0xFFFFE4B5),
-            borderRadius: BorderRadius.circular(4),
+            color: AppColors.titanGoldSoft,
+            borderRadius: BorderRadius.circular(AppRadius.tag),
           ),
           child: Text(
             '$off% OFF',
-            style: GoogleFonts.ibmPlexSans(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF9A3412)),
+            style: AppFonts.mono(size: 9.5, weight: FontWeight.w600, color: AppColors.titanGold),
           ),
         ),
         const SizedBox(width: 5),

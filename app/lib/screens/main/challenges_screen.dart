@@ -134,7 +134,8 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: AppCard.primary,
+      // Titan gold: levels and rewards are the League family of colours.
+      decoration: AppCard.primary.copyWith(border: Border.all(color: AppColors.titanGold)),
       child: Column(
         children: [
           Row(
@@ -145,15 +146,10 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('TITAN LEVEL',
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink4,
-                          letterSpacing: 0.5)),
+                      style: AppText.sectionLabel.copyWith(color: AppColors.titanGold)),
                   const SizedBox(height: 2),
                   Text(level.name,
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      style: AppFonts.sans(size: 24, weight: FontWeight.w700, color: AppColors.ink)),
                 ],
               ),
               Container(
@@ -163,13 +159,13 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.local_fire_department_rounded,
-                        size: 14, color: AppColors.imperialGold),
+                        size: 14, color: AppColors.titanGold),
                     const SizedBox(width: 4),
                     Text('$streak day${streak == 1 ? '' : 's'}',
                         style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.imperialGold)),
+                            color: AppColors.titanGold)),
                   ],
                 ),
               ),
@@ -182,7 +178,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               value: progress,
               minHeight: 8,
               backgroundColor: AppColors.cream,
-              valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
+              valueColor: AlwaysStoppedAnimation(AppColors.titanGold),
               semanticsLabel: 'Progress to next Titan level',
             ),
           ),
@@ -204,7 +200,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
             Divider(color: AppColors.birch, height: 1),
             const SizedBox(height: AppSpacing.md),
             Text('${Money.wallet(earned, decimals: 0)} earned from challenges',
-                style: GoogleFonts.ibmPlexSans(
+                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                     fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bull)),
           ],
         ],
@@ -255,8 +251,8 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(Money.wallet(c.rewardAmount, decimals: 0),
-                        style: GoogleFonts.ibmPlexSans(
-                            fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.bull)),
+                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
+                            fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bull)),
                     Text('${c.xp} XP',
                         style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
                     if (c.repeatLimit != null && c.repeatLimit! > 1)
