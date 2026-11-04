@@ -39,7 +39,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
     'all': Color(0xFF3B82F6),
     'stock': Color(0xFF10B981),
     'us_stock': Color(0xFF6366F1),
-    'crypto': Color(0xFFF59E0B),
+    'crypto': AppColors.crown,
     'pakistan_stock': Color(0xFF059669),
     'italy_stock': Color(0xFF0284C7),
   };
@@ -435,7 +435,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
               gradient: LinearGradient(
                 colors: [
                   AppColors.imperialGold,
-                  Color(0xFFF59E0B),
+                  AppColors.crown,
                   AppColors.bull,
                 ],
               ),

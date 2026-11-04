@@ -159,12 +159,12 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadius.pill),
                   color: isActive
-                      ? const Color(0xFFFFD700)
+                      ? AppColors.crown
                       : Colors.white.withValues(alpha: 0.22),
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color: const Color(0xFFFFD700).withValues(alpha: 0.45),
+                            color: AppColors.crown.withValues(alpha: 0.45),
                             blurRadius: 6,
                             spreadRadius: 1,
                           ),
@@ -260,7 +260,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFFFFD700).withValues(alpha: 0.70),
+                    AppColors.crown.withValues(alpha: 0.70),
                     const Color(0xFFC084FC).withValues(alpha: 0.50),
                     Colors.white.withValues(alpha: 0.15),
                     const Color(0xFFEAB308).withValues(alpha: 0.60),
@@ -275,7 +275,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                     offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: const Color(0xFFFFD700).withValues(alpha: 0.10 + 0.07 * pulse),
+                    color: AppColors.crown.withValues(alpha: 0.10 + 0.07 * pulse),
                     blurRadius: 18,
                     offset: const Offset(0, 4),
                   ),
@@ -360,15 +360,15 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                               borderRadius: BorderRadius.circular(AppRadius.pill),
                               border: Border.all(
                                 color: Color.lerp(
-                                  const Color(0xFFFFD700).withValues(alpha: 0.45),
-                                  const Color(0xFFFFD700).withValues(alpha: 0.90),
+                                  AppColors.crown.withValues(alpha: 0.45),
+                                  AppColors.crown.withValues(alpha: 0.90),
                                   pulse,
                                 )!,
                                 width: 1,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFFFD700).withValues(alpha: 0.20 * pulse),
+                                  color: AppColors.crown.withValues(alpha: 0.20 * pulse),
                                   blurRadius: 8,
                                 ),
                               ],
@@ -381,10 +381,10 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                                   height: 6,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: const Color(0xFFFFD700),
+                                    color: AppColors.crown,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFFFFD700).withValues(alpha: 0.85),
+                                        color: AppColors.crown.withValues(alpha: 0.85),
                                         blurRadius: 4,
                                         spreadRadius: 1,
                                       ),
@@ -397,7 +397,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                                   style: GoogleFonts.ibmPlexSans(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w800,
-                                    color: const Color(0xFFFFD700),
+                                    color: AppColors.crown,
                                     letterSpacing: 0.4,
                                   ),
                                 ),
@@ -405,7 +405,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                                 const Icon(
                                   Icons.workspace_premium_rounded,
                                   size: 13,
-                                  color: Color(0xFFFFD700),
+                                  color: AppColors.crown,
                                 ),
                               ],
                             ),
@@ -461,7 +461,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                               borderRadius: BorderRadius.circular(AppRadius.pill),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFFFD700).withValues(alpha: 0.35),
+                                  color: AppColors.crown.withValues(alpha: 0.35),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -1062,7 +1062,7 @@ class _FeedbackBannerState extends State<_FeedbackBanner>
 
   Widget _action(IconData icon, String label, VoidCallback onTap, {bool filled = false}) {
     return Material(
-      color: filled ? const Color(0xFFFFD700) : Colors.white.withValues(alpha: 0.1),
+      color: filled ? AppColors.crown : Colors.white.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(AppRadius.pill),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.pill),

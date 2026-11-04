@@ -565,22 +565,22 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFD700).withValues(alpha: 0.18),
+                  color: AppColors.crown.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(AppRadius.tag),
-                  border: Border.all(color: const Color(0xFFFFD700).withValues(alpha: 0.4)),
+                  border: Border.all(color: AppColors.crown.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   '★ FLAGSHIP PROGRAM · ₹1L+/MO VALUE',
                   style: GoogleFonts.ibmPlexSans(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFFFFD700),
+                    color: AppColors.crown,
                     letterSpacing: 0.6,
                   ),
                 ),
               ),
               const Spacer(),
-              const Icon(Icons.verified_rounded, size: 16, color: Color(0xFFFFD700)),
+              const Icon(Icons.verified_rounded, size: 16, color: AppColors.crown),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -627,7 +627,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 12, color: const Color(0xFFFFD700)),
+          Icon(icon, size: 12, color: AppColors.crown),
           const SizedBox(width: 4),
           Flexible(
             child: Text(

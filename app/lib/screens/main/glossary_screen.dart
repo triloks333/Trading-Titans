@@ -102,7 +102,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
+                  borderSide: const BorderSide(color: AppColors.crown, width: 1.5),
                 ),
               ),
             ),
@@ -218,7 +218,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.4)),
+        border: Border.all(color: AppColors.crown.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.25),
@@ -234,15 +234,15 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFD4AF37).withValues(alpha: 0.18),
+              color: AppColors.crown.withValues(alpha: 0.18),
               shape: BoxShape.circle,
               border: Border.all(
-                color: const Color(0xFFD4AF37).withValues(alpha: 0.5),
+                color: AppColors.crown.withValues(alpha: 0.5),
               ),
             ),
             child: const Icon(
               Icons.school_rounded,
-              color: Color(0xFFD4AF37),
+              color: AppColors.crown,
               size: 22,
             ),
           ),
@@ -300,7 +300,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
               MaterialPageRoute(builder: (_) => const GlossaryQuizScreen()),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD4AF37),
+              backgroundColor: AppColors.crown,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               minimumSize: Size.zero,

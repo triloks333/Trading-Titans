@@ -309,7 +309,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                   color: Colors.white.withValues(alpha: 0.12),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.workspace_premium_rounded, size: 22, color: Color(0xFFFFD700)),
+                                child: const Icon(Icons.workspace_premium_rounded, size: 22, color: AppColors.crown),
                               ),
                               const SizedBox(width: AppSpacing.md),
                               Expanded(
@@ -330,7 +330,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFFFD700).withValues(alpha: 0.2),
+                                            color: AppColors.crown.withValues(alpha: 0.2),
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
@@ -338,7 +338,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                             style: GoogleFonts.ibmPlexSans(
                                               fontSize: 8.5,
                                               fontWeight: FontWeight.w800,
-                                              color: const Color(0xFFFFD700),
+                                              color: AppColors.crown,
                                             ),
                                           ),
                                         ),

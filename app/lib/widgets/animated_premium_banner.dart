@@ -96,10 +96,10 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFFFFD700).withValues(alpha: 0.65),
+                    AppColors.crown.withValues(alpha: 0.65),
                     const Color(0xFF00E5FF).withValues(alpha: 0.35),
                     Colors.white.withValues(alpha: 0.12),
-                    const Color(0xFFFFB800).withValues(alpha: 0.45),
+                    AppColors.crown.withValues(alpha: 0.45),
                   ],
                   stops: const [0.0, 0.35, 0.70, 1.0],
                 ),
@@ -113,7 +113,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                   ),
                   // Warm gold depth
                   BoxShadow(
-                    color: const Color(0xFFFFD700).withValues(alpha: 0.08 + 0.06 * pulse),
+                    color: AppColors.crown.withValues(alpha: 0.08 + 0.06 * pulse),
                     blurRadius: 18,
                     offset: const Offset(0, 4),
                   ),
@@ -199,15 +199,15 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                               borderRadius: BorderRadius.circular(AppRadius.pill),
                               border: Border.all(
                                 color: Color.lerp(
-                                  const Color(0xFFFFD700).withValues(alpha: 0.4),
-                                  const Color(0xFFFFD700).withValues(alpha: 0.85),
+                                  AppColors.crown.withValues(alpha: 0.4),
+                                  AppColors.crown.withValues(alpha: 0.85),
                                   pulse,
                                 )!,
                                 width: 1,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFFFFD700).withValues(alpha: 0.18 * pulse),
+                                  color: AppColors.crown.withValues(alpha: 0.18 * pulse),
                                   blurRadius: 8,
                                 ),
                               ],
@@ -238,7 +238,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                                   style: GoogleFonts.ibmPlexSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
-                                    color: const Color(0xFFFFD700),
+                                    color: AppColors.crown,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -246,7 +246,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                                 const Icon(
                                   Icons.bolt_rounded,
                                   size: 13,
-                                  color: Color(0xFFFFD700),
+                                  color: AppColors.crown,
                                 ),
                               ],
                             ),

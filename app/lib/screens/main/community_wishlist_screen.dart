@@ -279,7 +279,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
         break;
       case 'planned':
         bg = AppColors.isDark ? const Color(0xFF3B2A0F) : const Color(0xFFFEF3C7);
-        text = AppColors.isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706);
+        text = AppColors.isDark ? AppColors.crown : const Color(0xFFD97706);
         label = 'Planned';
         break;
       case 'declined':

@@ -81,12 +81,76 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl), side: BorderSide(color: p.line))),
       snackBarTheme: SnackBarThemeData(backgroundColor: p.card2, contentTextStyle: AppFonts.sans(color: p.ink),
           behavior: SnackBarBehavior.floating),
+      // ── Controls: every button, input and toggle in the app picks these up. ──
+      elevatedButtonTheme: ElevatedButtonThemeData(style: _button(p.action, Colors.white)),
+      filledButtonTheme: FilledButtonThemeData(style: _button(p.action, Colors.white)),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: _button(Colors.transparent, p.ink, BorderSide(color: p.line))),
+      textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(
+          foregroundColor: p.accent, minimumSize: const Size(44, 44), textStyle: AppFonts.sans(size: 14, weight: FontWeight.w600))),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(backgroundColor: p.action, foregroundColor: Colors.white,
+          elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg))),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true, fillColor: p.card, isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        labelStyle: AppFonts.sans(size: 14, color: p.ink3), hintStyle: AppFonts.sans(size: 14, color: p.ink5),
+        border: _outline(p.line), enabledBorder: _outline(p.line), disabledBorder: _outline(p.line),
+        focusedBorder: _outline(p.accent, 1.5), errorBorder: _outline(p.bear), focusedErrorBorder: _outline(p.bear, 1.5),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: Colors.transparent, selectedColor: p.accentSoft, disabledColor: p.card2, checkmarkColor: p.accent,
+        side: BorderSide(color: p.line), labelStyle: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p.ink3),
+        secondaryLabelStyle: AppFonts.sans(size: 13, weight: FontWeight.w600, color: p.accent),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: p.ink, unselectedLabelColor: p.ink3, indicatorColor: p.accent, dividerColor: p.line,
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelStyle: AppFonts.sans(size: 13, weight: FontWeight.w600), unselectedLabelStyle: AppFonts.sans(size: 13, weight: FontWeight.w600),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: const WidgetStatePropertyAll(Colors.white),
+        trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? p.action : p.line),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      checkboxTheme: CheckboxThemeData(fillColor: _selected(p.action), side: BorderSide(color: p.ink5, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tag))),
+      radioTheme: RadioThemeData(fillColor: _selected(p.action, p.ink5)),
+      sliderTheme: SliderThemeData(activeTrackColor: p.action, inactiveTrackColor: p.line, thumbColor: p.action),
+      progressIndicatorTheme: ProgressIndicatorThemeData(color: p.action, linearTrackColor: p.line, circularTrackColor: p.line),
+      cardTheme: CardThemeData(color: p.card, elevation: 0, margin: EdgeInsets.zero, surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg), side: BorderSide(color: p.line))),
+      listTileTheme: ListTileThemeData(iconColor: p.ink3, textColor: p.ink, minVerticalPadding: 10),
+      popupMenuTheme: PopupMenuThemeData(color: p.card2, surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: p.line))),
+      tooltipTheme: TooltipThemeData(decoration: BoxDecoration(color: p.card2, borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: p.line)), textStyle: AppFonts.sans(size: 12, color: p.ink)),
+      iconTheme: IconThemeData(color: p.ink2),
       pageTransitionsTheme: PageTransitionsTheme(builders: {
         // One consistent fade + slight upward slide on every platform.
         for (final t in TargetPlatform.values) t: FadeUpwardsPageTransitionsBuilder(),
       }),
     );
   }
+
+  /// 48 dp tall, 10 dp corners, flat: the one button shape in Titan Terminal.
+  static ButtonStyle _button(Color bg, Color fg, [BorderSide? side]) => ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) && bg != Colors.transparent
+            ? bg.withValues(alpha: 0.4) : bg),
+        foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled) ? fg.withValues(alpha: 0.6) : fg),
+        overlayColor: WidgetStatePropertyAll(fg.withValues(alpha: 0.08)),
+        elevation: const WidgetStatePropertyAll(0),
+        minimumSize: const WidgetStatePropertyAll(Size(64, 48)),
+        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20)),
+        side: side == null ? null : WidgetStatePropertyAll(side),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md))),
+        textStyle: WidgetStatePropertyAll(AppFonts.sans(size: 15, weight: FontWeight.w600)),
+      );
+
+  static OutlineInputBorder _outline(Color c, [double w = 1]) =>
+      OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide(color: c, width: w));
+
+  static WidgetStateProperty<Color> _selected(Color on, [Color off = Colors.transparent]) =>
+      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? on : off);
 }
 
 class AppFormat {

@@ -401,7 +401,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
   Color _podiumColor(int index) {
     switch (index) {
       case 0:
-        return const Color(0xFFD4A017);
+        return AppColors.crown;
       case 1:
         return const Color(0xFF8E9AA8);
       case 2:

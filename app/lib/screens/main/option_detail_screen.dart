@@ -207,7 +207,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
       case 'ITM':
         return AppColors.bull;
       case 'ATM':
-        return const Color(0xFFD4A017); // gold
+        return AppColors.crown; // gold
       case 'OTM':
         return AppColors.bear;
       default:
@@ -878,7 +878,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Expanded(child: _greekTile('IV', greeks['iv']!, 2, const Color(0xFFD4A017), suffix: '%')),
+              Expanded(child: _greekTile('IV', greeks['iv']!, 2, AppColors.crown, suffix: '%')),
               const Expanded(child: SizedBox()), // keep grid balanced
             ],
           ),
@@ -1005,7 +1005,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   _greekExplainerTile(
                     symbol: 'IV (%)',
-                    color: const Color(0xFFD4A017),
+                    color: AppColors.crown,
                     summary: 'Implied Volatility',
                     explanation:
                         'The market\'s consensus estimate of annual price fluctuation, solved backwards from live option market prices.',

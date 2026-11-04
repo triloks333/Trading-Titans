@@ -81,6 +81,10 @@ class AppColors {
   static Color get violet => p.violet;
   static Color get violetLight => p.violetSoft;
 
+  /// Crown gold that never changes with the theme, for premium cards that paint
+  /// their own dark backgrounds. Replaces six near-identical hardcoded golds.
+  static const Color crown = Color(0xFFF2B544);
+
   // Titan gold: crown, league, rewards and festive moments only.
   static Color get titanGold => p.gold;
   static Color get titanGoldSoft => p.goldSoft;
