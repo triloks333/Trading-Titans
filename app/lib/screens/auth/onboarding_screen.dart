@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../core/currency.dart';
 import '../../core/countries.dart';
 import '../../core/theme.dart';
 import '../../services/currency_service.dart';
-import '../../widgets/crown_logo.dart';
+import '../../widgets/auth_kit.dart';
 
 /// First-run questions, shown once after sign-in and before the home screen.
 ///
@@ -127,504 +125,310 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final last = _step == _stepCount - 1;
     return Scaffold(
-      backgroundColor: AppColors.parchment,
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                children: [
-                  const CrownLogo(size: 28),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    'Trading Titans',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
-                  ),
-                  const Spacer(),
-                  if (_step > 0)
-                    Semantics(
-                      button: true,
-                      label: 'Go back a step',
-                      child: GestureDetector(
-                        onTap: _saving ? null : () => setState(() => _step--),
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: AppSpacing.md),
-                          child: Text('Back',
-                              style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.imperialGold)),
-                        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, AppSpacing.md, 20, 0),
+            child: Row(children: [
+              if (_step > 0) ...[
+                AuthIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    label: 'Go back a step',
+                    onTap: () {
+                      if (!_saving) setState(() => _step--);
+                    }),
+                const SizedBox(width: AppSpacing.md),
+              ] else ...[
+                const TitanCrown(size: 26),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Text('Trading Titans', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+              const Spacer(),
+              Text('Step ${_step + 1} of $_stepCount', style: AppFonts.mono(size: 12, color: AppColors.ink4)),
+            ]),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Semantics(
+              label: 'Setup progress, step ${_step + 1} of $_stepCount',
+              child: Row(children: [
+                for (var i = 0; i < _stepCount; i++)
+                  Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      height: 4,
+                      margin: EdgeInsets.only(right: i < _stepCount - 1 ? 6 : 0),
+                      decoration: BoxDecoration(
+                        color: i <= _step ? AppColors.goldMid : AppColors.birch,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                  Text(
-                    'Step ${_step + 1} of $_stepCount',
-                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                   ),
-                ],
-              ),
+              ]),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: LinearProgressIndicator(
-                  value: (_step + 1) / _stepCount,
-                  minHeight: 5,
-                  backgroundColor: AppColors.cream,
-                  valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
-                  semanticsLabel: 'Setup progress',
-                ),
-              ),
+          ),
+          Expanded(
+            child: switch (_step) {
+              0 => _buildLocationStep(),
+              1 => _buildCurrencyStep(),
+              _ => _buildMarketsStep(),
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, AppSpacing.lg),
+            child: AuthPrimaryButton(
+              label: last ? 'Start trading' : 'Continue',
+              busy: _saving,
+              onPressed: _canContinue ? _next : null,
             ),
-            Expanded(
-              child: switch (_step) {
-                0 => _buildLocationStep(),
-                1 => _buildCurrencyStep(),
-                _ => _buildMarketsStep(),
-              },
-            ),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: (!_canContinue || _saving) ? null : _next,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.ink,
-                    foregroundColor: AppColors.pureWhite,
-                    disabledBackgroundColor: AppColors.birch,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : Text(
-                          _step < _stepCount - 1 ? 'Continue' : 'Start trading',
-                          style: GoogleFonts.ibmPlexSans(
-                              fontWeight: FontWeight.bold, fontSize: 15),
-                        ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
 
-  Widget _buildHeading(String title, String subtitle) => Padding(
-        padding: const EdgeInsets.only(
-            left: AppSpacing.lg, right: AppSpacing.lg, top: AppSpacing.xl, bottom: AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title,
-                style: GoogleFonts.ibmPlexSans(
-                    fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
-            const SizedBox(height: 6),
-            Text(subtitle,
-                style: GoogleFonts.ibmPlexSans(
-                    fontSize: 14, color: AppColors.ink4, height: 1.4)),
-          ],
-        ),
+  Widget _heading(String title, String subtitle) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, AppSpacing.xl, 20, AppSpacing.lg),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: AppFonts.sans(size: 28, weight: FontWeight.w700, color: AppColors.ink, height: 1.15)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(subtitle, style: AppFonts.sans(size: 15, color: AppColors.ink3, height: 1.45)),
+        ]),
       );
 
   Widget _buildLocationStep() {
-    final countryName = Countries.name(_selectedCountryCode) ?? 'Select Country';
-    final flag = _countryFlag(_selectedCountryCode ?? 'IN');
-
     const popularCodes = ['IN', 'PK', 'IT', 'US', 'GB', 'AE'];
-
-    return ListView(
-      children: [
-        _buildHeading(
-          'Where are you trading from?',
-          'Select your country to set up your preferred market and currency automatically. You can always change it later.',
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-          child: GestureDetector(
+    return ListView(children: [
+      _heading('Where are you trading from?',
+          'Sets your currency and markets automatically. It never restricts what you can trade, and you can change it later.'),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Material(
+          color: AppColors.goldPale,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.lg), side: BorderSide(color: AppColors.goldMid, width: 1.5)),
+          child: InkWell(
             onTap: _showCountryPickerModal,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.pureWhite,
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppColors.imperialGold, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.imperialGold.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Text(flag, style: const TextStyle(fontSize: 32)),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          countryName,
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Tap to choose from 250+ countries',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.arrow_drop_down_circle_outlined, color: AppColors.imperialGold, size: 24),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
-          child: Text(
-            'QUICK SELECT',
-            style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.5),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: popularCodes.map((code) {
-              final isSelected = _selectedCountryCode == code;
-              final name = Countries.name(code) ?? code;
-              return ChoiceChip(
-                label: Text('${_countryFlag(code)} $name'),
-                selected: isSelected,
-                selectedColor: AppColors.imperialGold,
-                backgroundColor: AppColors.pureWhite,
-                labelStyle: GoogleFonts.ibmPlexSans(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppColors.ink,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                    color: isSelected ? AppColors.imperialGold : AppColors.birch,
-                  ),
-                ),
-                onSelected: (_) => _selectCountry(code),
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: AppColors.cream,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: AppColors.ink4, size: 18),
-                const SizedBox(width: AppSpacing.sm),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(children: [
+                Text(_countryFlag(_selectedCountryCode ?? 'IN'), style: const TextStyle(fontSize: 30)),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Text(
-                    'Pre-selected currency: ${_currency?.symbol ?? ''} ${_currency?.label ?? ''}',
-                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600),
-                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(Countries.name(_selectedCountryCode) ?? 'Select country',
+                        style: AppFonts.sans(size: 17, weight: FontWeight.w700, color: AppColors.ink)),
+                    Text('Tap to choose from 250+ countries', style: AppText.bodySmall),
+                  ]),
                 ),
-              ],
+                Text('Change', style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.goldMid)),
+              ]),
             ),
           ),
         ),
-      ],
-    );
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, AppSpacing.xl, 20, AppSpacing.sm),
+        child: Text('QUICK SELECT', style: AppText.sectionLabel),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: [
+          for (final code in popularCodes)
+            ChoiceChip(
+              label: Text('${_countryFlag(code)}  ${Countries.name(code) ?? code}'),
+              selected: _selectedCountryCode == code,
+              showCheckmark: false,
+              labelStyle: AppFonts.sans(
+                  size: 13, weight: FontWeight.w600, color: _selectedCountryCode == code ? AppColors.goldMid : AppColors.ink2),
+              side: BorderSide(color: _selectedCountryCode == code ? AppColors.goldMid : AppColors.birch),
+              onSelected: (_) => _selectCountry(code),
+            ),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, AppSpacing.xl, 20, 0),
+        child: Row(children: [
+          Icon(Icons.info_outline_rounded, size: 16, color: AppColors.ink4),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text.rich(TextSpan(style: AppText.bodySmall, children: [
+              const TextSpan(text: 'Currency set to '),
+              TextSpan(
+                  text: '${_currency?.symbol ?? ''} ${_currency?.label ?? ''}',
+                  style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink2)),
+            ])),
+          ),
+        ]),
+      ),
+    ]);
   }
 
   void _showCountryPickerModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      showDragHandle: true,
       builder: (ctx) {
         String filter = '';
-        return StatefulBuilder(
-          builder: (modalCtx, setModalState) {
-            final all = Countries.sortedByName;
-            final matches = filter.trim().isEmpty
-                ? all
-                : all.where((e) {
-                    final q = filter.trim().toLowerCase();
-                    return e.value.toLowerCase().contains(q) || e.key.toLowerCase().contains(q);
-                  }).toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75,
-              decoration: BoxDecoration(
-                color: AppColors.pureWhite,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        return StatefulBuilder(builder: (modalCtx, setModalState) {
+          final q = filter.trim().toLowerCase();
+          final matches = q.isEmpty
+              ? Countries.sortedByName
+              : Countries.sortedByName
+                  .where((e) => e.value.toLowerCase().contains(q) || e.key.toLowerCase().contains(q))
+                  .toList();
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.75,
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, AppSpacing.md),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Select country', style: AppFonts.sans(size: 18, weight: FontWeight.w700, color: AppColors.ink)),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    autofocus: true,
+                    decoration: InputDecoration(
+                        hintText: 'Search countries', prefixIcon: Icon(Icons.search_rounded, color: AppColors.ink4)),
+                    onChanged: (val) => setModalState(() => filter = val),
+                  ),
+                ]),
               ),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 10, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.birch,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Select Country',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 4),
-                    child: TextField(
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        hintText: 'Search countries...',
-                        prefixIcon: Icon(Icons.search, size: 20, color: AppColors.ink4),
-                        filled: true,
-                        fillColor: AppColors.parchment,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      onChanged: (val) => setModalState(() => filter = val),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: matches.length,
-                      itemBuilder: (c, idx) {
-                        final item = matches[idx];
-                        final code = item.key;
-                        final name = item.value;
-                        final isSelected = _selectedCountryCode == code;
-                        return ListTile(
-                          leading: Text(_countryFlag(code), style: const TextStyle(fontSize: 24)),
-                          title: Text(
-                            name,
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 14,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isSelected ? AppColors.imperialGold : AppColors.ink,
-                            ),
-                          ),
-                          trailing: isSelected
-                              ? Icon(Icons.check_circle, color: AppColors.imperialGold, size: 20)
-                              : Text(code, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink5)),
-                          onTap: () {
-                            Navigator.of(ctx).pop();
-                            _selectCountry(code);
-                          },
-                        );
+              Divider(color: AppColors.birch),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: matches.length,
+                  itemBuilder: (c, i) {
+                    final code = matches[i].key;
+                    final selected = _selectedCountryCode == code;
+                    return ListTile(
+                      leading: Text(_countryFlag(code), style: const TextStyle(fontSize: 22)),
+                      title: Text(matches[i].value,
+                          style: AppFonts.sans(
+                              size: 14,
+                              weight: selected ? FontWeight.w600 : FontWeight.w400,
+                              color: selected ? AppColors.goldMid : AppColors.ink)),
+                      trailing: selected
+                          ? Icon(Icons.check_rounded, color: AppColors.goldMid, size: 20)
+                          : Text(code, style: AppFonts.mono(size: 12, color: AppColors.ink5)),
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _selectCountry(code);
                       },
-                    ),
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
-            );
-          },
-        );
+            ]),
+          );
+        });
       },
     );
   }
 
-  Widget _buildCurrencyStep() {
-    return ListView(
-      children: [
-        _buildHeading(
-          'Which currency should we use?',
-          'Every price, balance and profit figure in the app will be shown in '
-              'this currency. You can change it any time from your profile.',
-        ),
+  Widget _buildCurrencyStep() => ListView(children: [
+        _heading('Which currency should we use?',
+            'Every price, balance and profit figure is shown in this currency. Your wallet stays in rupees.'),
         for (final c in Currency.values)
-          _buildOptionCard(
+          _option(
             selected: _currency == c,
             title: c.label,
             subtitle: c.subtitle,
-            leading: Text(
-              c.symbol,
-              style: GoogleFonts.ibmPlexSans(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: _currency == c ? AppColors.imperialGold : AppColors.ink4),
-            ),
+            leading: Text(c.symbol,
+                style: AppFonts.mono(size: 18, weight: FontWeight.w600, color: _currency == c ? AppColors.goldMid : AppColors.ink4)),
             onTap: () => setState(() => _currency = c),
           ),
-        Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Text(
-            'Your virtual wallet balance is dynamically converted to your chosen currency at the live rate. You can switch currencies at any time.',
-            style: GoogleFonts.ibmPlexSans(
-                fontSize: 11, color: AppColors.ink5, fontStyle: FontStyle.italic, height: 1.4),
-          ),
-        ),
-      ],
-    );
-  }
+      ]);
 
-  Widget _buildMarketsStep() {
-    return ListView(
-      children: [
-        _buildHeading(
-          'What do you want to trade?',
-          'Pick up to 3 markets that interest you. You can change your choice anytime from the Trade screen.',
+  Widget _buildMarketsStep() => ListView(children: [
+        _heading('What do you want to trade?', 'Pick up to 3. You can still trade anything, any time.'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, AppSpacing.sm),
+          child: Text('${_markets.length}/3 SELECTED', style: AppText.sectionLabel),
         ),
         for (final m in _marketOptions)
-          _buildOptionCard(
+          _option(
             selected: _markets.contains(m.key),
             title: m.title,
             subtitle: m.subtitle,
-            leading: Icon(m.icon,
-                size: 22,
-                color: _markets.contains(m.key)
-                    ? AppColors.imperialGold
-                    : AppColors.ink4),
+            leading: Icon(m.icon, size: 20, color: _markets.contains(m.key) ? AppColors.goldMid : AppColors.ink4),
             isCheckbox: true,
             onTap: () => setState(() {
               if (_markets.contains(m.key)) {
                 if (_markets.length > 1) {
                   _markets.remove(m.key);
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please select at least 1 market.'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  _snack('Please select at least 1 market.');
                 }
+              } else if (_markets.length >= 3) {
+                _snack('You can select a maximum of 3 markets.');
               } else {
-                if (_markets.length >= 3) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('You can select a maximum of 3 markets.'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  return;
-                }
                 _markets.add(m.key);
               }
             }),
           ),
-        if (_markets.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Text(
-              'Choose at least one to continue.',
-              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
-            ),
-          ),
-      ],
-    );
-  }
+      ]);
 
-  Widget _buildOptionCard({
+  void _snack(String text) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 2)));
+
+  /// One selectable row: accent fill and border when selected, a square check
+  /// for multi-select (markets) or a round mark for single-select (currency).
+  Widget _option({
     required bool selected,
     required String title,
     required String subtitle,
     required Widget leading,
     required VoidCallback onTap,
     bool isCheckbox = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.xs),
-      child: Semantics(
-        // Announces as a radio for the currency step and a checkbox for markets,
-        // which is what each control actually is.
-        inMutuallyExclusiveGroup: !isCheckbox,
-        checked: selected,
-        label: '$title. $subtitle',
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.pureWhite,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, AppSpacing.sm),
+        child: Semantics(
+          inMutuallyExclusiveGroup: !isCheckbox,
+          checked: selected,
+          label: '$title. $subtitle',
+          child: Material(
+            color: selected ? AppColors.goldPale : AppColors.pureWhite,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(
-                color: selected ? AppColors.imperialGold : AppColors.birch,
-                width: selected ? 2 : 1,
-              ),
-              boxShadow: selected ? AppShadows.sm : null,
+              side: BorderSide(color: selected ? AppColors.goldMid : AppColors.birch, width: selected ? 1.5 : 1),
             ),
-            child: Row(
-              children: [
-                SizedBox(width: 28, child: Center(child: leading)),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: GoogleFonts.ibmPlexSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.ink)),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+                child: Row(children: [
+                  SizedBox(width: 28, child: Center(child: leading)),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(title, style: AppFonts.sans(size: 15, weight: FontWeight.w600, color: AppColors.ink)),
                       const SizedBox(height: 2),
-                      Text(subtitle,
-                          style: GoogleFonts.ibmPlexSans(
-                              fontSize: 12, color: AppColors.ink4, height: 1.3)),
-                    ],
+                      Text(subtitle, style: AppText.bodySmall),
+                    ]),
                   ),
-                ),
-                Icon(
-                  isCheckbox
-                      ? (selected ? Icons.check_box : Icons.check_box_outline_blank)
-                      : (selected
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked),
-                  size: 22,
-                  color: selected ? AppColors.imperialGold : AppColors.ink5,
-                ),
-              ],
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: selected ? AppColors.imperialGold : Colors.transparent,
+                      shape: isCheckbox ? BoxShape.rectangle : BoxShape.circle,
+                      borderRadius: isCheckbox ? BorderRadius.circular(6) : null,
+                      border: Border.all(color: selected ? AppColors.imperialGold : AppColors.ink5, width: 2),
+                    ),
+                    child: selected ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+                  ),
+                ]),
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
 }

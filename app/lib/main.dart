@@ -6,7 +6,7 @@ import 'core/theme.dart';
 import 'core/supabase_config.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/auth/welcome_screen.dart';
 import 'screens/main/main_navigation.dart';
 import 'screens/auth/reset_password_screen.dart';
 import 'widgets/update_dialogs.dart';
@@ -149,7 +149,7 @@ class TradingTitansApp extends StatelessWidget {
                   : auth.isAuthenticated
                       // ignore: deprecated_member_use
                       ? ShowCaseWidget(builder: (context) => const MainNavigation())
-                      : const LoginScreen();
+                      : const WelcomeScreen();
               break;
           }
           if (!hasAppChrome) homeWidget = webFormPage(homeWidget);

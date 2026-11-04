@@ -26,6 +26,7 @@ import 'package:mobile/services/theme_service.dart';
 import 'package:mobile/screens/auth/login_screen.dart';
 import 'package:mobile/screens/auth/onboarding_screen.dart';
 import 'package:mobile/screens/auth/register_screen.dart';
+import 'package:mobile/screens/auth/welcome_screen.dart';
 import 'package:mobile/screens/main/analytics_screen.dart';
 import 'package:mobile/screens/main/autopsy_screen.dart';
 import 'package:mobile/screens/main/challenges_screen.dart';
@@ -65,6 +66,7 @@ final screens = <String, Widget Function()>{
   'Order entry · buy': () => OrderEntryScreen(quote: _reliance(), isBuy: true),
   'Order entry · sell': () => OrderEntryScreen(quote: _reliance(), isBuy: false),
   'Option chain': () => const OptionChainScreen(underlyingSymbol: 'NIFTY', spotPrice: 24318.45),
+  'Welcome': () => const WelcomeScreen(),
   'Onboarding': () => const OnboardingScreen(),
   'Login': () => const LoginScreen(),
   'Register': () => const RegisterScreen(),
