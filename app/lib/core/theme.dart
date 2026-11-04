@@ -18,6 +18,10 @@ class AppFonts {
   static TextStyle sans({double? size, FontWeight? weight, Color? color, double? spacing, double? height}) =>
       GoogleFonts.ibmPlexSans(fontSize: size, fontWeight: weight, color: color, letterSpacing: spacing, height: height);
 
+  /// IBM Plex Serif for long reads (news headlines and article body).
+  static TextStyle serif({double? size, FontWeight? weight, Color? color, double? height}) =>
+      GoogleFonts.ibmPlexSerif(fontSize: size, fontWeight: weight, color: color, height: height);
+
   static TextStyle mono({double? size, FontWeight? weight, Color? color, double? spacing}) => GoogleFonts.ibmPlexMono(
       fontSize: size, fontWeight: weight, color: color, letterSpacing: spacing,
       fontFeatures: const [FontFeature.tabularFigures()]);

@@ -20,7 +20,8 @@ const Map<String, String> newsMarketLabels = {
   'italy_stock': 'Italy Stocks',
 };
 
-Map<String, Color> newsMarketColors = {
+/// A getter so the colours follow the active theme instead of freezing at first read.
+Map<String, Color> get newsMarketColors => {
   'all': AppColors.imperialGold,
   'stock': AppColors.bull,
   'us_stock': AppColors.violet,

@@ -1,18 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/app_network_image.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/home_news_section.dart';
 import 'news_reader_screen.dart';
 
-/// Every news post, behind the home carousel's "View more".
-///
-/// Takes the posts the carousel already loaded rather than fetching again. Shows
-/// all markets, not just the user's preferred ones, because this is where people
-/// come to look past their own feed. Filtered by a date range and by market,
-/// which is how posts are tagged ("countries" in practice: India, US, Pakistan,
-/// Italy, plus Crypto and Global).
+/// Short chip labels for the market a post is tagged with, in display order.
+const Map<String, String> kNewsChipLabels = {
+  'stock': 'India', 'us_stock': 'US', 'crypto': 'Crypto', 'pakistan_stock': 'Pakistan', 'italy_stock': 'Italy',
+  'all': 'Global',
+};
+
+/// "1H AGO", "YESTERDAY", "3D AGO", or a date once it is over a week old.
+String newsAge(String? publishedAt, {DateTime? now}) {
+  final dt = DateTime.tryParse(publishedAt ?? '');
+  if (dt == null) return '';
+  final d = (now ?? DateTime.now()).toUtc().difference(dt.toUtc());
+  if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes}M AGO';
+  if (d.inHours < 24) return '${d.inHours}H AGO';
+  if (d.inDays == 1) return 'YESTERDAY';
+  if (d.inDays < 7) return '${d.inDays}D AGO';
+  return DateFormat('d MMM').format(dt.toLocal()).toUpperCase();
+}
+
+/// Reading time at ~200 words a minute, at least one minute.
+int newsReadMinutes(String? markdown) {
+  final words = RegExp(r'\S+').allMatches(markdown ?? '').length;
+  return (words / 200).ceil().clamp(1, 60);
+}
+
+/// Every news post, behind the home carousel's "View more". Takes the posts the
+/// carousel already loaded rather than fetching again, and shows all markets.
 class NewsListScreen extends StatefulWidget {
   final List<Map<String, dynamic>> posts;
 
@@ -23,268 +44,223 @@ class NewsListScreen extends StatefulWidget {
 }
 
 class _NewsListScreenState extends State<NewsListScreen> {
+  String? _market; // null = All
   DateTimeRange? _range;
-  final Set<String> _markets = {};
 
-  DateTime? _dateOf(Map<String, dynamic> post) =>
-      DateTime.tryParse(post['published_at'] as String? ?? '')?.toLocal();
+  String _marketOf(Map<String, dynamic> p) => parseNewsExcerpt(p['excerpt'] as String?).marketKey;
 
-  List<Map<String, dynamic>> get _visible => widget.posts.where((post) {
-        final date = _dateOf(post);
+  DateTime? _dateOf(Map<String, dynamic> p) => DateTime.tryParse(p['published_at'] as String? ?? '')?.toLocal();
+
+  List<Map<String, dynamic>> get _visible => widget.posts.where((p) {
+        if (_market != null && _marketOf(p) != _market) return false;
         if (_range != null) {
-          if (date == null) return false;
-          final day = DateTime(date.year, date.month, date.day);
+          final d = _dateOf(p);
+          if (d == null) return false;
+          final day = DateTime(d.year, d.month, d.day);
           if (day.isBefore(_range!.start) || day.isAfter(_range!.end)) return false;
-        }
-        if (_markets.isNotEmpty &&
-            !_markets.contains(parseNewsExcerpt(post['excerpt'] as String?).marketKey)) {
-          return false;
         }
         return true;
       }).toList();
 
-  bool get _filtered => _range != null || _markets.isNotEmpty;
-
-  Future<void> _openFilters() async {
-    var range = _range;
-    final markets = {..._markets};
-
-    final apply = await showModalBottomSheet<bool>(
+  Future<void> _pickDates() async {
+    final picked = await showDateRangePicker(
       context: context,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-      ),
-      builder: (sheet) => StatefulBuilder(
-        builder: (sheet, setSheet) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Filter news',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                const SizedBox(height: AppSpacing.md),
-                Text('Dates',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
-                const SizedBox(height: AppSpacing.xs),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.date_range_rounded, size: 18),
-                  label: Text(range == null
-                      ? 'Any date'
-                      : '${DateFormat('d MMM yyyy').format(range!.start)} – '
-                          '${DateFormat('d MMM yyyy').format(range!.end)}'),
-                  onPressed: () async {
-                    final now = DateTime.now();
-                    final picked = await showDateRangePicker(
-                      context: sheet,
-                      firstDate: DateTime(2025),
-                      lastDate: now,
-                      initialDateRange: range,
-                    );
-                    if (picked != null) setSheet(() => range = picked);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text('Markets',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
-                const SizedBox(height: AppSpacing.xs),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final e in newsMarketLabels.entries)
-                      FilterChip(
-                        label: Text(e.value),
-                        selected: markets.contains(e.key),
-                        selectedColor: newsMarketColors[e.key]!.withValues(alpha: 0.18),
-                        checkmarkColor: newsMarketColors[e.key],
-                        onSelected: (on) =>
-                            setSheet(() => on ? markets.add(e.key) : markets.remove(e.key)),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => setSheet(() {
-                        range = null;
-                        markets.clear();
-                      }),
-                      child: const Text('Clear'),
-                    ),
-                    const Spacer(),
-                    FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.imperialGold),
-                      onPressed: () => Navigator.pop(sheet, true),
-                      child: const Text('Apply'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      firstDate: DateTime(2025),
+      lastDate: DateTime.now(),
+      initialDateRange: _range,
     );
-
-    if (apply == true) {
-      setState(() {
-        _range = range;
-        _markets
-          ..clear()
-          ..addAll(markets);
-      });
-    }
+    if (picked != null) setState(() => _range = picked);
   }
+
+  void _open(Map<String, dynamic> post) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => NewsReaderScreen(post: post)));
 
   @override
   Widget build(BuildContext context) {
+    final present = widget.posts.map(_marketOf).toSet();
+    final markets = kNewsChipLabels.keys.where(present.contains).toList();
     final posts = _visible;
     return Scaffold(
-      backgroundColor: AppColors.cream,
-      appBar: AppBar(
-        backgroundColor: AppColors.cream,
-        elevation: 0,
-        title: Text('Market Intel & News',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
-        actions: [
-          IconButton(
-            tooltip: 'Filter',
-            onPressed: _openFilters,
-            icon: Badge(
-              isLabelVisible: _filtered,
-              backgroundColor: AppColors.imperialGold,
-              smallSize: 8,
-              child: Icon(Icons.tune_rounded, color: AppColors.ink),
-            ),
-          ),
-        ],
-      ),
-      body: posts.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_filtered ? 'No news matches these filters.' : 'No news yet.',
-                        style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink3)),
-                    if (_filtered)
-                      TextButton(
-                        onPressed: () => setState(() {
-                          _range = null;
-                          _markets.clear();
-                        }),
-                        child: const Text('Clear filters'),
-                      ),
-                  ],
+      body: SafeArea(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).pop()),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Market news', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              Badge(
+                isLabelVisible: _range != null,
+                smallSize: 8,
+                backgroundColor: AppColors.goldMid,
+                child: AuthIconButton(icon: Icons.date_range_outlined, label: 'Filter by date', onTap: _pickDates),
+              ),
+              const SizedBox(width: 10),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
                 ),
               ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              itemCount: posts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (_, i) => _tile(posts[i]),
+            ]),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+            child: Row(children: [
+              _chip('All', null),
+              for (final m in markets) _chip(kNewsChipLabels[m]!, m),
+            ]),
+          ),
+          if (_range != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 10),
+              child: Row(children: [
+                Icon(Icons.event_outlined, size: 14, color: AppColors.ink4),
+                const SizedBox(width: 6),
+                Text(
+                    '${DateFormat('d MMM').format(_range!.start)} – ${DateFormat('d MMM yyyy').format(_range!.end)}',
+                    style: AppFonts.sans(size: 12, color: AppColors.ink3)),
+                const Spacer(),
+                TextButton(onPressed: () => setState(() => _range = null), child: const Text('Clear dates')),
+              ]),
             ),
+          Divider(color: AppColors.birch),
+          Expanded(
+            child: posts.isEmpty
+                ? Center(
+                    child: Text(
+                      widget.posts.isEmpty ? 'No news yet.' : 'No news for this filter.',
+                      style: AppFonts.sans(size: 14, color: AppColors.ink3),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: posts.length,
+                    itemBuilder: (_, i) => i == 0 ? _lead(posts[0]) : _row(posts[i]),
+                  ),
+          ),
+        ]),
+      ),
     );
   }
 
-  Widget _tile(Map<String, dynamic> post) {
-    final parsed = parseNewsExcerpt(post['excerpt'] as String?);
-    final colour = newsMarketColors[parsed.marketKey] ?? AppColors.imperialGold;
-    final date = _dateOf(post);
-    final cover = post['cover_url'] as String?;
-
-    return Material(
-      color: AppColors.pureWhite,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => NewsReaderScreen(post: post)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.birch),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: colour.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              newsMarketLabels[parsed.marketKey] ?? 'Market News',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.ibmPlexSans(
-                                  fontSize: 10, fontWeight: FontWeight.w700, color: colour),
-                            ),
-                          ),
-                        ),
-                        if (date != null) ...[
-                          const SizedBox(width: 8),
-                          Text(DateFormat('d MMM yyyy').format(date),
-                              style: GoogleFonts.ibmPlexSans(fontSize: 10.5, color: AppColors.ink4)),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      post['title'] as String? ?? 'Market Update',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.25),
-                    ),
-                    if (parsed.cleanExcerpt.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        parsed.cleanExcerpt,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, height: 1.35),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (cover != null && cover.isNotEmpty) ...[
-                const SizedBox(width: AppSpacing.sm),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Image.network(
-                    cover,
-                    width: 72,
-                    height: 72,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox(width: 72, height: 72),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+  Widget _chip(String label, String? market) {
+    final on = _market == market;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: on,
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        labelStyle: AppFonts.sans(size: 13, weight: FontWeight.w500, color: on ? AppColors.goldMid : AppColors.ink3),
+        side: BorderSide(color: on ? AppColors.goldMid : AppColors.birch),
+        onSelected: (_) => setState(() => _market = market),
       ),
+    );
+  }
+
+  Widget _tag(String text, {Color? color}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(color?.withValues(alpha: 0.14) ?? AppColors.cream),
+        child: Text(text, style: AppText.badge.copyWith(color: color ?? AppColors.ink3)),
+      );
+
+  /// Newest post as the lead story: full-width cover, tags, serif headline, summary.
+  Widget _lead(Map<String, dynamic> post) {
+    final parsed = parseNewsExcerpt(post['excerpt'] as String?);
+    final cover = post['cover_url'] as String?;
+    return InkWell(
+      onTap: () => _open(post),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          NewsCover(url: cover, market: parsed.marketKey, height: 170),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            _tag((kNewsChipLabels[parsed.marketKey] ?? 'Global').toUpperCase(), color: newsMarketColors[parsed.marketKey]),
+            if (newsAge(post['published_at'] as String?).isNotEmpty) _tag(newsAge(post['published_at'] as String?)),
+            _tag('${newsReadMinutes(post['body_markdown'] as String?)} MIN READ'),
+          ]),
+          const SizedBox(height: AppSpacing.sm),
+          Text(post['title'] as String? ?? 'Market update',
+              style: GoogleSerif.headline(20)),
+          if (parsed.cleanExcerpt.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(parsed.cleanExcerpt,
+                maxLines: 3, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 13, color: AppColors.ink3, height: 1.4)),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  /// Every other post: age tag, headline, 76 x 64 thumbnail on the right.
+  Widget _row(Map<String, dynamic> post) {
+    final parsed = parseNewsExcerpt(post['excerpt'] as String?);
+    final age = newsAge(post['published_at'] as String?);
+    return InkWell(
+      onTap: () => _open(post),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                _tag((kNewsChipLabels[parsed.marketKey] ?? 'Global').toUpperCase(), color: newsMarketColors[parsed.marketKey]),
+                if (age.isNotEmpty) _tag(age),
+              ]),
+              const SizedBox(height: 6),
+              Text(post['title'] as String? ?? 'Market update',
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink, height: 1.35)),
+            ]),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          NewsCover(url: post['cover_url'] as String?, market: parsed.marketKey, width: 76, height: 64),
+        ]),
+      ),
+    );
+  }
+}
+
+/// IBM Plex Serif for long-read headlines and body, as in the design.
+class GoogleSerif {
+  static TextStyle headline(double size) =>
+      AppFonts.serif(size: size, weight: FontWeight.w600, color: AppColors.ink, height: 1.28);
+}
+
+/// A post's cover image, or a market-tinted placeholder when there is none or
+/// it fails to load, so every row keeps its shape.
+class NewsCover extends StatelessWidget {
+  const NewsCover({super.key, required this.url, required this.market, this.width, required this.height});
+  final String? url;
+  final String market;
+  final double? width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = newsMarketColors[market] ?? AppColors.goldMid;
+    final placeholder = Container(
+      width: width ?? double.infinity,
+      height: height,
+      color: tint.withValues(alpha: 0.12),
+      alignment: Alignment.center,
+      child: Icon(Icons.article_outlined, color: tint, size: height > 100 ? 36 : 22),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: url == null || url!.isEmpty
+          ? placeholder
+          : AppNetworkImage(url: url!, width: width ?? double.infinity, height: height),
     );
   }
 }

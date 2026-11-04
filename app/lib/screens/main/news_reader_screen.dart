@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_constants.dart';
 import '../../core/theme.dart';
+import '../../services/nav_tab_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/home_news_section.dart';
+import 'news_list_screen.dart';
 
-/// Renders a published market news/blog post with half-article preview and
-/// an interactive lock card redirecting readers to TheTradingTitans.com.
+/// A published news post: half-article preview, then a choice to read the rest
+/// in the app or on TheTradingTitans.com (which is what earns the site its
+/// search traffic), and a nudge to practise the market the post is about.
 class NewsReaderScreen extends StatefulWidget {
   final Map<String, dynamic> post;
 
-  const NewsReaderScreen({
-    super.key,
-    required this.post,
-  });
+  const NewsReaderScreen({super.key, required this.post});
 
   @override
   State<NewsReaderScreen> createState() => _NewsReaderScreenState();
@@ -26,644 +28,275 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
 
   Map<String, dynamic> get post => widget.post;
 
-  static const Map<String, String> _marketLabels = {
-    'all': 'Global Markets',
-    'stock': 'Indian Stocks',
-    'us_stock': 'US Stocks',
-    'crypto': 'Crypto',
-    'pakistan_stock': 'Pakistan Stocks',
-    'italy_stock': 'Italy Stocks',
-  };
-
-  static Map<String, Color> get _marketColors => {
-    'all': AppColors.imperialGold,
-    'stock': AppColors.bull,
-    'us_stock': AppColors.violet,
-    'crypto': AppColors.crown,
-    'pakistan_stock': AppColors.bull,
-    'italy_stock': AppColors.imperialGold,
-  };
-
-  ({String marketKey, String cleanExcerpt}) _parseExcerpt(String? raw) {
-    if (raw == null || raw.isEmpty) {
-      return (marketKey: 'all', cleanExcerpt: '');
-    }
-    final match = RegExp(r'^\[market:([a-z_]+)\]\s*(.*)$', dotAll: true).firstMatch(raw);
-    if (match != null) {
-      return (
-        marketKey: match.group(1) ?? 'all',
-        cleanExcerpt: match.group(2) ?? '',
-      );
-    }
-    return (marketKey: 'all', cleanExcerpt: raw);
+  String get _url {
+    final slug = (post['slug'] as String? ?? '').trim();
+    return slug.isEmpty ? '${AppConstants.marketingSiteUrl}/blog' : '${AppConstants.marketingSiteUrl}/blog/$slug';
   }
 
-  Future<void> _openFullArticle(BuildContext context, String slug) async {
-    final cleanSlug = slug.trim();
-    final url = cleanSlug.isNotEmpty
-        ? '${AppConstants.marketingSiteUrl}/blog/$cleanSlug'
-        : '${AppConstants.marketingSiteUrl}/blog';
-    final uri = Uri.tryParse(url);
+  /// Opens the article on the website; copies the link if no browser will take it.
+  Future<void> _openFullArticle() async {
+    final uri = Uri.tryParse(_url);
     if (uri == null) return;
-
     try {
-      bool launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) {
-        launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      for (final mode in [LaunchMode.externalApplication, LaunchMode.platformDefault, LaunchMode.inAppBrowserView]) {
+        if (await launchUrl(uri, mode: mode)) return;
       }
-      if (!launched) {
-        launched = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
-      }
-      if (!launched) {
-        await Clipboard.setData(ClipboardData(text: url));
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Link copied to clipboard:\n$url'),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
-      }
-    } catch (_) {
-      await Clipboard.setData(ClipboardData(text: url));
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Link copied to clipboard:\n$url'),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+    } catch (_) {}
+    await _copyLink();
+  }
+
+  Future<void> _copyLink() async {
+    await Clipboard.setData(ClipboardData(text: _url));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied')));
     }
+  }
+
+  /// Share without a plugin: WhatsApp's own share link, or copy the article URL.
+  void _share() {
+    final title = post['title'] as String? ?? 'Market news';
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: Icon(Icons.chat_outlined, color: AppColors.bull),
+            title: const Text('Share on WhatsApp'),
+            onTap: () async {
+              Navigator.pop(sheet);
+              final wa = Uri.parse('https://wa.me/?text=${Uri.encodeComponent('$title\n$_url')}');
+              if (!await launchUrl(wa, mode: LaunchMode.externalApplication)) await _copyLink();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.link_rounded, color: AppColors.goldMid),
+            title: const Text('Copy link'),
+            onTap: () {
+              Navigator.pop(sheet);
+              _copyLink();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.open_in_new_rounded, color: AppColors.ink3),
+            title: const Text('Open on website'),
+            onTap: () {
+              Navigator.pop(sheet);
+              _openFullArticle();
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ]),
+      ),
+    );
+  }
+
+  /// Paragraphs to show: all once expanded, otherwise roughly the first half.
+  List<String> _paragraphs(String body) {
+    final all = body.split(RegExp(r'\n\s*\n')).where((p) => p.trim().isNotEmpty).toList();
+    if (_expanded) return all;
+    if (all.length > 1) return all.take((all.length / 2).ceil()).toList();
+    if (body.isEmpty) return const [];
+    final cut = (body.length / 2).round();
+    final space = body.lastIndexOf(' ', cut);
+    return [body.substring(0, space > 0 ? space : cut)];
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = post['title'] as String? ?? 'Market News';
-    final slug = post['slug'] as String? ?? '';
-    final coverUrl = post['cover_url'] as String?;
-    final rawExcerpt = post['excerpt'] as String?;
-    final bodyMarkdown = post['body_markdown'] as String? ?? '';
-    final publishedAt = post['published_at'] as String?;
-
-    final parsed = _parseExcerpt(rawExcerpt);
-    final marketKey = parsed.marketKey;
-    final cleanExcerpt = parsed.cleanExcerpt;
-    final marketLabel = _marketLabels[marketKey] ?? 'Market News';
-    final tagColor = _marketColors[marketKey] ?? AppColors.imperialGold;
-
-    DateTime? publishDate;
-    if (publishedAt != null) {
-      publishDate = DateTime.tryParse(publishedAt);
-    }
-    final formattedDate = publishDate != null
-        ? DateFormat('d MMM yyyy').format(publishDate)
-        : 'Recent Update';
-
-    // Slice content: full if expanded, else first half
-    final rawParagraphs = bodyMarkdown
-        .split(RegExp(r'\n\s*\n'))
-        .where((p) => p.trim().isNotEmpty)
-        .toList();
-
-    List<String> visibleParagraphs;
-    if (_expanded) {
-      visibleParagraphs = rawParagraphs;
-    } else if (rawParagraphs.length > 1) {
-      final halfCount = (rawParagraphs.length / 2).ceil();
-      visibleParagraphs = rawParagraphs.take(halfCount.clamp(1, rawParagraphs.length)).toList();
-    } else if (bodyMarkdown.isNotEmpty) {
-      final cutoff = (bodyMarkdown.length / 2).round();
-      final lastSpace = bodyMarkdown.lastIndexOf(' ', cutoff);
-      visibleParagraphs = [bodyMarkdown.substring(0, lastSpace > 0 ? lastSpace : cutoff)];
-    } else {
-      visibleParagraphs = [];
-    }
+    final parsed = parseNewsExcerpt(post['excerpt'] as String?);
+    final market = parsed.marketKey;
+    final tint = newsMarketColors[market] ?? AppColors.goldMid;
+    final body = post['body_markdown'] as String? ?? '';
+    final published = DateTime.tryParse(post['published_at'] as String? ?? '')?.toLocal();
+    // Collapsed always shows about half, so there is more until expanded.
+    final hasMore = !_expanded && body.trim().isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.parchment,
-      appBar: AppBar(
-        backgroundColor: AppColors.parchment,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.ink),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.open_in_new_outlined, color: AppColors.ink2),
-            tooltip: 'Open in Browser',
-            onPressed: () => _openFullArticle(context, slug),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: AppSpacing.xxl * 2),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Cover Image Hero
-            if (coverUrl != null && coverUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image.network(
-                      coverUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: AppColors.cream,
-                        child: Center(
-                          child: Icon(Icons.broken_image_outlined, color: AppColors.ink5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Market tag and date
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: tagColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                            border: Border.all(color: tagColor.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  color: tagColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  marketLabel,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: tagColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        formattedDate,
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 12,
-                          color: AppColors.ink4,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Title
-                  Text(
-                    title,
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                      height: 1.3,
-                    ),
-                  ),
-
-                  // Excerpt / Subtitle
-                  if (cleanExcerpt.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      cleanExcerpt,
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.ink3,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: AppSpacing.md),
-                  Divider(color: AppColors.birch),
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Article content
-                  for (final paragraph in visibleParagraphs)
-                    _renderParagraph(paragraph),
-
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Lock card or Expanded Footer
-                  if (!_expanded)
-                    _buildLockCard(context, slug)
-                  else
-                    _buildExpandedFooter(context, slug),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _renderParagraph(String text) {
-    final trimmed = text.trim();
-    if (trimmed.startsWith('### ')) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 6),
-        child: Text(
-          trimmed.substring(4),
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-      );
-    } else if (trimmed.startsWith('## ')) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 8),
-        child: Text(
-          trimmed.substring(3),
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-      );
-    } else if (trimmed.startsWith('# ')) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 18, bottom: 8),
-        child: Text(
-          trimmed.substring(2),
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
-        ),
-      );
-    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 6, left: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(top: 6, right: 8),
-              child: Icon(Icons.circle, size: 6, color: AppColors.imperialGold),
-            ),
-            Expanded(
-              child: Text(
-                trimmed.substring(2),
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 14.5,
-                  height: 1.6,
-                  color: AppColors.ink,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Standard paragraph with bold parsing
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      child: _renderRichText(trimmed),
-    );
-  }
-
-  Widget _renderRichText(String text) {
-    final spans = <TextSpan>[];
-    final regex = RegExp(r'\*\*(.*?)\*\*');
-    int lastMatchEnd = 0;
-
-    for (final match in regex.allMatches(text)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(
-          text: text.substring(lastMatchEnd, match.start),
-          style: GoogleFonts.ibmPlexSans(
-            fontSize: 14.5,
-            height: 1.6,
-            color: AppColors.ink,
-          ),
-        ));
-      }
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: GoogleFonts.ibmPlexSans(
-          fontSize: 14.5,
-          height: 1.6,
-          fontWeight: FontWeight.bold,
-          color: AppColors.ink,
-        ),
-      ));
-      lastMatchEnd = match.end;
-    }
-
-    if (lastMatchEnd < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(lastMatchEnd),
-        style: GoogleFonts.ibmPlexSans(
-          fontSize: 14.5,
-          height: 1.6,
-          color: AppColors.ink,
-        ),
-      ));
-    }
-
-    return Text.rich(TextSpan(children: spans));
-  }
-
-  Widget _buildLockCard(BuildContext context, String slug) {
-    return Container(
-      margin: const EdgeInsets.only(top: AppSpacing.sm),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.warmWhite.withValues(alpha: 0.6),
-            AppColors.warmWhite,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.birch, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Gradient fade indicator showing reading cutoff
+      body: SafeArea(
+        child: Column(children: [
           Container(
-            height: 4,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.imperialGold,
-                  AppColors.crown,
-                  AppColors.bull,
-                ],
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back to news', onTap: () => Navigator.of(context).pop()),
+              const Spacer(),
+              AuthIconButton(icon: Icons.share_outlined, label: 'Share article', onTap: _share),
+              const SizedBox(width: 10),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
               ),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
-            ),
+            ]),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
-            child: Column(
-              children: [
-                // Lock Icon with glowing container
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: AppColors.imperialGold.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.imperialGold.withValues(alpha: 0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.lock_rounded,
-                      size: 28,
-                      color: AppColors.imperialGold,
-                    ),
-                  ),
-                ),
+          Expanded(
+            child: ListView(padding: const EdgeInsets.fromLTRB(20, 18, 20, AppSpacing.xl), children: [
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                _tag((kNewsChipLabels[market] ?? 'Global').toUpperCase(), tint),
+                _tag('${newsReadMinutes(body)} MIN READ', null),
+              ]),
+              const SizedBox(height: AppSpacing.md),
+              Text(post['title'] as String? ?? 'Market news', style: GoogleSerif.headline(26).copyWith(height: 1.25)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Trading Titans Desk${published == null ? '' : ' · ${DateFormat('d MMM yyyy').format(published)}'}',
+                style: AppFonts.sans(size: 12, color: AppColors.ink4),
+              ),
+              const SizedBox(height: 18),
+              NewsCover(url: post['cover_url'] as String?, market: market, height: 190),
+              const SizedBox(height: 18),
+              if (parsed.cleanExcerpt.isNotEmpty) ...[
+                Text(parsed.cleanExcerpt,
+                    style: AppFonts.serif(size: 17, weight: FontWeight.w600, color: AppColors.ink2, height: 1.55)),
                 const SizedBox(height: AppSpacing.md),
-
-                Text(
-                  'Continue Reading Full Analysis',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'You have completed the initial breakdown. Unlock the full research note, live chart levels, and deep market thesis on our website.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 13,
-                    color: AppColors.ink3,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Action Buttons
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => _openFullArticle(context, slug),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.imperialGold,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Read Full Article on Website',
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.open_in_new_rounded, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => setState(() => _expanded = true),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.ink,
-                      side: BorderSide(color: AppColors.birch, width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.chrome_reader_mode_outlined, size: 16),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'Read Complete Story In-App',
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.verified_outlined, size: 13, color: AppColors.ink4),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        'thetradingtitans.com  ·  Free Educational Research',
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 11.5,
-                          color: AppColors.ink4,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
-            ),
+              for (final p in _paragraphs(body)) _paragraph(p),
+              const SizedBox(height: AppSpacing.md),
+              if (hasMore) _continueCard() else _finishedCard(),
+              const SizedBox(height: 18),
+              _practiseCard(market, tint),
+            ]),
           ),
-        ],
+        ]),
       ),
     );
   }
 
-  Widget _buildExpandedFooter(BuildContext context, String slug) {
-    return Container(
-      margin: const EdgeInsets.only(top: AppSpacing.lg),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Full Research Note Completed',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ),
-            ],
+  Widget _tag(String text, Color? color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(color?.withValues(alpha: 0.14) ?? AppColors.cream),
+        child: Text(text, style: AppText.badge.copyWith(color: color ?? AppColors.ink3)),
+      );
+
+  /// Markdown subset the editor produces: #/##/### headings, - or * bullets, **bold**.
+  Widget _paragraph(String text) {
+    final t = text.trim();
+    for (final (prefix, size) in [('### ', 18.0), ('## ', 20.0), ('# ', 22.0)]) {
+      if (t.startsWith(prefix)) {
+        return Padding(
+          padding: const EdgeInsets.only(top: 14, bottom: 8),
+          child: Text(t.substring(prefix.length), style: AppFonts.sans(size: size, weight: FontWeight.w700, color: AppColors.ink)),
+        );
+      }
+    }
+    if (t.startsWith('- ') || t.startsWith('* ')) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 4),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 10, right: 10),
+            child: Container(width: 5, height: 5, decoration: BoxDecoration(color: AppColors.goldMid, shape: BoxShape.circle)),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Explore more macroeconomic intelligence and daily institutional breakdowns on our official website blog.',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 12.5,
-              color: AppColors.ink3,
-              height: 1.4,
-            ),
-          ),
+          Expanded(child: _rich(t.substring(2))),
+        ]),
+      );
+    }
+    return Padding(padding: const EdgeInsets.only(bottom: 14), child: _rich(t));
+  }
+
+  Widget _rich(String text) {
+    final base = AppFonts.serif(size: 17, color: AppColors.ink, height: 1.6);
+    final spans = <TextSpan>[];
+    var last = 0;
+    for (final m in RegExp(r'\*\*(.*?)\*\*').allMatches(text)) {
+      if (m.start > last) spans.add(TextSpan(text: text.substring(last, m.start)));
+      spans.add(TextSpan(text: m.group(1), style: const TextStyle(fontWeight: FontWeight.w700)));
+      last = m.end;
+    }
+    if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
+    return Text.rich(TextSpan(style: base, children: spans));
+  }
+
+  /// Halfway point: finish here or on the website.
+  Widget _continueCard() => Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.goldPale,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.goldBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Continue reading', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+          const SizedBox(height: 4),
+          Text('Read the rest here, or the full research note with chart levels on TheTradingTitans.com.',
+              style: AppFonts.sans(size: 13, color: AppColors.ink3, height: 1.4)),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _openFullArticle(context, slug),
-                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                  label: const Text(
-                    'Open on Website',
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.imperialGold,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              OutlinedButton(
-                onPressed: () => setState(() => _expanded = false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.ink3,
-                  side: BorderSide(color: AppColors.birch),
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                ),
-                child: const Text('Collapse'),
-              ),
-            ],
+          ElevatedButton(
+            onPressed: () => setState(() => _expanded = true),
+            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+            child: const Text('Read the full story here'),
           ),
-        ],
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: _openFullArticle,
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('Open on website'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+          ),
+        ]),
+      );
+
+  Widget _finishedCard() => Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.birch),
+        ),
+        child: Row(children: [
+          Icon(Icons.check_circle_outline_rounded, color: AppColors.bull),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('You have read the full story.', style: AppFonts.sans(size: 14, color: AppColors.ink2))),
+          TextButton(onPressed: _openFullArticle, child: const Text('Website')),
+        ]),
+      );
+
+  /// The design's "practise trade" card. Posts carry a market, not a symbol, so
+  /// it practises that market from the Trade tab.
+  Widget _practiseCard(String market, Color tint) {
+    final name = switch (market) {
+      'stock' => 'Indian stocks',
+      'us_stock' => 'US stocks',
+      'crypto' => 'crypto',
+      'pakistan_stock' => 'Pakistan stocks',
+      'italy_stock' => 'Italy stocks',
+      _ => 'the markets',
+    };
+    return Material(
+      color: AppColors.pureWhite,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: () {
+          NavTabService.goToTab(NavTabService.trade);
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Icon(Icons.candlestick_chart_outlined, color: tint),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Practise what you just read', style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
+                Text('Trade $name with demo cash', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.goldPale,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.goldMid),
+              ),
+              child: Text('Practise trade', style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.goldMid)),
+            ),
+          ]),
+        ),
       ),
     );
   }
