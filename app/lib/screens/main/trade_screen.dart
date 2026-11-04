@@ -1,19 +1,101 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../core/theme.dart';
-import '../../core/money.dart';
-import '../../core/app_constants.dart';
-import '../../services/market_service.dart';
-import '../../models/quote.dart';
 
-import '../../widgets/stock_action_sheet.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/market_nav_bar.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/market_hours.dart';
+import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../models/quote.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/currency_service.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/market_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/market_nav_bar.dart';
+import '../../widgets/stock_action_sheet.dart';
+import 'muhurat_screen.dart';
+import 'option_chain_screen.dart';
+import 'orders_screen.dart';
+import 'stock_detail_screen.dart';
+
+typedef MoverSymbol = ({String symbol, String name, String? display});
+MoverSymbol _s(String symbol, String name, [String? display]) => (symbol: symbol, name: name, display: display);
+
+/// Headline cards per market: (quote symbol, label). Priced with the rows.
+const Map<String, List<(String, String)>> kMarketIndices = {
+  'stock': [('NIFTY', 'NIFTY 50'), ('BANKNIFTY', 'BANKNIFTY')],
+  'fo': [('NIFTY', 'NIFTY 50'), ('BANKNIFTY', 'BANKNIFTY')],
+  'us_stock': [('^GSPC', 'S&P 500'), ('^IXIC', 'NASDAQ')],
+  'crypto': [('BTC', 'BTC'), ('ETH', 'ETH')],
+  'pakistan_stock': [('^KSE', 'KSE 100')],
+  'italy_stock': [('FTSEMIB.MI', 'FTSE MIB')],
+};
+
+/// The universe each market's movers are ranked from: the large, liquid names
+/// people actually trade. Search reaches everything else. The India, crypto and
+/// US lists mirror `POPULAR` in supabase/functions/refresh-quotes so they are
+/// served from quotes_cache (pinned by popular_symbols_sync_test).
+final Map<String, List<MoverSymbol>> kMoverUniverse = {
+  'stock': [
+    for (final (s, n) in const [
+      ('RELIANCE', 'Reliance Industries'), ('TCS', 'Tata Consultancy Services'), ('HDFCBANK', 'HDFC Bank'),
+      ('INFY', 'Infosys'), ('ICICIBANK', 'ICICI Bank'), ('SBIN', 'State Bank of India'), ('BHARTIARTL', 'Bharti Airtel'),
+      ('ITC', 'ITC'), ('LT', 'Larsen & Toubro'), ('HINDUNILVR', 'Hindustan Unilever'), ('KOTAKBANK', 'Kotak Mahindra Bank'),
+      ('AXISBANK', 'Axis Bank'), ('BAJFINANCE', 'Bajaj Finance'), ('MARUTI', 'Maruti Suzuki'), ('SUNPHARMA', 'Sun Pharma'),
+      ('TITAN', 'Titan Company'), ('ASIANPAINT', 'Asian Paints'), ('WIPRO', 'Wipro'), ('HCLTECH', 'HCL Technologies'),
+      ('TATASTEEL', 'Tata Steel'), ('NTPC', 'NTPC'), ('POWERGRID', 'Power Grid'), ('ONGC', 'ONGC'),
+      ('ADANIENT', 'Adani Enterprises'), ('ETERNAL', 'Eternal (Zomato)'), ('TMPV', 'Tata Motors (Passenger)'),
+      ('TMCV', 'Tata Motors (Commercial)'),
+    ])
+      _s(s, n),
+  ],
+  'us_stock': [
+    for (final (s, n) in const [
+      ('AAPL', 'Apple'), ('MSFT', 'Microsoft'), ('NVDA', 'NVIDIA'), ('AMZN', 'Amazon'), ('GOOGL', 'Alphabet'),
+      ('META', 'Meta Platforms'), ('TSLA', 'Tesla'), ('NFLX', 'Netflix'), ('AMD', 'AMD'), ('INTC', 'Intel'),
+      ('JPM', 'JPMorgan Chase'), ('V', 'Visa'), ('WMT', 'Walmart'), ('DIS', 'Disney'), ('ORCL', 'Oracle'), ('AVGO', 'Broadcom'),
+    ])
+      _s(s, n),
+  ],
+  'crypto': [
+    for (final (s, n) in const [
+      ('BTC', 'Bitcoin'), ('ETH', 'Ethereum'), ('SOL', 'Solana'), ('BNB', 'BNB'), ('XRP', 'Ripple'), ('ADA', 'Cardano'),
+      ('DOGE', 'Dogecoin'), ('POL', 'Polygon'), ('AVAX', 'Avalanche'), ('DOT', 'Polkadot'), ('LINK', 'Chainlink'),
+      ('LTC', 'Litecoin'), ('TRX', 'Tron'),
+    ])
+      _s(s, n),
+  ],
+  'pakistan_stock': [
+    _s('OGDC.KA', 'Oil & Gas Development Company', 'OGDC'), _s('LUCK.KA', 'Lucky Cement Ltd', 'LUCK'),
+    _s('MCB.KA', 'MCB Bank Ltd', 'MCB'), _s('SYS.KA', 'Systems Ltd', 'SYS'), _s('HBL.KA', 'Habib Bank Ltd', 'HBL'),
+    _s('EFERT.KA', 'Engro Fertilizers Ltd', 'EFERT'), _s('HUBC.KA', 'Hub Power Company', 'HUBC'),
+    _s('FFC.KA', 'Fauji Fertilizer Company', 'FFC'),
+  ],
+  'italy_stock': [
+    _s('ENI.MI', 'Eni S.p.A.', 'ENI'), _s('RACE.MI', 'Ferrari N.V.', 'RACE'), _s('ISP.MI', 'Intesa Sanpaolo', 'ISP'),
+    _s('UCG.MI', 'UniCredit S.p.A.', 'UCG'), _s('STLAM.MI', 'Stellantis N.V.', 'STLAM'), _s('ENEL.MI', 'Enel S.p.A.', 'ENEL'),
+    _s('G.MI', 'Assicurazioni Generali', 'GENERALI'), _s('PRY.MI', 'Prysmian S.p.A.', 'PRY'),
+  ],
+};
+
+/// F&O tab: underlyings with an option chain, their name, and the quote that prices them.
+const List<(String, String, String)> kFoUnderlyings = [
+  ('NIFTY', 'Nifty 50 index', 'NIFTY'), ('BANKNIFTY', 'Nifty Bank index', 'BANKNIFTY'),
+  ('RELIANCE', 'Reliance Industries', 'RELIANCE'), ('HDFCBANK', 'HDFC Bank', 'HDFCBANK'), ('ICICIBANK', 'ICICI Bank', 'ICICIBANK'),
+  ('INFY', 'Infosys', 'INFY'), ('TCS', 'Tata Consultancy Services', 'TCS'), ('SBIN', 'State Bank of India', 'SBIN'),
+];
+
+/// Today's gainers (biggest rise first) or losers (biggest fall first) among
+/// [quotes]; flat names belong to neither list.
+List<Quote> topMovers(Iterable<Quote> quotes, {required bool gainers, int limit = 8}) {
+  final list = quotes.where((q) => gainers ? q.changePct > 0 : q.changePct < 0).toList()
+    ..sort((a, b) => gainers ? b.changePct.compareTo(a.changePct) : a.changePct.compareTo(b.changePct));
+  return list.take(limit).toList();
+}
 
 class TradeScreen extends StatefulWidget {
   const TradeScreen({super.key});
@@ -23,121 +105,58 @@ class TradeScreen extends StatefulWidget {
 }
 
 class _TradeScreenState extends State<TradeScreen> {
-  /// Opens on the user's favourite market. Falls back to Indian stocks, which is
-  /// also the default for an account that never answered onboarding.
+  /// Opens on the user's favourite market; Indian stocks when none was chosen.
   String _market = CurrencyService.instance.defaultMarket;
   String _searchQuery = '';
   List<Map<String, dynamic>> _results = [];
   bool _loading = false;
+  bool _gainers = true;
   Timer? _debounce;
 
-  /// Live prices for whatever the list is currently showing, keyed
-  /// `symbol\x1Fmarket` to match [MarketService.quotes].
-  ///
-  /// Held here rather than in each row because one batched call per tick costs a
-  /// single `quotes_cache` query for the whole list, where per-row polling cost
-  /// one query *plus* a live fetch per row per tick. With nine popular rows on a
-  /// 4s poll that was roughly 4.5 requests a second from one phone.
+  /// Live prices keyed `symbol\x1Fmarket`, as [MarketService.quotes] returns them.
+  /// One batched call per tick prices every card and row on screen.
   Map<String, Quote> _quotes = const {};
   Timer? _priceTimer;
 
-  /// Consecutive failed polls. Rows show a stale marker past
-  /// [_staleAfterFailures] so a wedged feed is visible instead of looking like a
-  /// price that simply is not moving.
+  /// Consecutive failed polls; past two, prices are marked stale so a wedged
+  /// feed is visible instead of looking like a flat market.
   int _failedPolls = 0;
-  static const int _staleAfterFailures = 2;
+  bool get _pricesAreStale => _failedPolls >= 2;
 
-  bool get _pricesAreStale => _failedPolls >= _staleAfterFailures;
-
-  final List<Map<String, String>> _popularStocks = [
-    {'symbol': 'RELIANCE', 'name': 'Reliance Industries'},
-    {'symbol': 'TCS', 'name': 'Tata Consultancy Services'},
-    {'symbol': 'HDFCBANK', 'name': 'HDFC Bank'},
-    {'symbol': 'INFY', 'name': 'Infosys'},
-    {'symbol': 'ICICIBANK', 'name': 'ICICI Bank'},
-    {'symbol': 'TMCV', 'name': 'Tata Motors (Commercial)'},
-    {'symbol': 'TMPV', 'name': 'Tata Motors (Passenger)'},
-    {'symbol': 'ADANIENT', 'name': 'Adani Enterprises'},
-    {'symbol': 'ETERNAL', 'name': 'Eternal (Zomato)'},
-  ];
-
-  final List<Map<String, String>> _popularCrypto = [
-    {'symbol': 'BTC', 'name': 'Bitcoin'},
-    {'symbol': 'ETH', 'name': 'Ethereum'},
-    {'symbol': 'SOL', 'name': 'Solana'},
-    {'symbol': 'BNB', 'name': 'BNB'},
-    {'symbol': 'XRP', 'name': 'Ripple'},
-    {'symbol': 'ADA', 'name': 'Cardano'},
-    {'symbol': 'DOGE', 'name': 'Dogecoin'},
-    {'symbol': 'POL', 'name': 'Polygon'},
-  ];
-
-  final List<Map<String, String>> _popularUsStocks = [
-    {'symbol': 'AAPL', 'name': 'Apple'},
-    {'symbol': 'MSFT', 'name': 'Microsoft'},
-    {'symbol': 'NVDA', 'name': 'NVIDIA'},
-    {'symbol': 'AMZN', 'name': 'Amazon'},
-    {'symbol': 'GOOGL', 'name': 'Alphabet'},
-    {'symbol': 'META', 'name': 'Meta Platforms'},
-    {'symbol': 'TSLA', 'name': 'Tesla'},
-    {'symbol': 'NFLX', 'name': 'Netflix'},
-  ];
-
-  final List<Map<String, String>> _popularPakistanStocks = [
-    {'symbol': 'OGDC.KA', 'name': 'Oil & Gas Development Company', 'display_symbol': 'OGDC'},
-    {'symbol': 'LUCK.KA', 'name': 'Lucky Cement Ltd', 'display_symbol': 'LUCK'},
-    {'symbol': 'MCB.KA', 'name': 'MCB Bank Ltd', 'display_symbol': 'MCB'},
-    {'symbol': 'SYS.KA', 'name': 'Systems Ltd', 'display_symbol': 'SYS'},
-    {'symbol': 'HBL.KA', 'name': 'Habib Bank Ltd', 'display_symbol': 'HBL'},
-    {'symbol': 'EFERT.KA', 'name': 'Engro Fertilizers Ltd', 'display_symbol': 'EFERT'},
-    {'symbol': 'HUBC.KA', 'name': 'Hub Power Company', 'display_symbol': 'HUBC'},
-    {'symbol': 'FFC.KA', 'name': 'Fauji Fertilizer Company', 'display_symbol': 'FFC'},
-  ];
-
-  final List<Map<String, String>> _popularItalyStocks = [
-    {'symbol': 'ENI.MI', 'name': 'Eni S.p.A.', 'display_symbol': 'ENI'},
-    {'symbol': 'RACE.MI', 'name': 'Ferrari N.V.', 'display_symbol': 'RACE'},
-    {'symbol': 'ISP.MI', 'name': 'Intesa Sanpaolo', 'display_symbol': 'ISP'},
-    {'symbol': 'UCG.MI', 'name': 'UniCredit S.p.A.', 'display_symbol': 'UCG'},
-    {'symbol': 'STLAM.MI', 'name': 'Stellantis N.V.', 'display_symbol': 'STLAM'},
-    {'symbol': 'ENEL.MI', 'name': 'Enel S.p.A.', 'display_symbol': 'ENEL'},
-    {'symbol': 'G.MI', 'name': 'Assicurazioni Generali', 'display_symbol': 'GENERALI'},
-    {'symbol': 'PRY.MI', 'name': 'Prysmian S.p.A.', 'display_symbol': 'PRY'},
-  ];
-
-  /// Markets that are visible in the bar but not wired to live quotes yet.
-  /// Driven by the `us_stocks_enabled` flag in the `app_flags` table, so US
-  /// stocks can be switched on from the backend without a release.
-  Set<String> get _comingSoonMarkets =>
-      AppFlagsService.instance.usStocksEnabled ? const {} : const {'us_stock'};
-
+  /// US is visible but greyed until `app_flags.us_stocks_enabled` is on.
+  Set<String> get _comingSoonMarkets => AppFlagsService.instance.usStocksEnabled ? const {} : const {'us_stock'};
   bool get _isComingSoon => _comingSoonMarkets.contains(_market);
+
+  /// F&O orders, quotes and chains all run on the `stock` market.
+  String get _orderMarket => _market == 'fo' ? 'stock' : _market;
+  bool get _searching => _searchQuery.trim().isNotEmpty;
 
   @override
   void initState() {
     super.initState();
     _checkFirstRunPreferences();
     _refreshPrices();
-    _priceTimer = Timer.periodic(
-      AppConstants.dashboardPricePoll,
-      (_) => _refreshPrices(),
-    );
+    // shortcut: 15 s, not the 4 s home poll, because this prices ~30 symbols a tick
+    // to rank movers. Move to a realtime quotes_cache subscription if it must be faster.
+    _priceTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshPrices());
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _priceTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkFirstRunPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final configured = prefs.getBool('market_preferences_configured') ?? false;
-    if (!configured && mounted) {
+    if (!(prefs.getBool('market_preferences_configured') ?? false) && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showMarketPreferencesDialog();
       });
     }
   }
 
-  /// Fetches every visible row's price in one call.
-  ///
-  /// Deliberately keeps the previous prices on failure — a row that was working a
-  /// moment ago should not blank — but counts the failure so the UI can say so.
   Future<void> _refreshPrices() async {
     final pairs = _visiblePairs();
     if (pairs.isEmpty) return;
@@ -145,8 +164,7 @@ class _TradeScreenState extends State<TradeScreen> {
       final fetched = await MarketService.quotes(pairs);
       if (!mounted) return;
       setState(() {
-        // Merge rather than replace: a symbol missing from this tick keeps its
-        // last known price instead of flickering back to a spinner.
+        // Merge, so a symbol missing from one tick keeps its last price.
         _quotes = {..._quotes, ...fetched};
         _failedPolls = fetched.isEmpty ? _failedPolls + 1 : 0;
       });
@@ -156,23 +174,22 @@ class _TradeScreenState extends State<TradeScreen> {
     }
   }
 
-  /// The symbol/market pairs currently on screen.
+  /// Everything the current view needs priced: index cards plus the rows.
   List<({String symbol, String market})> _visiblePairs() {
     if (_isComingSoon) return const [];
-    final source = _searchQuery.trim().isEmpty ? _popularFor(_market) : _results;
-    return source
-        .map((e) => (symbol: '${e['symbol'] ?? ''}', market: _market))
-        .where((p) => p.symbol.isNotEmpty)
-        .toList();
+    final m = _orderMarket;
+    return [
+      for (final (sym, _) in kMarketIndices[_market] ?? const <(String, String)>[]) (symbol: sym, market: m),
+      if (_searching)
+        for (final r in _results) (symbol: '${r['symbol'] ?? ''}', market: m)
+      else if (_market == 'fo')
+        for (final (_, _, q) in kFoUnderlyings) (symbol: q, market: m)
+      else
+        for (final s in kMoverUniverse[_market] ?? const <MoverSymbol>[]) (symbol: s.symbol, market: m),
+    ].where((p) => p.symbol.isNotEmpty).toList();
   }
 
-  List<Map<String, dynamic>> _popularFor(String market) => switch (market) {
-        'crypto' => _popularCrypto,
-        'us_stock' => _popularUsStocks,
-        'pakistan_stock' => _popularPakistanStocks,
-        'italy_stock' => _popularItalyStocks,
-        _ => _popularStocks,
-      };
+  Quote? _quote(String symbol) => _quotes['$symbol\x1F$_orderMarket'];
 
   void _selectMarket(String key) {
     if (key == _market) return;
@@ -183,8 +200,6 @@ class _TradeScreenState extends State<TradeScreen> {
       _loading = false;
     });
     _debounce?.cancel();
-    // The new market's symbols have no prices yet, so fetch without waiting for
-    // the next tick.
     _refreshPrices();
   }
 
@@ -201,14 +216,12 @@ class _TradeScreenState extends State<TradeScreen> {
   Future<void> _search(String query) async {
     setState(() => _loading = true);
     try {
-      final results = await MarketService.search(query, _market);
+      final results = await MarketService.search(query, _orderMarket);
       if (query != _searchQuery.trim() || !mounted) return;
       setState(() {
         _results = results;
         _loading = false;
       });
-      // Search results are a different symbol set, so price them immediately
-      // rather than showing spinners until the next tick.
       _refreshPrices();
     } catch (_) {
       if (query != _searchQuery.trim() || !mounted) return;
@@ -217,209 +230,330 @@ class _TradeScreenState extends State<TradeScreen> {
         _loading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Search failed. Check your connection and try again.'),
-        ),
+        const SnackBar(content: Text('Search failed. Check your connection and try again.')),
       );
     }
   }
 
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _priceTimer?.cancel();
-    super.dispose();
-  }
+  void _openSheet(String symbol, String name) =>
+      StockActionSheet.show(context, symbol: symbol, market: _orderMarket, name: name);
+
+  void _openChain(String underlying, double spot) => Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => OptionChainScreen(underlyingSymbol: underlying, spotPrice: spot)));
 
   @override
   Widget build(BuildContext context) {
-    // Watched so the US tab flips out of "coming soon" as soon as the flag
-    // lands, without needing a screen change.
-    context.watch<AppFlagsService>();
+    context.watch<AppFlagsService>(); // US flips out of "coming soon" as the flag lands
+    final preferred = context.watch<CurrencyService>().preferredMarkets;
     final tab = MarketTab.byKey(_market);
-    final displayList = _searchQuery.trim().isEmpty
-        ? _popularFor(_market)
-        : _results;
-
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Trade', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
-                      const SizedBox(height: 2),
-                      Text('Real markets. Virtual stakes.', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
-                    ],
-                  ),
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, color: AppColors.ink),
-                    color: AppColors.pureWhite,
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      side: BorderSide(color: AppColors.birch),
-                    ),
-                    onSelected: (val) {
-                      if (val == 'preferences') {
-                        _showMarketPreferencesDialog();
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      PopupMenuItem(
-                        value: 'preferences',
-                        child: Row(
-                          children: [
-                            Icon(Icons.tune_rounded, size: 18, color: AppColors.ink),
-                            const SizedBox(width: AppSpacing.sm),
-                            Text(
-                              'Change Market Preferences',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              Expanded(child: Text('Trade', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink))),
+              AuthIconButton(icon: Icons.tune_rounded, label: 'Market preferences', onTap: _showMarketPreferencesDialog),
+              const SizedBox(width: 8),
+              AuthIconButton(
+                icon: Icons.format_list_bulleted_rounded,
+                label: 'Order book',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: MarketNavBar(
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+            child: Column(children: [
+              if (!_isComingSoon) ...[
+                TextField(
+                  onChanged: _onSearchChanged,
+                  textInputAction: TextInputAction.search,
+                  style: AppFonts.sans(size: 14, color: AppColors.ink),
+                  decoration: InputDecoration(
+                    hintText: tab.searchHint,
+                    prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.ink4),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+              MarketNavBar(
                 selectedKey: _market,
                 comingSoonKeys: _comingSoonMarkets,
-                preferredKeys: context.watch<CurrencyService>().preferredMarkets,
+                preferredKeys: preferred,
                 filterToPreferred: true,
+                showFo: preferred.isEmpty || preferred.contains('stock'),
                 onSelected: _selectMarket,
               ),
-            ),
-            if (!_isComingSoon) ...[
-              Container(
-                margin: const EdgeInsets.all(AppSpacing.lg),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                decoration: AppCard.primary,
-                child: Row(
+            ]),
+          ),
+          if (_isComingSoon)
+            Expanded(
+              child: EmptyState(
+                icon: Icons.public_rounded,
+                title: '${tab.label} — coming soon',
+                message: 'US market trading is on the way. The tab is here so you can see it land; '
+                    'quotes and orders switch on shortly.',
+              ),
+            )
+          else
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshPrices,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.xl),
                   children: [
-                    Icon(Icons.search, size: 18, color: AppColors.ink4),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: TextField(
-                        onChanged: _onSearchChanged,
-                        decoration: InputDecoration(
-                          hintText: tab.searchHint,
-                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
-                          border: InputBorder.none,
-                        ),
-                        style: GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink),
-                      ),
-                    ),
+                    if (!_searching && (_market == 'stock' || _market == 'fo')) _muhuratBanner(),
+                    if (!_searching) _indexCards(),
+                    ...(_searching ? _searchRows() : _market == 'fo' ? _foRows() : _moverRows()),
+                    if (!_searching && _market == 'stock') _chainCard(),
                   ],
                 ),
               ),
-              if (_searchQuery.trim().isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                  child: Text(
-                    tab.popularHeading,
-                    style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5),
-                  ),
-                ),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-            if (_isComingSoon)
-              Expanded(
-                child: EmptyState(
-                  icon: Icons.public_rounded,
-                  title: '${tab.label} — coming soon',
-                  message:
-                      'US market trading is on the way. The tab is here so you can '
-                      'see it land; quotes and orders switch on shortly.',
-                ),
-              )
-            else
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : (_searchQuery.trim().isNotEmpty && displayList.isEmpty)
-                      ? EmptyState(
-                          icon: Icons.search_off_rounded,
-                          title: 'No results',
-                          message: 'No matches for "${_searchQuery.trim()}". Try a different name or symbol.',
-                        )
-                      : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                      itemCount: displayList.length,
-                      itemBuilder: (context, index) {
-                        final item = displayList[index];
-                        final symbol = item['symbol'] as String? ?? '';
-                        final name = item['name'] as String? ?? '';
-                        // Use display_symbol for cleaner UI (without NSE: and -EQ)
-                        var displaySymbol = item['display_symbol'] as String? ?? symbol;
-                        // Fallback: strip NSE:/BSE: prefix for display if not provided
-                        if (displaySymbol == symbol && displaySymbol.contains(':')) {
-                          displaySymbol = displaySymbol.split(':').last;
-                        }
-                        // Strip -EQ suffix for display
-                        displaySymbol = displaySymbol.replaceAll(RegExp(r'-(EQ|SM)$'), '');
-                        return GestureDetector(
-                          onTap: () => StockActionSheet.show(context, symbol: symbol, market: _market, name: name),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            decoration: AppCard.secondary,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.goldPale,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.goldBorder),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    displaySymbol.length >= 2 ? displaySymbol.substring(0, 2) : displaySymbol,
-                                    style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(displaySymbol, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                                      const SizedBox(height: 2),
-                                      Text(name, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    ],
-                                  ),
-                                ),
-                                  _LivePrice(
-                                    quote: _quotes['$symbol\x1F$_market'],
-                                    market: _market,
-                                    isStale: _pricesAreStale,
-                                  ),
-                                ],
-                              ),
-                          ),
-                        );
-                      },
-                    ),
             ),
-          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _tag(String text, Color fg, Color bg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(bg),
+        child: Text(text, style: AppText.badge.copyWith(color: fg)),
+      );
+
+  /// The next special session (Muhurat) and any exchange holiday in the next two weeks.
+  Widget _muhuratBanner() {
+    final now = DateTime.now().toUtc();
+    final s = MarketHours.nextSpecialSession(now);
+    if (s == null) return const SizedBox.shrink();
+    final live = !now.isBefore(s.start);
+    final left = (live ? s.end : s.start).difference(now);
+    final holiday = [for (var d = 1; d <= 14; d++) now.add(Duration(days: d))].where(MarketHours.isIndianHoliday).firstOrNull;
+    final gold = AppColors.titanGold;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+      child: Material(
+        color: AppColors.titanGoldSoft,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: gold)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MuhuratScreen())),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(children: [
+              Icon(Icons.local_fire_department_rounded, size: 26, color: gold),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text.rich(TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink), children: [
+                    TextSpan(text: s.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    TextSpan(text: ' · ${istLabel(s.start, 'EEE d MMM, h:mm a')} IST'),
+                  ])),
+                  if (holiday != null)
+                    Text('Closed ${istLabel(holiday, 'EEE d MMM')} · exchange holiday',
+                        style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              _tag(live ? 'LIVE' : '${left.inDays}D ${(left.inHours % 24).toString().padLeft(2, '0')}H',
+                  const Color(0xFF1A1200), gold),
+            ]),
+          ),
         ),
       ),
     );
   }
+
+  Widget _indexCards() {
+    final cards = kMarketIndices[_market] ?? const <(String, String)>[];
+    if (cards.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Row(children: [
+        for (final (i, (sym, label)) in cards.indexed) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(child: _indexCard(sym, label)),
+        ],
+      ]),
+    );
+  }
+
+  Widget _indexCard(String sym, String label) {
+    final q = _quote(sym);
+    final up = (q?.change ?? 0) >= 0;
+    return Material(
+      color: AppColors.pureWhite,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: sym, market: _orderMarket, name: label))),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink4)),
+            const SizedBox(height: 4),
+            Text(q == null ? '—' : Money.instrument(q.price, market: _orderMarket),
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.mono(size: 17, weight: FontWeight.w600, color: AppColors.ink)),
+            Text(
+              q == null ? ' ' : '${up ? '▲ +' : '▼ −'}${q.change.abs().toStringAsFixed(2)} (${q.changePct.abs().toStringAsFixed(2)}%)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppFonts.mono(size: 12, color: up ? AppColors.bull : AppColors.bear),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHead(String label, [Widget? trailing]) => Container(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 18, AppSpacing.lg, 8),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          Expanded(child: Text(label.toUpperCase(), style: AppText.sectionLabel)),
+          ?trailing,
+        ]),
+      );
+
+  Widget _chip(String label, bool on, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.only(left: 6),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: on,
+          showCheckmark: false,
+          visualDensity: VisualDensity.compact,
+          labelStyle: AppFonts.sans(size: 13, weight: FontWeight.w500, color: on ? AppColors.goldMid : AppColors.ink3),
+          side: BorderSide(color: on ? AppColors.goldMid : AppColors.birch),
+          onSelected: (_) => onTap(),
+        ),
+      );
+
+  List<Widget> _moverRows() {
+    final universe = kMoverUniverse[_market] ?? const <MoverSymbol>[];
+    final bySymbol = {for (final s in universe) s.symbol: s};
+    final priced = [for (final s in universe) ?_quote(s.symbol)];
+    final movers = topMovers(priced, gainers: _gainers);
+    return [
+      _sectionHead(
+        'Top movers · ${MarketTab.byKey(_market).label}',
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          _chip('Gainers', _gainers, () => setState(() => _gainers = true)),
+          _chip('Losers', !_gainers, () => setState(() => _gainers = false)),
+        ]),
+      ),
+      if (priced.isEmpty)
+        const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
+      else if (movers.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Text(_gainers ? 'Nothing is up today among popular names.' : 'Nothing is down today among popular names.',
+              textAlign: TextAlign.center, style: AppText.body),
+        )
+      else
+        for (final q in movers)
+          _row(bySymbol[q.symbol]?.display ?? q.symbol, bySymbol[q.symbol]?.name ?? q.name, q,
+              () => _openSheet(q.symbol, bySymbol[q.symbol]?.name ?? q.name)),
+    ];
+  }
+
+  List<Widget> _foRows() => [
+        _sectionHead('Option chains · futures'),
+        for (final (u, name, sym) in kFoUnderlyings) _row(u, name, _quote(sym), () => _openChain(u, _quote(sym)?.price ?? 0)),
+      ];
+
+  List<Widget> _searchRows() {
+    if (_loading) return const [Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))];
+    if (_results.isEmpty) {
+      return [
+        SizedBox(
+          height: 280,
+          child: EmptyState(
+            icon: Icons.search_off_rounded,
+            title: 'No results',
+            message: 'No matches for "${_searchQuery.trim()}". Try a different name or symbol.',
+          ),
+        ),
+      ];
+    }
+    return [for (final item in _results) _searchRow(item)];
+  }
+
+  Widget _searchRow(Map<String, dynamic> item) {
+    final symbol = item['symbol'] as String? ?? '';
+    final name = item['name'] as String? ?? '';
+    // NSE:RELIANCE-EQ reads as RELIANCE.
+    var display = item['display_symbol'] as String? ?? symbol;
+    if (display == symbol && display.contains(':')) display = display.split(':').last;
+    display = display.replaceAll(RegExp(r'-(EQ|SM)$'), '');
+    return _row(display, name, _quote(symbol),
+        () => _market == 'fo' ? _openChain(display, _quote(symbol)?.price ?? 0) : _openSheet(symbol, name));
+  }
+
+  Widget _row(String symbol, String name, Quote? q, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+          child: Row(children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.sm)),
+              child: Text(symbol.length >= 2 ? symbol.substring(0, 2) : symbol,
+                  style: AppFonts.mono(size: 12, weight: FontWeight.w600, color: AppColors.ink3)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold),
+                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            _LivePrice(quote: q, market: _orderMarket, isStale: _pricesAreStale),
+          ]),
+        ),
+      );
+
+  Widget _chainCard() => Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Material(
+          color: AppColors.pureWhite,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () => _openChain('NIFTY', _quote('NIFTY')?.price ?? 0),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Icon(Icons.show_chart_rounded, color: AppColors.goldMid),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Option chain · NIFTY', style: AppText.bodyBold),
+                    Text('Practise F&O with live greeks', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+        ),
+      );
 
   Future<void> _showMarketPreferencesDialog() async {
     final current = CurrencyService.instance.preferredMarkets;
@@ -557,7 +691,7 @@ class _TradeScreenState extends State<TradeScreen> {
                             await CurrencyService.instance.setPreferredMarkets(selected);
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('market_preferences_configured', true);
-                            if (!selected.contains(_market)) {
+                            if (_market != 'fo' && !selected.contains(_market)) {
                               setState(() {
                                 _market = selected.first;
                                 _searchQuery = '';
@@ -644,7 +778,7 @@ class _LivePrice extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          '${isPositive ? '+' : ''}${q.changePct.toStringAsFixed(2)}%',
+          '${isPositive ? '▲ +' : '▼ −'}${q.changePct.abs().toStringAsFixed(2)}%',
           style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 12,
             fontWeight: FontWeight.w600,

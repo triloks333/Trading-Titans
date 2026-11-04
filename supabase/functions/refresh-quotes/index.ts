@@ -53,8 +53,8 @@ function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): bool
  *
  * These are not in anybody's watchlist or holdings by default, so without them
  * the popular rows miss the cache and each client fetches them live — which is
- * why rows in one list moved at different rates. Mirrors the three `_popular*`
- * lists in `app/lib/screens/main/trade_screen.dart`; keep them in step.
+ * why rows in one list moved at different rates. Mirrors the India, crypto and US
+ * lists in `kMoverUniverse` in `app/lib/screens/main/trade_screen.dart`; keep them in step.
  *
  * ponytail: duplicated across Dart and TS rather than fetched from a table. The
  * ceiling is that a new popular symbol needs editing in two files; if these
@@ -62,12 +62,16 @@ function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): bool
  * read it here instead.
  */
 const POPULAR: { symbol: string; market: string }[] = [
-  ...["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "TMCV", "TMPV",
-      "ADANIENT", "ETERNAL"]
+  ...["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
+      "ITC", "LT", "HINDUNILVR", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "MARUTI",
+      "SUNPHARMA", "TITAN", "ASIANPAINT", "WIPRO", "HCLTECH", "TATASTEEL", "NTPC",
+      "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
     .map((symbol) => ({ symbol, market: "stock" })),
-  ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL"]
+  ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
+      "LINK", "LTC", "TRX"]
     .map((symbol) => ({ symbol, market: "crypto" })),
-  ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX"]
+  ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
+      "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
     .map((symbol) => ({ symbol, market: US_MARKET })),
 ];
 

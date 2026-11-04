@@ -70,8 +70,18 @@ class MarketTab {
     italyStock,
   ];
 
+  /// Indian derivatives: option chains and futures. Not a separate order
+  /// market (F&O orders still carry `stock`), so it is never in [all].
+  static const fo = MarketTab(
+    key: 'fo',
+    label: 'F&O',
+    icon: Icons.stacked_line_chart,
+    searchHint: 'Search an underlying, e.g. NIFTY',
+    popularHeading: 'OPTION CHAINS',
+  );
+
   static MarketTab byKey(String key) =>
-      all.firstWhere((t) => t.key == key, orElse: () => stock);
+      [...all, fo].firstWhere((t) => t.key == key, orElse: () => stock);
 }
 
 /// Horizontal market selector where the active tab expands to icon + label and
@@ -84,7 +94,11 @@ class MarketNavBar extends StatelessWidget {
     this.comingSoonKeys = const {},
     this.preferredKeys = const [],
     this.filterToPreferred = false,
+    this.showFo = false,
   });
+
+  /// Adds the F&O segment after the markets.
+  final bool showFo;
 
   final String selectedKey;
   final ValueChanged<String> onSelected;
@@ -121,7 +135,7 @@ class MarketNavBar extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
         child: Row(children: [
-          for (final tab in orderedTabs) Expanded(child: _buildTab(tab, tab.key == selectedKey)),
+          for (final tab in [...orderedTabs, if (showFo) MarketTab.fo]) Expanded(child: _buildTab(tab, tab.key == selectedKey)),
         ]),
       );
 

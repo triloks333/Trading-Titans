@@ -1,4 +1,4 @@
-// The Trade screen's popular symbols must all be in the refresh-quotes universe.
+// The Trade screen's movers universe must all be in the refresh-quotes universe.
 //
 // This is the invariant that broke: the popular lists live in Dart, the refresh
 // job's universe lives in TypeScript, and the job only collected symbols someone
@@ -14,18 +14,16 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// Symbols in a Dart list literal like `{'symbol': 'RELIANCE', 'name': ...}`,
-/// scoped to one `_popularX` field.
-Set<String> dartPopular(String source, String field) {
-  final start = source.indexOf(field);
-  expect(start, isNot(-1), reason: '$field not found in trade_screen.dart');
-  final end = source.indexOf('];', start);
-  expect(end, isNot(-1), reason: '$field is not a closed list literal');
-  final block = source.substring(start, end);
-  return RegExp(r"'symbol':\s*'([^']+)'")
-      .allMatches(block)
-      .map((m) => m.group(1)!)
-      .toSet();
+/// Symbols in one market's list of `kMoverUniverse`, written as
+/// `('RELIANCE', 'Reliance Industries')` tuples.
+Set<String> dartPopular(String source, String market) {
+  final universe = source.indexOf('kMoverUniverse');
+  expect(universe, isNot(-1), reason: 'kMoverUniverse not found in trade_screen.dart');
+  final start = source.indexOf("'$market': [", universe);
+  expect(start, isNot(-1), reason: '$market list not found in kMoverUniverse');
+  final end = source.indexOf('_s(s, n),', start);
+  expect(end, isNot(-1), reason: '$market list is not a closed literal');
+  return RegExp(r"\('([A-Z0-9]+)', '").allMatches(source.substring(start, end)).map((m) => m.group(1)!).toSet();
 }
 
 /// Symbols in one `[...].map((symbol) => ({ symbol, market: "x" }))` group of
@@ -68,23 +66,23 @@ void main() {
   });
 
   test('every popular Indian stock is in the refresh universe', () {
-    expect(tsPopular(ts, 'stock'), dartPopular(dart, '_popularStocks'));
+    expect(tsPopular(ts, 'stock'), dartPopular(dart, 'stock'));
   });
 
   test('every popular coin is in the refresh universe', () {
-    expect(tsPopular(ts, 'crypto'), dartPopular(dart, '_popularCrypto'));
+    expect(tsPopular(ts, 'crypto'), dartPopular(dart, 'crypto'));
   });
 
   test('every popular US stock is in the refresh universe', () {
-    expect(tsPopular(ts, 'us_stock'), dartPopular(dart, '_popularUsStocks'));
+    expect(tsPopular(ts, 'us_stock'), dartPopular(dart, 'us_stock'));
   });
 
   test('the lists are not accidentally empty', () {
     // Guards the parsers themselves: a regex that silently matches nothing would
     // make all three tests above pass trivially.
-    expect(dartPopular(dart, '_popularStocks').length, greaterThan(4));
-    expect(dartPopular(dart, '_popularCrypto').length, greaterThan(4));
-    expect(dartPopular(dart, '_popularUsStocks').length, greaterThan(4));
+    expect(dartPopular(dart, 'stock').length, greaterThan(4));
+    expect(dartPopular(dart, 'crypto').length, greaterThan(4));
+    expect(dartPopular(dart, 'us_stock').length, greaterThan(4));
   });
 
   test('refresh-quotes gates US symbols on the US session, not the Indian one', () {
