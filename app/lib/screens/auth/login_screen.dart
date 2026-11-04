@@ -239,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       'Reset Password',
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         color: AppColors.ink,
                       ),
                     ),
@@ -256,17 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AppSpacing.xs),
                     TextField(
                       controller: emailController,
-                      decoration: InputDecoration(
-                        hintText: 'you@example.com',
-                        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
-                        filled: true,
-                        fillColor: AppColors.cream,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: BorderSide(color: AppColors.birch),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 16),
-                      ),
+                      decoration: const InputDecoration(hintText: 'you@example.com'),
                     ),
                     if (resetError != null) ...[
                       const SizedBox(height: AppSpacing.sm),
@@ -314,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         minimumSize: const Size.fromHeight(52),
                       ),
                       child: resetting
-                          ? CircularProgressIndicator(color: AppColors.pureWhite)
+                          ? const CircularProgressIndicator(color: Colors.white)
                           : Text(
                               'Send Link',
                               style: TextStyle(
@@ -346,9 +336,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: AppSpacing.xxl),
                 const CrownLogo(size: 84),
                 const SizedBox(height: AppSpacing.lg),
-                Text('Trading Titans', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                Text('Trading Titans', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                Text('Trade Bold. Lose Nothing.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Trade Bold. Lose Nothing.', style: TextStyle(fontSize: 14, color: AppColors.ink3)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -357,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Welcome back, Titan', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      Text('Welcome back, Titan', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
                       Text('Sign in to your trading desk', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
@@ -388,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ElevatedButton(
                         onPressed: _busy ? null : _submit,
                         style: ElevatedButton.styleFrom(backgroundColor: AppColors.imperialGold, minimumSize: const Size.fromHeight(52)),
-                        child: _busy ? CircularProgressIndicator(color: AppColors.pureWhite) : Text('Sign In', style: TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
+                        child: _busy ? const CircularProgressIndicator(color: Colors.white) : Text('Sign In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Row(
@@ -531,11 +521,6 @@ class _LoginScreenState extends State<LoginScreen> {
       obscureText: isPassword ? _obscurePassword : obscureText,
       decoration: InputDecoration(
         hintText: placeholder,
-        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
-        filled: true,
-        fillColor: AppColors.cream,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide(color: AppColors.birch)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 16),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(

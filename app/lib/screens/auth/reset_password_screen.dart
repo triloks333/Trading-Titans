@@ -96,9 +96,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 const SizedBox(height: AppSpacing.xl),
                 const CrownLogo(size: 72),
                 const SizedBox(height: AppSpacing.lg),
-                Text('Secure Your Account', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                Text('Secure Your Account', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                Text('Enter a strong, new password below.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Enter a strong, new password below.', style: TextStyle(fontSize: 14, color: AppColors.ink3)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -111,7 +111,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Update Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      Text('Update Password', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
                       Text('Your new password must satisfy all checklist items.', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
@@ -145,8 +145,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           minimumSize: const Size.fromHeight(52),
                         ),
                         child: _busy
-                            ? CircularProgressIndicator(color: AppColors.pureWhite)
-                            : Text('Update Password', style: TextStyle(color: _isValid ? AppColors.pureWhite : AppColors.ink4, fontWeight: FontWeight.w600)),
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text('Update Password', style: TextStyle(color: _isValid ? Colors.white : AppColors.ink4, fontWeight: FontWeight.w600)),
                       ),
                     ],
                   ),
@@ -208,11 +208,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       },
       decoration: InputDecoration(
         hintText: placeholder,
-        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
-        filled: true,
-        fillColor: AppColors.cream,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide(color: AppColors.birch)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 16),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(

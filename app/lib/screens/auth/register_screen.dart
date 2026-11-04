@@ -199,9 +199,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: AppSpacing.xxl),
                 const CrownLogo(size: 72),
                 const SizedBox(height: AppSpacing.lg),
-                Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.ink3)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -210,9 +210,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      Text('Create your desk', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(height: AppSpacing.sm),
-                      Text('Start with ₹11,000 free dummy cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
+                      Text('Start with ₹1,100 free demo cash instantly!', style: TextStyle(fontSize: 13, color: AppColors.ink4)),
                       const SizedBox(height: AppSpacing.xl),
                       Text('Full Name (optional)', style: TextStyle(fontSize: 12, color: AppColors.ink3)),
                       const SizedBox(height: AppSpacing.xs),
@@ -286,8 +286,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           minimumSize: const Size.fromHeight(52),
                         ),
                         child: _busy
-                            ? CircularProgressIndicator(color: AppColors.pureWhite)
-                            : Text('Create Account', style: TextStyle(color: _isValid ? AppColors.pureWhite : AppColors.ink4, fontWeight: FontWeight.w600)),
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text('Create Account', style: TextStyle(color: _isValid ? Colors.white : AppColors.ink4, fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       Row(
@@ -437,11 +437,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
       decoration: InputDecoration(
         hintText: placeholder,
-        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
-        filled: true,
-        fillColor: AppColors.cream,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide(color: AppColors.birch)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 16),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(

@@ -141,7 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   Text(
                     'Trading Titans',
                     style: GoogleFonts.ibmPlexSans(
-                        fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink),
+                        fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
                   ),
                   const Spacer(),
                   if (_step > 0)
@@ -231,7 +231,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             Text(title,
                 style: GoogleFonts.ibmPlexSans(
-                    fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                    fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
             const SizedBox(height: 6),
             Text(subtitle,
                 style: GoogleFonts.ibmPlexSans(
@@ -487,7 +487,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               c.symbol,
               style: GoogleFonts.ibmPlexSans(
                   fontSize: 20,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: _currency == c ? AppColors.imperialGold : AppColors.ink4),
             ),
             onTap: () => setState(() => _currency = c),
@@ -602,7 +602,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Text(title,
                           style: GoogleFonts.ibmPlexSans(
                               fontSize: 15,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               color: AppColors.ink)),
                       const SizedBox(height: 2),
                       Text(subtitle,

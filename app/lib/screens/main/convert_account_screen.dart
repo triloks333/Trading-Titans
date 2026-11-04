@@ -89,7 +89,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.pureWhite,
         title: Text('You are a permanent Titan',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700)),
         content: Text(
           bonus > 0
               ? 'Your account is locked in and ${Money.wallet(bonus)} demo cash '
@@ -140,7 +140,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                     Text('Already permanent',
                         style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
@@ -160,7 +160,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                     Text('Unlock the full ₹1,100',
                         style: GoogleFonts.ibmPlexSans(
                             fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.ink)),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
@@ -344,14 +344,6 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
       enableSuggestions: !isPassword,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: AppColors.ink4.withValues(alpha: 0.5)),
-        filled: true,
-        fillColor: AppColors.cream,
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: BorderSide(color: AppColors.birch)),
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md, vertical: 16),
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
