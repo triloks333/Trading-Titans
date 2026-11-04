@@ -338,25 +338,16 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         alignment: Alignment.center,
         children: [
           Container(
-            height: 1.5,
-            color: isUp ? AppColors.bull.withValues(alpha: 0.5) : AppColors.bear.withValues(alpha: 0.5),
+            height: 1,
+            color: AppColors.goldMid,
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF1B2B3C), // Premium deep charcoal/blue
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isUp ? AppColors.bull : AppColors.bear,
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                )
-              ]
+              // Accent marker on the spot line, as in the Titan Terminal chain.
+              color: AppColors.goldPale,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.goldMid),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -369,12 +360,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 const SizedBox(width: 6),
                 Text(
                   '${Money.instrument(_spotPrice, market: widget.market)}  |  ${isUp ? '+' : ''}${Money.instrument(_change, market: widget.market)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
-                  style: GoogleFonts.ibmPlexSans(fontFeatures: const [FontFeature.tabularFigures()], 
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
+                  style: AppFonts.mono(size: 11, weight: FontWeight.w600, color: AppColors.goldMid),
                 ),
               ],
             ),
