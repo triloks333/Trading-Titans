@@ -12,7 +12,6 @@ import 'package:showcaseview/showcaseview.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:mobile/core/theme.dart';
-import 'package:mobile/models/order.dart';
 import 'package:mobile/screens/main/analytics_screen.dart';
 import 'package:mobile/screens/main/autopsy_screen.dart';
 import 'package:mobile/screens/main/chat_screen.dart';
@@ -38,9 +37,6 @@ Future<void> _loadFonts() async {
     }
   }
 }
-
-Order _o(double pnl, DateTime at) =>
-    Order(id: '$at', symbol: 'X', name: 'X', market: 'stock', side: 'sell', quantity: 1, price: 1, total: 1, realizedPnl: pnl, executedAt: at);
 
 Future<void> _pumpHome(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390, 844);
@@ -79,20 +75,16 @@ void main() {
     await Supabase.initialize(url: 'http://127.0.0.1:9', anonKey: 'home-test-key');
   });
 
-  test('realised curve sums closing fills inside the range, oldest first', () {
-    final now = DateTime(2026, 11, 4, 12);
-    final orders = [
-      _o(50, now.subtract(const Duration(hours: 2))),
-      _o(-20, now.subtract(const Duration(days: 3))),
-      _o(100, now.subtract(const Duration(days: 40))),
-      _o(0, now.subtract(const Duration(hours: 1))), // an opening buy: no realised P&L
+  test('portfolio curve moves each position with its own price, ends at today', () {
+    // ₹1,000 total: ₹500 of stock A (long), ₹200 short of B, rest cash.
+    final legs = <ChartLeg>[
+      (value: 500, sign: 1, prices: [(1, 80.0), (2, 90.0), (3, 100.0)]),
+      (value: 200, sign: -1, prices: [(2, 50.0), (3, 40.0)]),
     ];
-    expect(realisedCurve(orders, const Duration(days: 1), now: now), [0, 50]);
-    expect(realisedCurve(orders, const Duration(days: 7), now: now), [0, -20, 30]);
-    expect(realisedCurve(orders, null, now: now), [0, 100, 80, 130]);
-    // Book value walks back from today's total; the last step is open-position P&L.
-    expect(valueCurve(orders, const Duration(days: 7), total: 1100, unrealised: 40, now: now), [1030, 1010, 1060, 1100]);
-    expect(valueCurve(const [], null, total: 1100, unrealised: 0, now: now), [1100, 1100]);
+    // t1: A at 80% => -100; B before its first point uses 50 => short -(200*0.25) = -50.
+    // t2: A 90% => -50, B 50 => -50.  t3: both at latest => 0.  Then today's total.
+    expect(portfolioCurve(1000, legs), [850, 900, 1000, 1000]);
+    expect(portfolioCurve(1000, const []), [1000, 1000], reason: 'cash only is flat');
   });
 
   const pushes = <String, Type>{
@@ -133,7 +125,7 @@ void main() {
     expect(find.byType(CustomPaint), findsWidgets);
     expect(find.textContaining('1M  +'), findsOneWidget);
     await tester.tap(find.text('1Y'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('1Y  +'), findsOneWidget);
     expect(find.text('TOTAL PORTFOLIO VALUE · DEMO CASH'), findsOneWidget);
   });

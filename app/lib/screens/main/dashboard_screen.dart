@@ -12,7 +12,6 @@ import '../../core/app_constants.dart';
 import '../../core/market_hours.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
-import '../../models/order.dart';
 import '../../models/portfolio.dart';
 import '../../models/quote.dart';
 import '../../services/app_flags_service.dart';
@@ -41,33 +40,36 @@ import 'subscribe_screen.dart';
 import 'watchlist_screen.dart';
 import 'whatif_screen.dart';
 
-/// Chart ranges on the home value card, newest-first window lengths.
-const Map<String, Duration?> kHomeRanges = {
-  '1D': Duration(days: 1), '1W': Duration(days: 7), '1M': Duration(days: 30), '1Y': Duration(days: 365), 'ALL': null,
-};
+/// Chart range buttons mapped to the `market-history` range they fetch.
+const Map<String, String> kHomeRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', 'ALL': '5y'};
 
-/// Running total of realised P&L for orders filled inside [range], oldest first,
-/// starting from 0. There is no stored portfolio-value history, so the home
-/// chart plots what the user actually booked over the window.
-List<double> realisedCurve(List<Order> orders, Duration? range, {DateTime? now}) {
-  final from = range == null ? null : (now ?? DateTime.now()).subtract(range);
-  final fills = orders
-      .where((o) => o.realizedPnl != 0) // only executed closing orders carry realised P&L
-      .map((o) => (at: o.executedAt ?? o.createdAt, pnl: o.realizedPnl))
-      .where((f) => f.at != null && (from == null || f.at!.isAfter(from)))
-      .toList()
-    ..sort((a, b) => a.at!.compareTo(b.at!));
-  var sum = 0.0;
-  return [0, for (final f in fills) sum += f.pnl];
-}
+/// One open position on the chart: its live value now, +1 long / -1 short, and
+/// its closing prices over the range as (epoch ms, price), oldest first.
+typedef ChartLeg = ({double value, double sign, List<(int, double)> prices});
 
-/// Portfolio value across [range], ending at [total] now. No value history is
-/// stored, so it is rebuilt backwards: each closing fill moves the book value by
-/// its realised P&L, and the last step marks open positions to market.
-List<double> valueCurve(List<Order> orders, Duration? range, {required double total, required double unrealised, DateTime? now}) {
-  final r = realisedCurve(orders, range, now: now);
-  final start = total - unrealised - r.last;
-  return [for (final v in r) start + v, total];
+/// Portfolio value over the range, ending at [total] now. Cash and anything
+/// without a price history stay flat; each charted position moves with its own
+/// price relative to the latest close, so the line reacts to your stocks.
+List<double> portfolioCurve(double total, List<ChartLeg> legs) {
+  final charted = legs.where((l) => l.prices.isNotEmpty && l.prices.last.$2 > 0).toList();
+  if (charted.isEmpty) return [total, total];
+  final times = {for (final l in charted) ...l.prices.map((p) => p.$1)}.toList()..sort();
+  final at = List.filled(charted.length, 0);
+  return [
+    for (final t in times)
+      total +
+          [
+            for (var i = 0; i < charted.length; i++)
+              () {
+                final ps = charted[i].prices;
+                while (at[i] + 1 < ps.length && ps[at[i] + 1].$1 <= t) {
+                  at[i]++;
+                }
+                return charted[i].sign * charted[i].value.abs() * (ps[at[i]].$2 / ps.last.$2 - 1);
+              }(),
+          ].fold(0.0, (a, b) => a + b),
+    total,
+  ];
 }
 
 class DashboardScreen extends StatefulWidget {
@@ -84,7 +86,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Holding> _holdings = [];
   List<Quote> _watchlist = [];
   List<Quote> _overview = [];
-  List<Order> _orders = [];
+  final Map<String, List<ChartLeg>> _legs = {}; // per range, fetched once
   List<Map<String, dynamic>> _news = [];
   ChatMessage? _lastChat;
   int _newChats = 0;
@@ -166,6 +168,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _overview = r[0] as List<Quote>;
           _holdings = r[1] as List<Holding>;
           _watchlist = r[2] as List<Quote>;
+          _legs.clear();
         });
       }
     } catch (_) {
@@ -199,7 +202,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) setState(() => _news = posts.where((p) => p['published_at'] != null).toList());
     }).catchError((_) {});
     final results = await Future.wait<Object?>([
-      SupabaseService().getOrders(limit: 500).catchError((_) => <Order>[]),
+      Future.value(null),
       Future.value(null),
       ChatService.instance.loadRecent(),
       SharedPreferences.getInstance(),
@@ -208,10 +211,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final chats = results[2] as List<ChatMessage>;
     final seen = DateTime.tryParse((results[3] as SharedPreferences).getString(_chatSeenKey) ?? '');
     setState(() {
-      _orders = results[0] as List<Order>;
       _lastChat = chats.isEmpty ? null : chats.last;
       _newChats = seen == null ? 0 : chats.where((m) => m.createdAt.isAfter(seen)).length;
     });
+  }
+
+  /// Price history for every open position over [range]; options and anything
+  /// the history service cannot price come back empty and stay flat.
+  Future<void> _loadLegs(String range) async {
+    _legs[range] = const [];
+    final open = _open.toList();
+    final legs = await Future.wait(open.map((h) async {
+      final pts = h.isEquity ? await SupabaseService().getHistory(h.symbol, h.market, kHomeRanges[range]!).catchError((_) => <Map<String, dynamic>>[]) : const <Map<String, dynamic>>[];
+      return (
+        value: h.current,
+        sign: h.quantity < 0 ? -1.0 : 1.0,
+        prices: [for (final p in pts) if (p['t'] is num && p['v'] is num) ((p['t'] as num).toInt(), (p['v'] as num).toDouble())],
+      );
+    }));
+    if (mounted) setState(() => _legs[range] = legs);
   }
 
   Future<void> _maybeStartTour() async {
@@ -424,7 +442,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = wallet + _positions;
     final dayBase = total - _dayPnl;
     final allTime = realised + _unrealised;
-    final curve = valueCurve(_orders, kHomeRanges[_range], total: total, unrealised: _unrealised);
+    final legs = _legs[_range];
+    if (legs == null) _loadLegs(_range);
+    final curve = portfolioCurve(total, legs ?? const []);
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 18, AppSpacing.lg, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
