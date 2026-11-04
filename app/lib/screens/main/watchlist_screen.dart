@@ -111,7 +111,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(list == null ? 'New watchlist' : 'Edit watchlist',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: name,
@@ -121,7 +121,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 decoration: const InputDecoration(labelText: 'Name', hintText: 'e.g. Long-term, Intraday'),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text('Colour', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
+              Text('Colour', style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: 10,
@@ -157,8 +157,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                   if (list != null && _lists.length > 1)
                     TextButton.icon(
                       onPressed: () => Navigator.pop(sheet, 'delete'),
-                      icon: const Icon(Icons.delete_outline, color: AppColors.bear),
-                      label: const Text('Delete', style: TextStyle(color: AppColors.bear)),
+                      icon: Icon(Icons.delete_outline, color: AppColors.bear),
+                      label: Text('Delete', style: TextStyle(color: AppColors.bear)),
                     ),
                   const Spacer(),
                   FilledButton(
@@ -195,7 +195,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
             TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Delete', style: TextStyle(color: AppColors.bear)),
+              child: Text('Delete', style: TextStyle(color: AppColors.bear)),
             ),
           ],
         ),
@@ -218,7 +218,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(symbol, style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+              title: Text(symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800)),
             ),
             ListTile(
               leading: const Icon(Icons.segment_rounded),
@@ -232,8 +232,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 onTap: () => Navigator.pop(sheet, 'list'),
               ),
             ListTile(
-              leading: const Icon(Icons.star_outline_rounded, color: AppColors.bear),
-              title: const Text('Remove from watchlist', style: TextStyle(color: AppColors.bear)),
+              leading: Icon(Icons.star_outline_rounded, color: AppColors.bear),
+              title: Text('Remove from watchlist', style: TextStyle(color: AppColors.bear)),
               onTap: () => Navigator.pop(sheet, 'remove'),
             ),
           ],
@@ -339,7 +339,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Watchlists', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text('Watchlists', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.parchment,
         foregroundColor: AppColors.ink,
         elevation: 0,
@@ -460,16 +460,16 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(symbol, style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                    Text(symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
                     Text(name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13)),
+                        style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 13)),
                   ],
                 ),
               ),
             ),
-            Text(market.toUpperCase(), style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5)),
+            Text(market.toUpperCase(), style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5)),
             IconButton(
               tooltip: 'Move or remove',
               icon: Icon(Icons.more_vert_rounded, color: AppColors.ink4),

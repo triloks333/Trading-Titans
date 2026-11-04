@@ -235,7 +235,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                                   PlanService.instance.saleActive
                                       ? '50% OFF · FROM ${PlanService.instance.marketingRupees(199)}'
                                       : 'START FROM ₹199',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFFFFD700),
@@ -258,7 +258,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                             children: [
                               Text(
                                 'Boost Your Capital',
-                                style: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
@@ -279,7 +279,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                                   'Get instant demo funds to trade F&O and Equity without limits',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                     color: const Color(0xFFCBD5E1),
@@ -318,7 +318,7 @@ class _AnimatedPremiumBannerState extends State<AnimatedPremiumBanner>
                               children: [
                                 Text(
                                   'Top Up Now',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFF090D16),

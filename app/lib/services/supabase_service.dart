@@ -4394,6 +4394,20 @@ class SupabaseService {
     } catch (e) {
       debugPrint('refreshMarketHolidays failed: $e');
     }
+    // Special sessions (Diwali Muhurat) ride the same refresh; kept on failure.
+    try {
+      final rows = await client
+          .from('market_special_sessions')
+          .select('name, opens_at, closes_at')
+          .eq('market', 'stock')
+          .gte('closes_at', DateTime.now().toUtc().toIso8601String());
+      MarketHours.specialSessions = (rows as List)
+          .map((r) => SpecialSession.fromRow(Map<String, dynamic>.from(r as Map)))
+          .whereType<SpecialSession>()
+          .toList();
+    } catch (e) {
+      debugPrint('refreshSpecialSessions failed: $e');
+    }
   }
 
   /// Records which platform this session is running on, for the admin breakdown.

@@ -40,7 +40,7 @@ class _CandleChartState extends State<CandleChart> {
     return Column(
       children: [
         if (chartData.isEmpty)
-          SizedBox(height: 280, child: Center(child: Text('No data', style: GoogleFonts.inter(color: AppColors.ink4))))
+          SizedBox(height: 280, child: Center(child: Text('No data', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4))))
         else
           SizedBox(
             height: 280,
@@ -95,7 +95,7 @@ class _CandleChartState extends State<CandleChart> {
               ),
               child: Text(
                 iv.toUpperCase(),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: selected ? AppColors.pureWhite : AppColors.ink4,

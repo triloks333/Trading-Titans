@@ -56,7 +56,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Password updated successfully!'),
           backgroundColor: AppColors.bull,
         ),
@@ -98,7 +98,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Text('Secure Your Account', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                const Text('Enter a strong, new password below.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Enter a strong, new password below.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -134,7 +134,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       }),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.sm),
-                        Text(_error!, style: const TextStyle(color: AppColors.bear, fontSize: 13)),
+                        Text(_error!, style: TextStyle(color: AppColors.bear, fontSize: 13)),
                       ],
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(

@@ -220,7 +220,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                         children: [
                           Text(
                             _cleanSymbol(widget.symbol),
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppColors.ink,
@@ -242,7 +242,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                         children: [
                           Text(
                             _exchangeLabel,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               color: AppColors.ink4,
                               fontWeight: FontWeight.w500,
@@ -258,7 +258,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                           else if (_quote != null) ...[
                             Text(
                               Money.instrument(_quote!.price, market: widget.market),
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: _quote!.change >= 0
@@ -269,7 +269,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                             const SizedBox(width: AppSpacing.xs),
                             Text(
                               '${_quote!.change >= 0 ? '+' : ''}${Money.instrument(_quote!.change, market: widget.market)} (${_quote!.changePct.toStringAsFixed(2)}%)',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 12,
                                 color: _quote!.change >= 0
                                     ? AppColors.bull
@@ -298,7 +298,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                                 ),
                                 child: Text(
                                   'BUY',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                     letterSpacing: 0.5,
@@ -324,7 +324,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                                 ),
                                 child: Text(
                                   'SELL',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                     letterSpacing: 0.5,
@@ -353,7 +353,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                                 const SizedBox(width: AppSpacing.xs),
                                 Text(
                                   'View chart',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     color: const Color(0xFF4A84F6),
                                     fontWeight: FontWeight.w500,
                                     fontSize: 13,
@@ -391,7 +391,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                                   const SizedBox(width: AppSpacing.xs),
                                   Text(
                                     'Option chain',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       color: const Color(0xFF4A84F6),
                                       fontWeight: FontWeight.w500,
                                       fontSize: 13,
@@ -434,7 +434,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
       children: [
         Text(
           'Day\'s range',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.ink,
@@ -449,12 +449,12 @@ class _StockActionSheetState extends State<StockActionSheet> {
               children: [
                 Text(
                   'Low',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   low,
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
                 ),
               ],
             ),
@@ -463,12 +463,12 @@ class _StockActionSheetState extends State<StockActionSheet> {
               children: [
                 Text(
                   'High',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   high,
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
                 ),
               ],
             ),
@@ -492,11 +492,11 @@ class _StockActionSheetState extends State<StockActionSheet> {
               children: [
                 Text(
                   'Open  ',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
                 Text(
                   open,
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
                 ),
               ],
             ),
@@ -504,11 +504,11 @@ class _StockActionSheetState extends State<StockActionSheet> {
               children: [
                 Text(
                   'Prev. close  ',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
                 Text(
                   prevClose,
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
                 ),
               ],
             ),
@@ -533,11 +533,11 @@ class _StockActionSheetState extends State<StockActionSheet> {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+            style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
           ),
           Text(
             value,
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink),
+            style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink),
           ),
         ],
       ),

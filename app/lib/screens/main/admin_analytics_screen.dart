@@ -98,7 +98,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('User Analytics',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontWeight: FontWeight.bold, color: AppColors.ink)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
@@ -119,7 +119,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                           'No figures came back. This screen is admin-only — if '
                           'you are signed in as an admin and still see this, the '
                           'request failed rather than returning nothing.',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 13,
                               color: AppColors.ink4,
                               height: 1.5),
@@ -157,12 +157,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(_title(dimension),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink)),
               Text('$total',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink3)),
@@ -190,7 +190,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
             children: [
               Expanded(
                 child: Text(label,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 13, color: AppColors.ink2)),
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -198,7 +198,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 share == null
                     ? '$count'
                     : '$count  ·  ${(share * 100).toStringAsFixed(share < 0.01 ? 1 : 0)}%',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.ink3),
@@ -216,7 +216,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                 // A share, not a task in progress. Screen readers get the figure
                 // from the text beside it, so this stays decorative.
                 valueColor:
-                    const AlwaysStoppedAnimation(AppColors.imperialGold),
+                    AlwaysStoppedAnimation(AppColors.imperialGold),
               ),
             ),
           ],

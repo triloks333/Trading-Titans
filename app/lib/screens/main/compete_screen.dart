@@ -146,7 +146,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Weekly League',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   color: AppColors.ink,
@@ -179,7 +179,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 const SizedBox(height: 2),
                 Text(
                   standingLabel(ahead),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink),
@@ -194,14 +194,14 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 children: [
                   TrendArrow(isPositive: pnl >= 0, size: 18),
                   Text(Money.wallet(pnl.abs()),
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 18,
                           fontWeight: FontWeight.w900,
                           color: pnl >= 0 ? AppColors.bull : AppColors.bear,
                           letterSpacing: -0.3)),
                 ],
               ),
-              Text('realised', style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5)),
+              Text('realised', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5)),
             ],
           ),
         ],
@@ -258,7 +258,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
             width: 26,
             child: Text('${index + 1}',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink4)),
@@ -295,7 +295,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
               size: large ? 26 : 22, color: accent)
           : Center(
               child: Text('${index + 1}',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: large ? 18 : 15,
                       fontWeight: FontWeight.w900,
                       color: onPodium ? accent : AppColors.ink4)),
@@ -317,7 +317,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
       ),
       child: Center(
         child: Text(initial,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: size * 0.42,
                 fontWeight: FontWeight.w800,
                 color: accent)),
@@ -338,7 +338,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
                     : 'Anonymous Titan',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: bold ? 15 : 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink),
@@ -373,7 +373,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
           children: [
             TrendArrow(isPositive: positive, size: compact ? 14 : 16),
             Text(Money.wallet(pnl.abs()),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: compact ? 13 : 15,
                     fontWeight: FontWeight.w800,
                     color: positive ? AppColors.bull : AppColors.bear)),
@@ -381,7 +381,7 @@ class _CompeteScreenState extends State<CompeteScreen> {
         ),
         if (!compact)
           Text('realised P&L',
-              style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5)),
+              style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5)),
       ],
     );
   }

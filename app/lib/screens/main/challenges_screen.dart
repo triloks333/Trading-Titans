@@ -66,7 +66,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Challenges',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w900, color: AppColors.ink)),
         backgroundColor: AppColors.pureWhite,
         foregroundColor: AppColors.ink,
         elevation: 0,
@@ -109,7 +109,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                 padding: const EdgeInsets.only(bottom: AppSpacing.sm, top: AppSpacing.xs),
                 child: Text(
                   category.label.toUpperCase(),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink4,
@@ -145,14 +145,14 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('TITAN LEVEL',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppColors.ink4,
                           letterSpacing: 0.5)),
                   const SizedBox(height: 2),
                   Text(level.name,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 ],
               ),
@@ -162,11 +162,11 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.local_fire_department_rounded,
+                    Icon(Icons.local_fire_department_rounded,
                         size: 14, color: AppColors.imperialGold),
                     const SizedBox(width: 4),
                     Text('$streak day${streak == 1 ? '' : 's'}',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: AppColors.imperialGold)),
@@ -182,7 +182,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               value: progress,
               minHeight: 8,
               backgroundColor: AppColors.cream,
-              valueColor: const AlwaysStoppedAnimation(AppColors.imperialGold),
+              valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
               semanticsLabel: 'Progress to next Titan level',
             ),
           ),
@@ -191,11 +191,11 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('$xp XP',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink3)),
               Text(
                 next == null ? 'Max level' : '${next.minXp - xp} XP to ${next.name}',
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
               ),
             ],
           ),
@@ -204,7 +204,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
             Divider(color: AppColors.birch, height: 1),
             const SizedBox(height: AppSpacing.md),
             Text('${Money.wallet(earned, decimals: 0)} earned from challenges',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bull)),
           ],
         ],
@@ -242,11 +242,11 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(c.title,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(c.description,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 12, color: AppColors.ink4, height: 1.35)),
                 const SizedBox(height: 6),
                 Wrap(
@@ -255,16 +255,16 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(Money.wallet(c.rewardAmount, decimals: 0),
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.bull)),
                     Text('${c.xp} XP',
-                        style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
                     if (c.repeatLimit != null && c.repeatLimit! > 1)
                       Text('${c.timesEarned}/${c.repeatLimit} claimed',
-                          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
                     if (partial)
                       Text('In progress',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: AppColors.imperialGold)),
@@ -282,7 +282,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text('Take the quiz',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.imperialGold)),

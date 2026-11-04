@@ -128,7 +128,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Glossary quiz',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w900, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w900, color: AppColors.ink)),
         backgroundColor: AppColors.pureWhite,
         foregroundColor: AppColors.ink,
         elevation: 0,
@@ -137,7 +137,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
         child: _questions.isEmpty
             ? Center(
                 child: Text('Quiz unavailable right now.',
-                    style: GoogleFonts.inter(color: AppColors.ink4)))
+                    style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)))
             : _finished
                 ? _buildResult()
                 : _buildQuestion(),
@@ -156,20 +156,20 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
             value: (_index + 1) / _questions.length,
             minHeight: 6,
             backgroundColor: AppColors.cream,
-            valueColor: const AlwaysStoppedAnimation(AppColors.imperialGold),
+            valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
             semanticsLabel: 'Question ${_index + 1} of ${_questions.length}',
           ),
         ),
         const SizedBox(height: AppSpacing.md),
         Text('QUESTION ${_index + 1} OF ${_questions.length}',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: AppColors.ink4,
                 letterSpacing: 0.5)),
         const SizedBox(height: AppSpacing.xs),
         Text('What does "${q.term}" mean?',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink)),
         const SizedBox(height: AppSpacing.lg),
         for (var i = 0; i < q.options.length; i++) _buildOption(q, i),
@@ -188,7 +188,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
               ),
               child: Text(
                   _index + 1 < _questions.length ? 'Next question' : 'See result',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                  style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
             ),
           ),
       ],
@@ -228,13 +228,13 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
             children: [
               Expanded(
                 child: Text(q.options[i],
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 13, color: AppColors.ink2, height: 1.4)),
               ),
               if (revealed && isCorrect)
-                const Icon(Icons.check_circle, size: 18, color: AppColors.bull)
+                Icon(Icons.check_circle, size: 18, color: AppColors.bull)
               else if (revealed && isPicked)
-                const Icon(Icons.cancel, size: 18, color: AppColors.bear),
+                Icon(Icons.cancel, size: 18, color: AppColors.bear),
             ],
           ),
         ),
@@ -262,7 +262,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
             ),
             const SizedBox(height: AppSpacing.lg),
             Text('$_correct / ${_questions.length} correct',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -270,7 +270,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
                   ? 'Passed. Your reward is waiting in the wallet.'
                   : 'You need $kGlossaryQuizPassMark correct to pass. Read the glossary and try again.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4, height: 1.4),
+              style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4, height: 1.4),
             ),
             const SizedBox(height: AppSpacing.xl),
             if (_submitting)
@@ -296,7 +296,7 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
                         borderRadius: BorderRadius.circular(AppRadius.md)),
                   ),
                   child: Text(passed ? 'Done' : 'Try again',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                      style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
                 ),
               ),
           ],

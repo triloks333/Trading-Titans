@@ -346,9 +346,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Portfolio', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                            Text('Portfolio', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                             const SizedBox(height: 2),
-                            Text('Track your holdings and P&L', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                            Text('Track your holdings and P&L', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
                           ],
                         ),
                       ),
@@ -366,9 +366,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('DEPLOYED CAPITAL', style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                            Text('DEPLOYED CAPITAL', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                             const SizedBox(height: 4),
-                            Text(_fmt(_totalInvested), style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
+                            Text(_fmt(_totalInvested), style: GoogleFonts.ibmPlexSans(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
                             const SizedBox(height: AppSpacing.lg),
                             Row(
                               children: [
@@ -399,8 +399,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         unselectedLabelColor: AppColors.ink4,
                         indicatorColor: AppColors.imperialGold,
                         indicatorWeight: 3,
-                        labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                        unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+                        labelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, fontSize: 13),
+                        unselectedLabelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 13),
                         tabs: [
                           Tab(text: 'Holdings (${equityHoldings.length})'),
                           Tab(text: 'F&O Positions (${_foPositions.length})'),
@@ -574,7 +574,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     alignment: Alignment.center,
                     child: Text(
                       h.symbol.length >= 2 ? h.symbol.substring(0, 2) : h.symbol,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         color: isClosed ? AppColors.ink4 : AppColors.goldDeep,
@@ -590,7 +590,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           children: [
                             Text(
                               h.symbol,
-                              style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+                              style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
@@ -604,7 +604,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                 ),
                                 child: Text(
                                   'CLOSED',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 8,
                                     fontWeight: FontWeight.w900,
                                     color: AppColors.ink3,
@@ -622,7 +622,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                                 ),
                                 child: Text(
                                   'SHORT',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 8,
                                     fontWeight: FontWeight.w900,
                                     color: AppColors.bear,
@@ -635,7 +635,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         const SizedBox(height: 2),
                         Text(
                           '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)} ${h.isShort ? 'units short' : 'shares'}',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                         ),
                       ],
                     ),
@@ -645,7 +645,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                     children: [
                       Text(
                         'LTP ${Money.instrument(h.displayCurrentPrice, market: h.market)}',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontWeight: FontWeight.bold,
                           color: AppColors.ink,
                           fontSize: 13,
@@ -668,7 +668,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                               TrendArrow(isPositive: isPctPositive, size: 16),
                               Text(
                                 '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: isPctPositive ? AppColors.bull : AppColors.bear,
@@ -758,7 +758,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       },
                       child: Text(
                         'EXIT',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           color: AppColors.bear,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -840,7 +840,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 alignment: Alignment.center,
                 child: Text(
                   pos.instrumentType == 'OPTION' ? pos.optionType : 'FUT',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: pos.netQty > 0 ? AppColors.bull : AppColors.bear,
@@ -856,12 +856,12 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       pos.instrumentType == 'OPTION' 
                           ? '${pos.symbol} ${pos.expiry.month}/${pos.expiry.day} ${pos.strikePrice.toStringAsFixed(0)} ${pos.optionType}'
                           : '${pos.symbol} FUT',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink, fontSize: 13),
+                      style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink, fontSize: 13),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '$formattedQty ($totalUnits units)',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                     ),
                   ],
                 ),
@@ -871,7 +871,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 children: [
                   Text(
                     'LTP ${Money.wallet(estPrice, decimals: 2)}',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontWeight: FontWeight.bold,
                       color: AppColors.ink,
                       fontSize: 13,
@@ -884,7 +884,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       TrendArrow(isPositive: isPositive, size: 16),
                       Text(
                         '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: isPositive ? AppColors.bull : AppColors.bear,
@@ -962,7 +962,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 },
                 child: Text(
                   'EXIT',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: AppColors.bear,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,

@@ -52,7 +52,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
         elevation: 0,
         title: Text(
           'Trading Glossary',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontWeight: FontWeight.w800,
             color: AppColors.ink,
           ),
@@ -143,7 +143,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                     child: Center(
                       child: Text(
                         cat,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                           color: isSelected ? AppColors.pureWhite : AppColors.ink3,
@@ -182,7 +182,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                           const SizedBox(height: 8),
                           Text(
                             'No terms found for "$_query"',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               color: AppColors.ink3,
                               fontWeight: FontWeight.w600,
                             ),
@@ -190,7 +190,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                           const SizedBox(height: 4),
                           Text(
                             'Try selecting "All" or searching another keyword',
-                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                            style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                           ),
                         ],
                       ),
@@ -255,7 +255,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                   children: [
                     Text(
                       'Test Your Knowledge',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -273,7 +273,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                       ),
                       child: Text(
                         '+₹750 CASH',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 9,
                           fontWeight: FontWeight.w800,
                           color: const Color(0xFF22C55E),
@@ -285,7 +285,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
                 const SizedBox(height: 2),
                 Text(
                   'Score 4/5 on the 5-question quiz to earn a demo cash reward!',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     color: const Color(0xFF94A3B8),
                     height: 1.3,
@@ -312,7 +312,7 @@ class _GlossaryScreenState extends State<GlossaryScreen> {
             ),
             child: Text(
               'Quiz',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
               ),
@@ -371,7 +371,7 @@ class _GlossaryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   term.term,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
@@ -387,7 +387,7 @@ class _GlossaryCard extends StatelessWidget {
                 ),
                 child: Text(
                   term.category,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: catColor,
@@ -399,7 +399,7 @@ class _GlossaryCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             term.definition,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 12.5,
               height: 1.45,
               color: AppColors.ink2,
@@ -425,7 +425,7 @@ class _GlossaryCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     term.example,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 11.5,
                       height: 1.35,
                       color: AppColors.ink3,

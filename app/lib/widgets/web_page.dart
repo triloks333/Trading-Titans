@@ -79,7 +79,7 @@ class _BrandPanel extends StatelessWidget {
             // and the name, and repeating them reads as a duplicated header.
             Text(
               'Learn the market\nwithout losing money.',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 38,
                 height: 1.15,
                 fontWeight: FontWeight.w900,
@@ -90,7 +90,7 @@ class _BrandPanel extends StatelessWidget {
             Text(
               'Trade real prices with virtual cash. Every order, position and '
               'profit behaves exactly as it would with your own money.',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 14,
                 height: 1.6,
                 color: AppColors.pureWhite.withValues(alpha: 0.66),
@@ -119,7 +119,7 @@ class _BrandPanel extends StatelessWidget {
                         children: [
                           Text(
                             p.$1,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w700,
                               color: AppColors.pureWhite,
@@ -128,7 +128,7 @@ class _BrandPanel extends StatelessWidget {
                           const SizedBox(height: 2),
                           Text(
                             p.$2,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12.5,
                               height: 1.45,
                               color:

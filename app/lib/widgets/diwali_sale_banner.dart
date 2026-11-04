@@ -165,7 +165,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
               decoration: BoxDecoration(color: _gold, borderRadius: BorderRadius.circular(999)),
               child: Text(
                 'DIWALI SALE',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.2,
@@ -177,7 +177,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
               const SizedBox(width: 8),
               Text(
                 'Ends ${DateFormat('d MMM').format(ends)}',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 11, fontWeight: FontWeight.w700, color: const Color(0xFFFFE9A8)),
               ),
             ],
@@ -186,7 +186,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
         const SizedBox(height: 6),
         Text(
           '50% off\nevery pack',
-          style: GoogleFonts.playfairDisplay(
+          style: GoogleFonts.ibmPlexSerif(
             fontSize: 32,
             height: 1.02,
             fontWeight: FontWeight.w800,
@@ -198,7 +198,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
           'Pro, Titan and every top-up.',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(fontSize: 12.5, height: 1.35, color: _blush),
+          style: GoogleFonts.ibmPlexSans(fontSize: 12.5, height: 1.35, color: _blush),
         ),
         const SizedBox(height: 12),
         Container(
@@ -206,7 +206,7 @@ class _DiwaliSaleBannerState extends State<DiwaliSaleBanner>
           decoration: BoxDecoration(color: _gold, borderRadius: BorderRadius.circular(999)),
           child: Text(
             'Claim 50% off',
-            style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w800, color: _night),
+            style: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w800, color: _night),
           ),
         ),
       ],

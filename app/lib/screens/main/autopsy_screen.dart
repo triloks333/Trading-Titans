@@ -29,7 +29,7 @@ class AutopsyScreen extends StatelessWidget {
         if (snapshot.connectionState != ConnectionState.done) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('Autopsy', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              title: Text('Autopsy', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
               backgroundColor: AppColors.parchment,
               centerTitle: false,
             ),
@@ -39,7 +39,7 @@ class AutopsyScreen extends StatelessWidget {
         if (snapshot.hasError) {
           return Scaffold(
             appBar: AppBar(
-              title: Text('Autopsy', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              title: Text('Autopsy', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
               backgroundColor: AppColors.parchment,
               centerTitle: false,
             ),
@@ -66,7 +66,7 @@ class AutopsyScreen extends StatelessWidget {
             appBar: AppBar(
               title: Text(
                 'Autopsy',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
               ),
               backgroundColor: AppColors.parchment,
               centerTitle: false,
@@ -74,8 +74,8 @@ class AutopsyScreen extends StatelessWidget {
                 indicatorColor: AppColors.imperialGold,
                 labelColor: AppColors.ink,
                 unselectedLabelColor: AppColors.ink4,
-                labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
-                unselectedLabelStyle: GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 13),
+                labelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w500, fontSize: 13),
                 tabs: [
                   Tab(text: 'All (${insights.length})'),
                   Tab(text: 'Profits (${profits.length})'),
@@ -118,12 +118,12 @@ class AutopsyScreen extends StatelessWidget {
                   : filterType == 'loss'
                       ? 'No losing trades yet'
                       : 'No trades to review yet',
-              style: GoogleFonts.inter(color: AppColors.ink3, fontWeight: FontWeight.bold),
+              style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
               'Realized trades will show up here.',
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5),
+              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink5),
             ),
           ],
         ),
@@ -140,7 +140,7 @@ class AutopsyScreen extends StatelessWidget {
             children: [
               Text(
                 'Every trade is a lesson.',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   color: AppColors.ink,
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -149,7 +149,7 @@ class AutopsyScreen extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 summary ?? 'Review these lessons to refine your edge.',
-                style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13),
+                style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 13),
               ),
             ],
           ),
@@ -188,7 +188,7 @@ class AutopsyScreen extends StatelessWidget {
                       children: [
                         Text(
                           '${insight['symbol']} • ${insight['market']?.toUpperCase() ?? ''}',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                             color: AppColors.ink,
@@ -202,7 +202,7 @@ class AutopsyScreen extends StatelessWidget {
                           ),
                           child: Text(
                             isProfit ? 'PROFIT' : 'LOSS',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               color: isProfit ? AppColors.bull : AppColors.bear,
@@ -214,7 +214,7 @@ class AutopsyScreen extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       insight['reason'] as String? ?? 'Review this trade.',
-                      style: GoogleFonts.inter(color: AppColors.ink3, fontSize: 13),
+                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontSize: 13),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Builder(
@@ -231,13 +231,13 @@ class AutopsyScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   isProfit ? 'Gross Realized Profit' : 'Gross Realized Loss',
-                                  style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                                  style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12),
                                 ),
                                 Text(
                                   isProfit 
                                     ? '+${Money.wallet(pnlAmount, decimals: 2)}' 
                                     : '-${Money.wallet(pnlAmount.abs(), decimals: 2)}', 
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     color: isProfit ? AppColors.bull : AppColors.bear, 
                                     fontWeight: FontWeight.w700,
                                     fontSize: 14,
@@ -254,7 +254,7 @@ class AutopsyScreen extends StatelessWidget {
                                     children: [
                                       Text(
                                         'Transaction Charges ',
-                                        style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                                        style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -264,7 +264,7 @@ class AutopsyScreen extends StatelessWidget {
                                         ),
                                         child: Text(
                                           'DEMO ONLY',
-                                          style: GoogleFonts.inter(
+                                          style: GoogleFonts.ibmPlexSans(
                                             fontSize: 8,
                                             fontWeight: FontWeight.w800,
                                             color: AppColors.ink4,
@@ -275,7 +275,7 @@ class AutopsyScreen extends StatelessWidget {
                                   ),
                                   Text(
                                     '-${Money.wallet(totalCharges, decimals: 2)}',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       color: AppColors.bear,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 12,
@@ -291,13 +291,13 @@ class AutopsyScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     isNetProfit ? 'Net Realized Profit' : 'Net Realized Loss',
-                                    style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                   Text(
                                     isNetProfit 
                                       ? '+${Money.wallet(netPnl, decimals: 2)}' 
                                       : '-${Money.wallet(netPnl.abs(), decimals: 2)}', 
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       color: isNetProfit ? AppColors.bull : AppColors.bear, 
                                       fontWeight: FontWeight.w800,
                                       fontSize: 15,
@@ -339,7 +339,7 @@ class AutopsyScreen extends StatelessWidget {
                                         'Gross ${Money.signedWallet(pnlAmount, decimals: 2)}, '
                                         'less ${Money.wallet(totalCharges, decimals: 2)} charges on this order, '
                                         'nets ${Money.signedWallet(pnlAmount - totalCharges, decimals: 2)} (virtual cash).',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                           color: isNetProfit ? AppColors.bull : AppColors.bear,
@@ -369,7 +369,7 @@ class AutopsyScreen extends StatelessWidget {
                         children: [
                           Text(
                             'LESSON & ADVICE',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               color: isProfit ? AppColors.bull : AppColors.bear,
@@ -379,7 +379,7 @@ class AutopsyScreen extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             insight['advice'] as String? ?? 'Stay patient and respect risk.',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               color: AppColors.ink2,
                               fontSize: 12,
                               height: 1.4,

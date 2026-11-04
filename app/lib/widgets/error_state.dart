@@ -48,7 +48,7 @@ class ErrorState extends StatelessWidget {
                     Text(
                       "Couldn't load",
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink,
@@ -58,7 +58,7 @@ class ErrorState extends StatelessWidget {
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 13,
                         height: 1.45,
                         color: AppColors.ink4,
@@ -71,7 +71,7 @@ class ErrorState extends StatelessWidget {
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
                           'Retry',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.imperialGold,

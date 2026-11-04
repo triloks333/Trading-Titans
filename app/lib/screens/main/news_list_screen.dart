@@ -64,11 +64,11 @@ class _NewsListScreenState extends State<NewsListScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Filter news',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
                 const SizedBox(height: AppSpacing.md),
                 Text('Dates',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
                 const SizedBox(height: AppSpacing.xs),
                 OutlinedButton.icon(
@@ -90,7 +90,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text('Markets',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink2)),
                 const SizedBox(height: AppSpacing.xs),
                 Wrap(
@@ -152,7 +152,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
         backgroundColor: AppColors.cream,
         elevation: 0,
         title: Text('Market Intel & News',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.ink)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, color: AppColors.ink)),
         actions: [
           IconButton(
             tooltip: 'Filter',
@@ -174,7 +174,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(_filtered ? 'No news matches these filters.' : 'No news yet.',
-                        style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink3)),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink3)),
                     if (_filtered)
                       TextButton(
                         onPressed: () => setState(() {
@@ -236,7 +236,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                               newsMarketLabels[parsed.marketKey] ?? 'Market News',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                   fontSize: 10, fontWeight: FontWeight.w700, color: colour),
                             ),
                           ),
@@ -244,7 +244,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                         if (date != null) ...[
                           const SizedBox(width: 8),
                           Text(DateFormat('d MMM yyyy').format(date),
-                              style: GoogleFonts.inter(fontSize: 10.5, color: AppColors.ink4)),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 10.5, color: AppColors.ink4)),
                         ],
                       ],
                     ),
@@ -253,7 +253,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                       post['title'] as String? ?? 'Market Update',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.25),
                     ),
                     if (parsed.cleanExcerpt.isNotEmpty) ...[
@@ -262,7 +262,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
                         parsed.cleanExcerpt,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, height: 1.35),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, height: 1.35),
                       ),
                     ],
                   ],

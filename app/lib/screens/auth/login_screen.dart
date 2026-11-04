@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text(
+            child: Text(
               'Close',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -272,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         resetError!,
-                        style: const TextStyle(color: AppColors.bear, fontSize: 13),
+                        style: TextStyle(color: AppColors.bear, fontSize: 13),
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xl),
@@ -297,7 +297,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 if (!context.mounted) return;
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text('Recovery link sent! Please check your email.'),
                                     backgroundColor: AppColors.bull,
                                   ),
@@ -348,7 +348,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Text('Trading Titans', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                const Text('Trade Bold. Lose Nothing.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Trade Bold. Lose Nothing.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -377,12 +377,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             minimumSize: const Size(0, 30),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text('Forgot Password?', style: TextStyle(color: AppColors.imperialGold, fontSize: 13)),
+                          child: Text('Forgot Password?', style: TextStyle(color: AppColors.imperialGold, fontSize: 13)),
                         ),
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.sm),
-                        Text(_error!, style: const TextStyle(color: AppColors.bear, fontSize: 13)),
+                        Text(_error!, style: TextStyle(color: AppColors.bear, fontSize: 13)),
                       ],
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(
@@ -503,7 +503,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: () {
                               Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
                             },
-                            child: const Text('Create account', style: TextStyle(color: AppColors.imperialGold)),
+                            child: Text('Create account', style: TextStyle(color: AppColors.imperialGold)),
                           ),
                         ],
                       ),

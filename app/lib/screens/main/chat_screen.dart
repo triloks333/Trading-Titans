@@ -335,7 +335,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       isMuted
                           ? 'Chat Notifications: Muted'
                           : 'Chat Notifications',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppColors.ink,
@@ -348,13 +348,13 @@ class _ChatScreenState extends State<ChatScreen> {
             const Divider(height: 1),
             if (isMuted)
               ListTile(
-                leading: const Icon(Icons.notifications_active_rounded,
+                leading: Icon(Icons.notifications_active_rounded,
                     color: AppColors.bull),
                 title: Text('Unmute notifications',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontWeight: FontWeight.w600, color: AppColors.ink)),
                 subtitle: Text('Receive tray alerts for all community messages',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 12, color: AppColors.ink4)),
                 onTap: () async {
                   Navigator.pop(sheet);
@@ -364,13 +364,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.timer_outlined,
+              leading: Icon(Icons.timer_outlined,
                   color: AppColors.imperialGold),
               title: Text('Mute for 8 hours',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontWeight: FontWeight.w600, color: AppColors.ink)),
               subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, color: AppColors.ink4)),
               onTap: () async {
                 Navigator.pop(sheet);
@@ -381,13 +381,13 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.bedtime_outlined,
+              leading: Icon(Icons.bedtime_outlined,
                   color: AppColors.imperialGold),
               title: Text('Mute for 1 day',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontWeight: FontWeight.w600, color: AppColors.ink)),
               subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, color: AppColors.ink4)),
               onTap: () async {
                 Navigator.pop(sheet);
@@ -398,13 +398,13 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.volume_mute_outlined,
+              leading: Icon(Icons.volume_mute_outlined,
                   color: AppColors.imperialGold),
               title: Text('Mute for 1 week',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontWeight: FontWeight.w600, color: AppColors.ink)),
               subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, color: AppColors.ink4)),
               onTap: () async {
                 Navigator.pop(sheet);
@@ -450,12 +450,12 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             child: Row(
               children: [
-                const Icon(Icons.alternate_email_rounded,
+                Icon(Icons.alternate_email_rounded,
                     size: 14, color: AppColors.imperialGold),
                 const SizedBox(width: 6),
                 Text(
                   'TAG A MEMBER · ADMIN ONLY',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     color: AppColors.imperialGold,
@@ -492,7 +492,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             color: AppColors.imperialGold
                                 .withValues(alpha: 0.4)),
                       ),
-                      child: const Center(
+                      child: Center(
                         child: Icon(Icons.workspace_premium,
                             size: 18, color: AppColors.imperialGold),
                       ),
@@ -501,7 +501,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(
                           '@everyone',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w800,
                             color: AppColors.imperialGold,
@@ -517,7 +517,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           child: Text(
                             'BYPASSES MUTE',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 9,
                               fontWeight: FontWeight.w900,
                               color: Colors.white,
@@ -529,7 +529,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     subtitle: Text(
                       'Notify every member immediately',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 11, color: AppColors.ink4),
                     ),
                     onTap: () => _insertMention('everyone'),
@@ -546,7 +546,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           : const Color(0xFF6366F1).withValues(alpha: 0.15),
                       child: Text(
                         u.name.isNotEmpty ? u.name[0].toUpperCase() : 'T',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: u.isAdmin
@@ -559,7 +559,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(
                           '@${u.name}',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: AppColors.ink,
@@ -614,12 +614,12 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             child: Row(
               children: [
-                const Icon(Icons.link_rounded,
+                Icon(Icons.link_rounded,
                     size: 15, color: AppColors.imperialGold),
                 const SizedBox(width: 6),
                 Text(
                   'ATTACH APP PAGE · ADMIN ONLY',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     color: AppColors.imperialGold,
@@ -641,7 +641,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Text(
                 'No matching app pages found for "/$query"',
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
               ),
             )
           else
@@ -672,7 +672,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(
                           route.slashCommand,
-                          style: GoogleFonts.firaCode(
+                          style: GoogleFonts.ibmPlexMono(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700,
                             color: AppColors.goldDeep,
@@ -682,7 +682,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         Expanded(
                           child: Text(
                             route.title,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink,
@@ -695,7 +695,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     subtitle: Text(
                       route.subtitle,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 10.5, color: AppColors.ink4),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -831,10 +831,10 @@ class _ChatScreenState extends State<ChatScreen> {
             if (isMine && message.kind == 'text')
               ListTile(
                 leading:
-                    const Icon(Icons.edit_outlined, color: AppColors.imperialGold),
+                    Icon(Icons.edit_outlined, color: AppColors.imperialGold),
                 title: Text('Edit message',
                     style:
-                        GoogleFonts.inter(fontSize: 15, color: AppColors.ink)),
+                        GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink)),
                 onTap: () {
                   Navigator.pop(sheet);
                   _startEditing(message);
@@ -845,9 +845,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   color: AppColors.ink3),
               title: Text('Delete for me',
                   style:
-                      GoogleFonts.inter(fontSize: 15, color: AppColors.ink)),
+                      GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink)),
               subtitle: Text('Hide this message on your device',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, color: AppColors.ink4)),
               onTap: () async {
                 Navigator.pop(sheet);
@@ -856,10 +856,10 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             if (!isMine)
               ListTile(
-                leading: const Icon(Icons.flag_outlined, color: AppColors.bear),
+                leading: Icon(Icons.flag_outlined, color: AppColors.bear),
                 title: Text('Report this message',
                     style:
-                        GoogleFonts.inter(fontSize: 15, color: AppColors.ink)),
+                        GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink)),
                 onTap: () async {
                   Navigator.pop(sheet);
                   final ok = await ChatService.instance.report(message.id);
@@ -870,10 +870,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             if (isAdmin) ...[
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppColors.bear),
+                leading: Icon(Icons.delete_outline, color: AppColors.bear),
                 title: Text('Delete message (Everyone)',
                     style:
-                        GoogleFonts.inter(fontSize: 15, color: AppColors.ink)),
+                        GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink)),
                 onTap: () async {
                   Navigator.pop(sheet);
                   final ok =
@@ -887,10 +887,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (!isMine)
                 ListTile(
-                  leading: const Icon(Icons.volume_off_outlined,
+                  leading: Icon(Icons.volume_off_outlined,
                       color: AppColors.bear),
                   title: Text('Mute this user for 1 day',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 15, color: AppColors.ink)),
                   onTap: () async {
                     Navigator.pop(sheet);
@@ -906,7 +906,7 @@ class _ChatScreenState extends State<ChatScreen> {
               leading: Icon(Icons.close, color: AppColors.ink4),
               title: Text('Cancel',
                   style:
-                      GoogleFonts.inter(fontSize: 15, color: AppColors.ink3)),
+                      GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink3)),
               onTap: () => Navigator.pop(sheet),
             ),
           ],
@@ -925,7 +925,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       child: Text(
         'ADMIN',
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: 8.5,
           fontWeight: FontWeight.w900,
           letterSpacing: 0.5,
@@ -971,7 +971,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Text(
               'Titans Room',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontWeight: FontWeight.bold,
                 color: AppColors.ink,
                 fontSize: 18,
@@ -994,7 +994,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.bull,
                       shape: BoxShape.circle,
                     ),
@@ -1002,7 +1002,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 4.5),
                   Text(
                     'Live',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: AppColors.bull,
@@ -1044,7 +1044,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           padding: const EdgeInsets.all(AppSpacing.xl),
                           child: Text(
                             'Nothing here yet. Say hello.',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                                 fontSize: 14, color: AppColors.ink4),
                           ),
                         ),
@@ -1087,7 +1087,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     ),
                                     child: Text(
                                       _dateChipLabel(message.createdAt),
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
                                         color: AppColors.ink3,
@@ -1200,7 +1200,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           message.body?.contains('@everyone') == true
                               ? 'PRIORITY ANNOUNCEMENT'
                               : 'MENTIONED YOU',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 9.5,
                             fontWeight: FontWeight.w800,
                             color: AppColors.imperialGold,
@@ -1219,7 +1219,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     children: [
                       Text(
                         message.authorName ?? 'Titan',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
                           color: message.authorIsAdmin
@@ -1250,7 +1250,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       Icon(Icons.mic_none, size: 16, color: AppColors.ink4),
                       const SizedBox(width: 4),
                       Text('Voice note — update the app to play',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 12, color: AppColors.ink4)),
                     ],
                   ),
@@ -1271,7 +1271,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (message.isEdited) ...[
                       Text(
                         'edited ',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 9.5,
                           fontStyle: FontStyle.italic,
                           color: AppColors.ink5,
@@ -1279,7 +1279,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ],
                     Text(_stamp(message.createdAt),
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 10, color: AppColors.ink5)),
                   ],
                 ),
@@ -1301,7 +1301,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(
           text: body.substring(lastMatchEnd, match.start),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 14,
             color: AppColors.ink,
             height: 1.35,
@@ -1327,7 +1327,7 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.workspace_premium,
                   size: 11,
                   color: AppColors.imperialGold,
@@ -1335,7 +1335,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 2.5),
                 Text(
                   '@everyone',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: AppColors.imperialGold,
@@ -1357,7 +1357,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             child: Text(
               token,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 color: const Color(0xFF4F46E5),
@@ -1386,7 +1386,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             child: Text(
               token,
-              style: GoogleFonts.firaCode(
+              style: GoogleFonts.ibmPlexMono(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: isKnownRoute ? AppColors.goldDeep : AppColors.ink2,
@@ -1402,7 +1402,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (lastMatchEnd < body.length) {
       spans.add(TextSpan(
         text: body.substring(lastMatchEnd),
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: 14,
           color: AppColors.ink,
           height: 1.35,
@@ -1491,7 +1491,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.edit,
+                    Icon(Icons.edit,
                         size: 15, color: AppColors.imperialGold),
                     const SizedBox(width: 8),
                     Expanded(
@@ -1500,7 +1500,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         children: [
                           Text(
                             'Editing message',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                               color: AppColors.imperialGold,
@@ -1510,7 +1510,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             _editingMessage!.body ?? '',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               color: AppColors.ink3,
                             ),
@@ -1543,7 +1543,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     IconButton(
                       icon: Text(
                         '@',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: AppColors.imperialGold,
@@ -1566,7 +1566,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     IconButton(
                       icon: Text(
                         '/',
-                        style: GoogleFonts.firaCode(
+                        style: GoogleFonts.ibmPlexMono(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                           color: AppColors.imperialGold,
@@ -1645,7 +1645,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: Text(
                     'Make your account permanent to chat',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink),
@@ -1658,7 +1658,7 @@ class _ChatScreenState extends State<ChatScreen> {
               'You can read the room as a guest. Posting needs a permanent '
               'account, which also means your portfolio and history survive a '
               'reinstall.',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                   fontSize: 12, color: AppColors.ink4, height: 1.4),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -1671,7 +1671,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 icon: const Icon(Icons.person_add_alt, size: 18),
                 label: Text('Make account permanent',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 14, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1703,7 +1703,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(text,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 13, color: AppColors.ink3, height: 1.4)),
             ),
           ],

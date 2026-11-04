@@ -153,7 +153,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
                       children: [
                         Text(
                           title,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -164,7 +164,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
                         if (subtitle.isNotEmpty)
                           Text(
                             subtitle,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               color: const Color(0xFFCBD5E1),
                             ),
@@ -204,7 +204,7 @@ class _ChatImageViewerState extends State<ChatImageViewer> {
                 ),
                 child: Text(
                   widget.caption!,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 14.5,
                     color: Colors.white,
                     height: 1.4,

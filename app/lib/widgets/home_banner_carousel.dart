@@ -394,7 +394,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                                 const SizedBox(width: 5),
                                 Text(
                                   'FOUNDER MENTORSHIP · ₹1L+/MO VALUE',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFFFFD700),
@@ -417,7 +417,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                             children: [
                               Text(
                                 'Titan Pro Membership',
-                                style: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 18.5,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
@@ -438,7 +438,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                                   'Twice-weekly live 1-on-1 mentorship with founders, ₹10L demo capital & F&O unlocked',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                     color: const Color(0xFFCBD5E1),
@@ -477,7 +477,7 @@ class _MentorshipBannerState extends State<_MentorshipBanner>
                               children: [
                                 Text(
                                   'Join for ${PlanService.instance.marketingRupees(999)}',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFF1B1100),
@@ -776,7 +776,7 @@ class _GlossaryBannerState extends State<_GlossaryBanner>
                                 const SizedBox(width: 5),
                                 Text(
                                   'KNOWLEDGE HUB · ZERO RISK',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 9.5,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFF00F5A0),
@@ -799,7 +799,7 @@ class _GlossaryBannerState extends State<_GlossaryBanner>
                             children: [
                               Text(
                                 'Master Trading Terms',
-                                style: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 18.5,
                                   fontWeight: FontWeight.w800,
                                   color: Colors.white,
@@ -820,7 +820,7 @@ class _GlossaryBannerState extends State<_GlossaryBanner>
                                   'Options, Greeks & Market Mechanics decoded in plain English with interactive quiz',
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                     color: const Color(0xFFCBD5E1),
@@ -859,7 +859,7 @@ class _GlossaryBannerState extends State<_GlossaryBanner>
                               children: [
                                 Text(
                                   'Explore Glossary',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFF021B13),
@@ -1007,7 +1007,7 @@ class _FeedbackBannerState extends State<_FeedbackBanner>
               const SizedBox(width: 6),
               Text(
                 'HELP US BUILD TRADING TITANS',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 10.5,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.6,
@@ -1021,7 +1021,7 @@ class _FeedbackBannerState extends State<_FeedbackBanner>
             'Have an idea or spotted a bug?',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 18,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -1032,7 +1032,7 @@ class _FeedbackBannerState extends State<_FeedbackBanner>
             'We read every one. Good ideas can earn a reward.',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
+            style: GoogleFonts.ibmPlexSans(fontSize: 12, color: Colors.white70),
           ),
           const Spacer(),
           Row(
@@ -1088,7 +1088,7 @@ class _FeedbackBannerState extends State<_FeedbackBanner>
                 const SizedBox(width: 6),
                 Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w700,
                     color: filled ? const Color(0xFF0F1B33) : Colors.white,

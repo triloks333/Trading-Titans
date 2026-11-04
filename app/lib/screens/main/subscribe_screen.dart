@@ -174,7 +174,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                         child: Text(
                           'Charges are in ${billing.label}s.'
                           '${Money.rate == null ? '' : ' Amounts marked \u2248 are today\u2019s equivalent in ${Money.display.label}s.'}',
-                          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                         ),
                       ),
                     ],
@@ -198,7 +198,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   'Demo cash is educational virtual capital with zero monetary value and cannot be withdrawn. '
                   'Transactions use secure 256-bit encrypted Razorpay checkout.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5, height: 1.45),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5, height: 1.45),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
@@ -212,7 +212,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   AppBar _bar() => AppBar(
         title: Text(
           'Plans & Top-Ups',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.ink),
         ),
         backgroundColor: AppColors.parchment,
         elevation: 0,
@@ -247,7 +247,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.goldBorder),
             ),
-            child: const Icon(Icons.account_balance_wallet_rounded, size: 20, color: AppColors.goldDeep),
+            child: Icon(Icons.account_balance_wallet_rounded, size: 20, color: AppColors.goldDeep),
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -256,7 +256,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               children: [
                 Text(
                   'CURRENT DEMO BALANCE',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink4,
@@ -266,7 +266,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 const SizedBox(height: 1),
                 Text(
                   Money.wallet(wallet),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppColors.ink,
@@ -287,7 +287,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               ),
               child: Text(
                 'FREE TIER',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink4,
@@ -380,7 +380,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             Flexible(
               child: Text(
                 title,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
                   color: isSelected ? AppColors.ink : AppColors.ink3,
@@ -397,7 +397,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               ),
               child: Text(
                 badge,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 8.5,
                   fontWeight: FontWeight.w800,
                   color: isSelected ? activeColor : AppColors.ink4,
@@ -476,7 +476,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 child: Center(
                   child: Text(
                     'Monthly Pass',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 12.5,
                       fontWeight: !isAnnual ? FontWeight.w800 : FontWeight.w600,
                       color: !isAnnual ? AppColors.violet : AppColors.ink3,
@@ -507,7 +507,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   children: [
                     Text(
                       'Annual Pass',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 12.5,
                         fontWeight: isAnnual ? FontWeight.w800 : FontWeight.w600,
                         color: isAnnual ? AppColors.violet : AppColors.ink3,
@@ -522,7 +522,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       ),
                       child: Text(
                         'SAVE 37%',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 8.5,
                           fontWeight: FontWeight.w800,
                           color: AppColors.bull,
@@ -571,7 +571,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 ),
                 child: Text(
                   '★ FLAGSHIP PROGRAM · ₹1L+/MO VALUE',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFFFFD700),
@@ -586,7 +586,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Live Founder Mentorship & Pro Setups',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 18,
               fontWeight: FontWeight.w900,
               color: Colors.white,
@@ -595,7 +595,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           const SizedBox(height: 4),
           Text(
             'Twice-weekly interactive live sessions (Wed & Sat) with founders, institutional strategy reviews, and ₹10L monthly virtual stipend.',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 12,
               color: Colors.white.withValues(alpha: 0.85),
               height: 1.4,
@@ -632,7 +632,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           Flexible(
             child: Text(
               text,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 9.5,
                 fontWeight: FontWeight.w600,
                 color: Colors.white,
@@ -694,7 +694,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               ),
               child: Text(
                 '★ MOST POPULAR · INCLUDES LIVE FOUNDER SESSIONS',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w800,
                   color: AppColors.violet,
@@ -714,7 +714,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       children: [
                         Text(
                           product.title,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink,
@@ -727,7 +727,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                             decoration: AppCard.badge(AppColors.bullLight),
                             child: Text(
                               'ACTIVE',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.bull,
@@ -740,7 +740,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     ),
                     Text(
                       isTitan ? 'Ultimate mentorship & pro trading pass' : 'Starter simulation plan',
-                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                     ),
                   ],
                 ),
@@ -751,7 +751,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   if (product.onSale) _wasPrice(product, billing),
                   Text(
                     product.priceLabel(billing),
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                       color: AppColors.ink,
@@ -761,7 +761,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     product.billingInterval == 'annual'
                         ? (approx == null ? 'per year' : 'per year · $approx')
                         : (approx == null ? 'per month' : 'per month · $approx'),
-                    style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5),
                   ),
                 ],
               ),
@@ -806,7 +806,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     )
                   : Text(
                       isCurrent ? 'Current Plan' : 'Unlock ${product.title}',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         color: blocked ? AppColors.ink4 : AppColors.pureWhite,
                         fontWeight: FontWeight.w700,
@@ -827,7 +827,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           Expanded(
             child: Text(
               text,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 12.5,
                 fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
                 color: isBold ? AppColors.ink : AppColors.ink3,
@@ -881,7 +881,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           Container(
             width: 36,
             height: 36,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.goldDeep,
               shape: BoxShape.circle,
             ),
@@ -894,7 +894,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               children: [
                 Text(
                   'INSTANT CAPITAL BOOST',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                     color: AppColors.goldDeep,
@@ -904,7 +904,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   'One-time demo cash · Never expires · Stocks & F&O simulation with zero personal capital risk.',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11.5,
                     color: AppColors.ink2,
                     height: 1.35,
@@ -966,7 +966,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   ),
                   child: Text(
                     '⚡ BEST VALUE · 10X CAPITAL',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       color: AppColors.goldDeep,
@@ -984,7 +984,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   ),
                   child: Text(
                     '⚡ MINI BOOST · ${product.priceLabel(billing)} ONLY',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w800,
                       color: const Color(0xFF0284C7),
@@ -1002,7 +1002,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   ),
                   child: Text(
                     'PRO PACK',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink3,
@@ -1020,7 +1020,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   ),
                   child: Text(
                     'STARTER PACK',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.ink4,
@@ -1030,7 +1030,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 ),
               Text(
                 'One-Time Purchase',
-                style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
               ),
             ],
           ),
@@ -1045,7 +1045,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   children: [
                     Text(
                       '+${Money.wallet(product.cashGrant)}',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
                         color: isMax ? AppColors.goldDeep : AppColors.ink,
@@ -1053,7 +1053,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     ),
                     Text(
                       'Credited instantly · Never expires',
-                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                     ),
                   ],
                 ),
@@ -1064,7 +1064,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   if (product.onSale) _wasPrice(product, billing),
                   Text(
                     product.priceLabel(billing),
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                       color: AppColors.ink,
@@ -1073,7 +1073,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   if (approx != null)
                     Text(
                       approx,
-                      style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink5),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5),
                     ),
                 ],
               ),
@@ -1099,7 +1099,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     )
                   : Text(
                       'Get ${Money.wallet(product.cashGrant)} for ${product.priceLabel(billing)}',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -1144,7 +1144,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         const SizedBox(width: 4),
         Text(
           text,
-          style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2),
+          style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2),
         ),
       ],
     );
@@ -1165,11 +1165,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         title: Text(
           'Frequently Asked Questions',
-          style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
         subtitle: Text(
           'Mentorship schedule, cancellations & simulated funds',
-          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
         ),
         children: [
           _faqItem(
@@ -1203,11 +1203,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         title: Text(
           'Top-Up FAQs',
-          style: GoogleFonts.inter(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
         subtitle: Text(
           'Instant balance addition & validity',
-          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
         ),
         children: [
           _faqItem(
@@ -1235,12 +1235,12 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       children: [
         Text(
           question,
-          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
         const SizedBox(height: 2),
         Text(
           answer,
-          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink3, height: 1.4),
+          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink3, height: 1.4),
         ),
       ],
     );
@@ -1376,12 +1376,12 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         title: Row(
           children: [
-            const Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 26),
+            Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 26),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 granted ? 'Payment Confirmed!' : 'Payment Received!',
-                style: GoogleFonts.inter(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink),
               ),
             ),
           ],
@@ -1392,7 +1392,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               : product != null
                   ? '+${Money.wallet(product.cashGrant)} has been credited to your demo wallet.'
                   : 'Your account balance and benefits have been updated.',
-          style: GoogleFonts.inter(fontSize: 13.5, color: AppColors.ink2, height: 1.45),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13.5, color: AppColors.ink2, height: 1.45),
         ),
         actions: [
           ElevatedButton(
@@ -1402,7 +1402,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
             ),
-            child: Text('Start Trading', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            child: Text('Start Trading', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -1433,19 +1433,19 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         title: Row(
           children: [
-            const Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 24),
+            Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 24),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 'Payment Incomplete',
-                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.ink),
               ),
             ),
           ],
         ),
         content: Text(
           'Your payment did not go through ($rawMsg). If you were charged, it will auto-credit or refund shortly.',
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.45),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink3, height: 1.45),
         ),
         actions: [
           if (session?.hostedUrl != null)
@@ -1456,7 +1456,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               },
               child: Text(
                 'Pay via Browser',
-                style: GoogleFonts.inter(color: AppColors.ink3, fontWeight: FontWeight.w600),
+                style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontWeight: FontWeight.w600),
               ),
             ),
           if (product != null)
@@ -1470,7 +1470,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               ),
-              child: Text('Retry Payment', style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+              child: Text('Retry Payment', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700)),
             ),
         ],
       ),
@@ -1515,7 +1515,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                           color: AppColors.goldPale,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.phone_iphone_rounded, color: AppColors.goldDeep, size: 20),
+                        child: Icon(Icons.phone_iphone_rounded, color: AppColors.goldDeep, size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1524,7 +1524,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                           children: [
                             Text(
                               'Mobile Number for Instant UPI & Receipt',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
                                 color: AppColors.ink,
@@ -1532,7 +1532,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                             ),
                             Text(
                               'Pre-fills Razorpay for 1-tap GPay / PhonePe / Paytm checkout',
-                              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.ink4),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 11.5, color: AppColors.ink4),
                             ),
                           ],
                         ),
@@ -1544,7 +1544,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     controller: controller,
                     autofocus: true,
                     keyboardType: TextInputType.phone,
-                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
                     decoration: InputDecoration(
                       labelText: 'Mobile / WhatsApp Number',
                       hintText: '+91 98765 43210',
@@ -1591,7 +1591,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                       ),
                       child: Text(
                         'Continue to Checkout · ${product.title}',
-                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w800),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ),
@@ -1617,7 +1617,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   void _tell(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.inter(fontSize: 13)),
+        content: Text(message, style: GoogleFonts.ibmPlexSans(fontSize: 13)),
         duration: const Duration(seconds: 6),
         behavior: SnackBarBehavior.floating,
       ),
@@ -1641,13 +1641,13 @@ Widget _wasPrice(PlanOption product, Currency billing) {
           ),
           child: Text(
             '$off% OFF',
-            style: GoogleFonts.inter(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF9A3412)),
+            style: GoogleFonts.ibmPlexSans(fontSize: 9.5, fontWeight: FontWeight.w800, color: const Color(0xFF9A3412)),
           ),
         ),
         const SizedBox(width: 5),
         Text(
           product.wasPriceLabel(billing) ?? '',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 12,
             color: AppColors.ink4,
             decoration: TextDecoration.lineThrough,

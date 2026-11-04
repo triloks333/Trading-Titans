@@ -234,7 +234,7 @@ class ChatRouteAttachmentCard extends StatelessWidget {
                   children: [
                     Text(
                       meta.title,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w700,
                         color: AppColors.ink,
@@ -244,7 +244,7 @@ class ChatRouteAttachmentCard extends StatelessWidget {
                     ),
                     Text(
                       meta.subtitle,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 10,
                         color: AppColors.ink4,
                       ),
@@ -279,7 +279,7 @@ class ChatRouteAttachmentCard extends StatelessWidget {
                 children: [
                   Text(
                     meta.buttonLabel,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,

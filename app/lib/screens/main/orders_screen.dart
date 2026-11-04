@@ -172,7 +172,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       if (mounted) {
         setState(_reload);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Order cancelled successfully'),
             backgroundColor: AppColors.bull,
           ),
@@ -206,7 +206,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text('Order History', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text('Order History', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
       ),
@@ -259,7 +259,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       const SizedBox(width: 6),
                       Text(
                         _dateLabel,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppColors.ink,
@@ -346,14 +346,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   decoration: AppCard.badge(isBuy ? AppColors.bullLight : AppColors.bearLight),
                                   child: Text(
                                     order.side.toUpperCase(),
-                                    style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: isBuy ? AppColors.bull : AppColors.bear, letterSpacing: 0.5),
+                                    style: GoogleFonts.ibmPlexSans(fontSize: 10, fontWeight: FontWeight.bold, color: isBuy ? AppColors.bull : AppColors.bear, letterSpacing: 0.5),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: Text(
                                     order.symbol,
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.ink,
                                     ),
@@ -369,7 +369,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             decoration: AppCard.badge(_statusColor(order.status).withValues(alpha: 0.15)),
                             child: Text(
                               order.status.toUpperCase(),
-                              style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: _statusColor(order.status), letterSpacing: 0.5),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 10, fontWeight: FontWeight.bold, color: _statusColor(order.status), letterSpacing: 0.5),
                             ),
                           ),
                         ],
@@ -381,19 +381,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.inter(color: AppColors.ink3)),
+                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.ibmPlexSans(color: AppColors.ink3)),
                               const SizedBox(height: 2),
                               _buildLtpWidget(order),
                             ],
                           ),
-                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: AppColors.ink)),
+                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, color: AppColors.ink)),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(order.createdAt?.toLocal().toString().split('.').first ?? '', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                          Text(order.createdAt?.toLocal().toString().split('.').first ?? '', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                           if (order.isPending)
                             Row(
                               children: [
@@ -401,7 +401,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   onPressed: () => _showModifyOrderSheet(context, order),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: AppColors.imperialGold,
-                                    side: const BorderSide(color: AppColors.imperialGold, width: 1),
+                                    side: BorderSide(color: AppColors.imperialGold, width: 1),
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     minimumSize: const Size(64, 32),
                                     tapTargetSize: MaterialTapTargetSize.padded,
@@ -411,7 +411,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   ),
                                   child: Text(
                                     'Edit',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -422,7 +422,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   onPressed: () => _cancel(order.id),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: AppColors.bear,
-                                    side: const BorderSide(color: AppColors.bear, width: 1),
+                                    side: BorderSide(color: AppColors.bear, width: 1),
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     minimumSize: const Size(64, 32),
                                     tapTargetSize: MaterialTapTargetSize.padded,
@@ -432,7 +432,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   ),
                                   child: Text(
                                     'Cancel',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -499,7 +499,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       children: [
                         Text(
                           order.symbol,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: AppColors.ink,
@@ -508,7 +508,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         const SizedBox(height: 4),
                         Text(
                           order.name,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 13,
                             color: AppColors.ink4,
                           ),
@@ -529,7 +529,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                         child: Text(
                           order.side.toUpperCase(),
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
                             color: isBuy ? AppColors.bull : AppColors.bear,
@@ -545,7 +545,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                         child: Text(
                           order.status.toUpperCase(),
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
                             color: statusColor,
@@ -610,7 +610,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               const SizedBox(width: 6),
                               Text(
                                 'Transaction Charges',
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.ink,
@@ -626,7 +626,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             ),
                             child: Text(
                               'VIRTUAL CASH',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w800,
                                 color: const Color(0xFFE65100),
@@ -643,7 +643,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         children: [
                           Text(
                             '${Money.quantity(order.quantity, market: order.market)} × ${Money.instrument(order.displayPrice, market: order.market)}',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink2,
@@ -651,7 +651,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           ),
                           Text(
                             Money.instrument(order.displayTotal, market: order.market),
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                               color: AppColors.ink,
@@ -719,7 +719,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             const SizedBox(width: 6),
                             Text(
                               'How this P&L is calculated',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.ink,
@@ -750,7 +750,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           order.isBuy
                               ? 'Charges shown are for this order only.'
                               : 'Charges shown are for this exit order only. The entry order was charged separately when it was placed, so a full round trip costs more than the figure above.',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 11,
                             color: AppColors.ink4,
                             height: 1.4,
@@ -785,7 +785,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       Expanded(
                         child: Text(
                           'Order ID: ${order.id}',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
                             color: AppColors.ink3,
                           ),
@@ -817,7 +817,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                         child: Text(
                           'EDIT ORDER',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.0,
@@ -842,7 +842,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                         child: Text(
                           'CANCEL ORDER',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.0,
@@ -863,13 +863,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Widget _buildLtpWidget(Order order) {
     final quote = _ltp[_ltpKey(order)];
     if (!_ltp.containsKey(_ltpKey(order))) {
-      return Text('LTP: Loading...', style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4));
+      return Text('LTP: Loading...', style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4));
     }
     if (quote == null) return const SizedBox.shrink();
     final isPositive = quote.changePct >= 0;
     return Text(
       'LTP: ${Money.instrument(quote.price, market: quote.market)} (${isPositive ? "+" : ""}${quote.changePct.toStringAsFixed(2)}%)',
-      style: GoogleFonts.inter(
+      style: GoogleFonts.ibmPlexSans(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         color: isPositive ? AppColors.bull : AppColors.bear,
@@ -930,11 +930,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           children: [
                             Text(
                               'Modify Order: ${order.symbol}',
-                              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                             ),
                             Text(
                               '${order.side.toUpperCase()} • ${(order.orderType ?? "limit").toUpperCase()}',
-                              style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                              style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12),
                             ),
                           ],
                         ),
@@ -953,7 +953,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: InputDecoration(
                               labelText: 'Quantity',
-                              labelStyle: GoogleFonts.inter(color: AppColors.ink3),
+                              labelStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink3),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                           ),
@@ -965,7 +965,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: InputDecoration(
                               labelText: 'Limit Price',
-                              labelStyle: GoogleFonts.inter(color: AppColors.ink3),
+                              labelStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink3),
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                           ),
@@ -1004,7 +1004,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                     setState(_reload);
                                     navigator.pop();
                                     messenger.showSnackBar(
-                                      const SnackBar(
+                                      SnackBar(
                                         content: Text('Order modified successfully'),
                                         backgroundColor: AppColors.bull,
                                       ),
@@ -1029,7 +1029,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             ? const CircularProgressIndicator(color: Colors.white)
                             : Text(
                                 'MODIFY ${order.side.toUpperCase()} ORDER',
-                                style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                                style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
                               ),
                       ),
                     ),
@@ -1057,7 +1057,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       children: [
         Text(
           label.toUpperCase(),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 10,
             color: AppColors.ink4,
             fontWeight: FontWeight.bold,
@@ -1067,7 +1067,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         const SizedBox(height: 4),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 14,
             fontWeight: FontWeight.bold,
             color: valueColor ?? AppColors.ink,
@@ -1083,7 +1083,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: isTotal ? 13 : 12,
             fontWeight: isTotal ? FontWeight.w800 : FontWeight.w500,
             color: isTotal ? AppColors.ink : AppColors.ink3,
@@ -1091,7 +1091,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         ),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: isTotal ? 13 : 12,
             fontWeight: isTotal ? FontWeight.w800 : FontWeight.w600,
             color: isTotal ? AppColors.ink : AppColors.ink2,

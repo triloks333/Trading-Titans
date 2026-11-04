@@ -41,7 +41,7 @@ class LegalConsentCheckbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final linkStyle = GoogleFonts.inter(
+    final linkStyle = GoogleFonts.ibmPlexSans(
       fontSize: 13,
       height: 1.4,
       color: AppColors.imperialGold,
@@ -49,7 +49,7 @@ class LegalConsentCheckbox extends StatelessWidget {
       decoration: TextDecoration.underline,
       decorationColor: AppColors.imperialGold,
     );
-    final bodyStyle = GoogleFonts.inter(
+    final bodyStyle = GoogleFonts.ibmPlexSans(
       fontSize: 13,
       height: 1.4,
       color: AppColors.ink2,
@@ -111,7 +111,7 @@ class LegalConsentCheckbox extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             errorText,
-            style: GoogleFonts.inter(fontSize: 12, color: AppColors.bear),
+            style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.bear),
           ),
         ],
       ],
@@ -172,7 +172,7 @@ class AuthDisclaimer extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'VIRTUAL TRADING ONLY',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.6,
@@ -185,7 +185,7 @@ class AuthDisclaimer extends StatelessWidget {
           Text(
             LegalDocs.authDisclaimer,
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 11,
               height: 1.5,
               color: AppColors.ink4,

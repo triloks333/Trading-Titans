@@ -255,9 +255,9 @@ class _TradeScreenState extends State<TradeScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Trade', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      Text('Trade', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                       const SizedBox(height: 2),
-                      Text('Real markets. Virtual stakes.', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                      Text('Real markets. Virtual stakes.', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
                     ],
                   ),
                   PopupMenuButton<String>(
@@ -282,7 +282,7 @@ class _TradeScreenState extends State<TradeScreen> {
                             const SizedBox(width: AppSpacing.sm),
                             Text(
                               'Change Market Preferences',
-                              style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
                             ),
                           ],
                         ),
@@ -316,10 +316,10 @@ class _TradeScreenState extends State<TradeScreen> {
                         onChanged: _onSearchChanged,
                         decoration: InputDecoration(
                           hintText: tab.searchHint,
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           border: InputBorder.none,
                         ),
-                        style: GoogleFonts.inter(fontSize: 15, color: AppColors.ink),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink),
                       ),
                     ),
                   ],
@@ -330,7 +330,7 @@ class _TradeScreenState extends State<TradeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                   child: Text(
                     tab.popularHeading,
-                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5),
                   ),
                 ),
             ],
@@ -389,7 +389,7 @@ class _TradeScreenState extends State<TradeScreen> {
                                   alignment: Alignment.center,
                                   child: Text(
                                     displaySymbol.length >= 2 ? displaySymbol.substring(0, 2) : displaySymbol,
-                                    style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
+                                    style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
@@ -397,9 +397,9 @@ class _TradeScreenState extends State<TradeScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(displaySymbol, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text(displaySymbol, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
                                       const SizedBox(height: 2),
-                                      Text(name, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text(name, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4), maxLines: 1, overflow: TextOverflow.ellipsis),
                                     ],
                                   ),
                                 ),
@@ -459,13 +459,13 @@ class _TradeScreenState extends State<TradeScreen> {
                           color: AppColors.goldPale,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.tune_rounded, color: AppColors.goldDeep, size: 20),
+                        child: Icon(Icons.tune_rounded, color: AppColors.goldDeep, size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Market Preferences',
-                          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                         ),
                       ),
                     ],
@@ -473,7 +473,7 @@ class _TradeScreenState extends State<TradeScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Choose up to 3 markets to trade. You can change your choice anytime from the 3 dots menu.',
-                    style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4, height: 1.4),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4, height: 1.4),
                   ),
                 ],
               ),
@@ -503,7 +503,7 @@ class _TradeScreenState extends State<TradeScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           title: Text(
                             opt['title']!,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink,
@@ -511,7 +511,7 @@ class _TradeScreenState extends State<TradeScreen> {
                           ),
                           subtitle: Text(
                             opt['desc']!,
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                            style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                           ),
                           value: isChecked,
                           onChanged: (val) {
@@ -576,7 +576,7 @@ class _TradeScreenState extends State<TradeScreen> {
                     ),
                     child: Text(
                       'Save Preferences (${selected.length}/3)',
-                      style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -634,7 +634,7 @@ class _LivePrice extends StatelessWidget {
             ],
             Text(
               Money.instrument(q.price, market: market),
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: isStale ? AppColors.ink4 : AppColors.ink,
@@ -645,7 +645,7 @@ class _LivePrice extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           '${isPositive ? '+' : ''}${q.changePct.toStringAsFixed(2)}%',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: isPositive ? AppColors.bull : AppColors.bear,

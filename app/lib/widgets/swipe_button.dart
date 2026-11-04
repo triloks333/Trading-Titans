@@ -112,7 +112,7 @@ class _SwipeButtonState extends State<SwipeButton> with SingleTickerProviderStat
                     )
                   : Text(
                       widget.text,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

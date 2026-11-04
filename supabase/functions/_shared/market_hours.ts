@@ -65,9 +65,21 @@ export function isIndianStockHoliday(at: Date = new Date()): boolean {
   return INDIAN_HOLIDAYS_2026.has(`${y}-${m}-${d}`);
 }
 
+/// One-off sessions outside the normal week (Diwali Muhurat trading), as ISO
+/// instants, half-open [start, end). Mirror of public.market_special_sessions,
+/// which the app reads; add the window to both once NSE publishes it.
+export const SPECIAL_SESSIONS: { name: string; start: string; end: string }[] = [];
+
+export function isSpecialSession(at: Date = new Date(), sessions = SPECIAL_SESSIONS): boolean {
+  const t = at.getTime();
+  return sessions.some((s) => t >= Date.parse(s.start) && t < Date.parse(s.end));
+}
+
 /// True during the Indian equity session: Mon-Fri, 09:15 (inclusive) to 15:30
-/// (exclusive) IST, and not on an exchange trading holiday.
+/// (exclusive) IST, and not on an exchange trading holiday; or during a special
+/// session such as Muhurat trading.
 export function isStockOpen(at: Date = new Date()): boolean {
+  if (isSpecialSession(at)) return true;
   const ist = istNow(at);
   const day = ist.getUTCDay();
   if (day === 0 || day === 6) return false;

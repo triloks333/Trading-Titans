@@ -117,7 +117,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                     color: AppColors.goldPale,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.emoji_events_rounded,
                     size: 48,
                     color: AppColors.imperialGold,
@@ -126,7 +126,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 const SizedBox(height: AppSpacing.lg),
                 Text(
                   'Congratulations! 🎉',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     color: AppColors.ink,
@@ -135,7 +135,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   widget.subtitle,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: AppColors.ink4,
@@ -155,7 +155,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                     children: [
                       Text(
                         '+ ${Money.wallet(widget.amount, decimals: 0)}',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 26,
                           fontWeight: FontWeight.w900,
                           color: AppColors.bull,
@@ -164,7 +164,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                       const SizedBox(width: 6),
                       Text(
                         'Demo Cash',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: AppColors.ink3,
@@ -177,7 +177,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 Text(
                   widget.message,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     color: AppColors.ink2,
                     fontWeight: FontWeight.w500,
@@ -196,7 +196,7 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                     ),
                     child: Text(
                       'Awesome, Thanks!',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontWeight: FontWeight.bold,
                         color: AppColors.pureWhite,
                       ),

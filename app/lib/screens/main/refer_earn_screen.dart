@@ -106,7 +106,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
         ),
         title: Text(
           'Refer & Earn',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             color: AppColors.ink,
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -114,7 +114,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
         ),
       ),
       body: _loadingStats
-          ? const Center(child: CircularProgressIndicator(color: AppColors.imperialGold))
+          ? Center(child: CircularProgressIndicator(color: AppColors.imperialGold))
           : RefreshIndicator(
               onRefresh: _loadReferralData,
               child: ListView(
@@ -124,7 +124,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                   Container(
                     padding: const EdgeInsets.all(AppSpacing.xl),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
+                      gradient: LinearGradient(
                         colors: [AppColors.goldDeep, AppColors.imperialGold],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -137,7 +137,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                       children: [
                         Text(
                           'Share the Titan desk,',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.pureWhite.withValues(alpha: 0.8),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -146,7 +146,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                         const SizedBox(height: 4),
                         Text(
                           'Both Get ₹5,000 Cash!',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.pureWhite,
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -156,7 +156,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           'When your friends sign up using your referral code, both of you get ₹5,000 dummy cash credited instantly and automatically to your wallet balance. No purchase required!',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.pureWhite.withValues(alpha: 0.9),
                             fontSize: 13,
                             height: 1.4,
@@ -181,7 +181,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                       children: [
                         Text(
                           'YOUR REFERRAL CODE',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.ink4,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -201,7 +201,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                                 ),
                                 child: Text(
                                   referralCode,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     color: AppColors.ink2,
                                     fontSize: 16,
                                     fontWeight: FontWeight.w700,
@@ -220,7 +220,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                                   border: Border.all(color: AppColors.goldBorder),
                                   borderRadius: BorderRadius.circular(AppRadius.sm),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.copy,
                                   size: 20,
                                   color: AppColors.goldDeep,
@@ -248,7 +248,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                       children: [
                         Text(
                           'REFERRAL BONUS PROGRAM',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.ink,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -284,12 +284,12 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                               children: [
                                 Text(
                                   'Total Referral Cash Earned',
-                                  style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12),
+                                  style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   AppFormat.formatINR(_claimedBalance),
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.bull,
@@ -305,11 +305,11 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.check_circle_outline, color: AppColors.bull, size: 16),
+                                  Icon(Icons.check_circle_outline, color: AppColors.bull, size: 16),
                                   const SizedBox(width: 4),
                                   Text(
                                     'Auto-Redeemed',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       color: AppColors.bull,
                                       fontWeight: FontWeight.bold,
                                       fontSize: 11,
@@ -339,7 +339,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                   // Friends List
                   Text(
                     'Referred Friends & Status',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       color: AppColors.ink,
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
@@ -360,7 +360,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                           const SizedBox(height: AppSpacing.md),
                           Text(
                             'No referred friends yet',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               color: AppColors.ink,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
@@ -370,7 +370,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                           Text(
                             'Share your referral code above to start earning!',
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               color: AppColors.ink4,
                               fontSize: 12,
                             ),
@@ -393,8 +393,8 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(pkg, style: GoogleFonts.inter(color: AppColors.ink2, fontSize: 13, fontWeight: FontWeight.w500)),
-          Text(desc, style: GoogleFonts.inter(color: AppColors.bull, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(pkg, style: GoogleFonts.ibmPlexSans(color: AppColors.ink2, fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(desc, style: GoogleFonts.ibmPlexSans(color: AppColors.bull, fontSize: 13, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -404,9 +404,9 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+        Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
         const SizedBox(height: 4),
-        Text(val, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 15)),
+        Text(val, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.bold, fontSize: 15)),
       ],
     );
   }
@@ -450,14 +450,14 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
               children: [
                 Text(
                   friend['name'] as String,
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.ink),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   '${friend['package']} · ${friend['date']}',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -471,7 +471,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
               if (commission > 0)
                 Text(
                   '+${AppFormat.formatINR(commission)}',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                     color: AppColors.bull,
@@ -480,7 +480,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
               else
                 Text(
                   '--',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                     color: AppColors.ink4,
@@ -495,7 +495,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                 ),
                 child: Text(
                   statusLabel,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     color: badgeText,

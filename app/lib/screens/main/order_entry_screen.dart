@@ -278,7 +278,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   Future<void> _submitOrder() async {
     if (_isContractExpired) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('This contract has expired and cannot be traded.'),
           backgroundColor: AppColors.bear,
         ),
@@ -407,7 +407,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(width: 6),
               Text(
                 'New here? Tap a term to learn',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink3,
@@ -434,7 +434,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                     children: [
                       Text(
                         t,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: AppColors.ink2,
@@ -470,7 +470,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         child: Center(
           child: Text(
             title,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               color: isSelected ? Colors.white : AppColors.ink4,
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -504,7 +504,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           child: Center(
             child: Text(
               title,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 color: isSelected ? (widget.isBuy ? AppColors.blue : AppColors.bear) : AppColors.ink3,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                 fontSize: 14,
@@ -591,7 +591,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               const SizedBox(width: 6),
               Text(
                 'ORDER SUMMARY',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   color: color,
@@ -607,7 +607,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 ),
                 child: Text(
                   'VIRTUAL MONEY',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 8,
                     fontWeight: FontWeight.w800,
                     color: const Color(0xFFE65100),
@@ -678,7 +678,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 widget.isExitOrder 
                     ? (grandTotal >= 0 ? 'You Receive (approx.)' : 'Total Payable')
                     : ((!widget.isBuy && !isDeriv && _marginRequired <= 0) ? 'You Receive (approx.)' : 'Total Payable'),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                   color: AppColors.ink,
@@ -686,7 +686,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               ),
               Text(
                 Money.instrument(grandTotal.abs(), market: widget.quote.market),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
                   color: widget.isExitOrder
@@ -712,7 +712,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   note == null
                       ? '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet'
                       : '\u2248 ${Money.walletChargeInr(inrValue)} moves in your wallet $note',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppColors.ink3,
@@ -726,7 +726,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             widget.quote.market != 'stock'
                 ? 'No brokerage or Indian taxes on non-domestic trades • Virtual cash only'
                 : 'Charges: ${Money.instrument(totalCharges, market: widget.quote.market)} • Deducted from virtual cash only',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 10,
               color: AppColors.ink5,
               fontStyle: FontStyle.italic,
@@ -744,7 +744,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         Expanded(
           child: Text(
             label,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: isMain ? 12 : 11,
               fontWeight: isMain ? FontWeight.w600 : FontWeight.w500,
               color: isMain ? AppColors.ink2 : AppColors.ink4,
@@ -753,7 +753,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         ),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: isMain ? 12 : 11,
             fontWeight: isMain ? FontWeight.w700 : FontWeight.w600,
             color: valueColor,
@@ -784,7 +784,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           children: [
             Text(
               widget.quote.symbol,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 color: AppColors.ink,
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -793,7 +793,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             if (widget.instrumentType == 'OPTION')
               Text(
                 '${widget.optionType} | Strike: ${Money.wallet(widget.strikePrice ?? 0, decimals: 0)} | Exp: ${widget.expiryDate}',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   color: AppColors.ink4,
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
@@ -825,7 +825,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '$_exchangeLabel  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: AppColors.ink,
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
@@ -879,7 +879,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                             _isIntraday
                                 ? 'MIS — Auto-squared off at 3:20 PM. Lower margin.'
                                 : 'NRML — Carry forward until expiry. Full margin.',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 11,
                               color: AppColors.ink4,
                               fontStyle: FontStyle.italic,
@@ -907,7 +907,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   const SizedBox(width: 6),
                                   Text(
                                     'Closing existing position — no additional margin required',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.bear,
@@ -921,7 +921,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 const SizedBox(height: 6),
                                 Text(
                                   'Your margin blocked: ${Money.wallet(widget.marginUsed!, decimals: 0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 10,
                                     color: AppColors.ink3,
                                     fontStyle: FontStyle.italic,
@@ -951,15 +951,15 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Amount to invest', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                              Text('Amount to invest', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                               const SizedBox(height: 4),
                               TextField(
                                 controller: _moneyController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500),
+                                style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
                                 decoration: InputDecoration(
                                   prefixText: '${Money.symbol} ',
-                                  prefixStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: AppColors.ink3),
+                                  prefixStyle: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: AppColors.ink3),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
                                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
@@ -969,7 +969,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                               const SizedBox(height: 8),
                               Text(
                                 'You will get ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                               ),
                             ],
                           ),
@@ -981,12 +981,12 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Quantity', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                                    Text('Quantity', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 4),
                                     TextField(
                                       controller: _qtyController,
                                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500),
+                                      style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
                                       decoration: InputDecoration(
                                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
@@ -1005,10 +1005,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text('Price', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                                        Text('Price', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                                         GestureDetector(
                                           onTap: () => setState(() => _isMarket = !_isMarket),
-                                          child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.inter(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                                          child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
                                         ),
                                       ],
                                     ),
@@ -1017,7 +1017,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                       controller: _priceController,
                                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                       enabled: !_isMarket,
-                                      style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
+                                      style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
                                       decoration: InputDecoration(
                                         hintText: _isMarket
                                     ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
@@ -1049,7 +1049,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     _isDerivative
                                         ? 'Qty (Lots)'
                                         : 'Quantity',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontSize: 12,
                                       color: AppColors.ink3,
                                       fontWeight: FontWeight.w600,
@@ -1058,7 +1058,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   if (_isDerivative)
                                     Text(
                                       '1 Lot = $_lotSize qty',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                         fontSize: 10,
                                         color: AppColors.ink5,
                                       ),
@@ -1068,7 +1068,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     controller: _qtyController,
                                     keyboardType: TextInputType.number,
                                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                    style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500),
+                                    style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
                                     decoration: InputDecoration(
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
@@ -1088,10 +1088,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      Text('Price', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                                      Text('Price', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                                       GestureDetector(
                                         onTap: () => setState(() => _isMarket = !_isMarket),
-                                        child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.inter(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                                        child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
@@ -1100,7 +1100,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     controller: _priceController,
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     enabled: !_isMarket,
-                                    style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
+                                    style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
                                     decoration: InputDecoration(
                                       hintText: _isMarket
                                     ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
@@ -1139,7 +1139,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                         SwitchListTile(
                           title: Row(
                             children: [
-                              Text('Stoploss', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                              Text('Stoploss', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 14)),
                               const SizedBox(width: 4),
                               Icon(Icons.info_outline, size: 16, color: color),
                             ],
@@ -1167,7 +1167,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                         SwitchListTile(
                           title: Row(
                             children: [
-                              Text('Market protection', style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14)),
+                              Text('Market protection', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 14)),
                               const SizedBox(width: 4),
                               Icon(Icons.info_outline, size: 16, color: color),
                             ],
@@ -1191,7 +1191,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       children: [
                         Text(
                           'Advanced',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: color,
                             fontWeight: FontWeight.bold,
                           ),
@@ -1216,7 +1216,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Validity', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                          Text('Validity', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 12),
                           Row(
                             children: [
@@ -1234,7 +1234,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Disclosed Qty.', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                                    Text('Disclosed Qty.', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 8),
                                     TextField(
                                       controller: _disclosedQtyController,
@@ -1252,7 +1252,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Minutes', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                                    Text('Minutes', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 8),
                                     TextField(
                                       enabled: _validity == 'Minutes',
@@ -1315,14 +1315,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                               Expanded(
                                 child: Row(
                                   children: [
-                                    Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                                    Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                                     Flexible(
-                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.inter(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexSans(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
                                     ),
-                                    Text(' • ', style: GoogleFonts.inter(color: AppColors.ink4)),
-                                    Text('Avail. ', style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                                    Text(' • ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
+                                    Text('Avail. ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                                     Flexible(
-                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.inter(color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
+                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.ibmPlexSans(color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
                                     ),
                                   ],
                                 ),
@@ -1347,7 +1347,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                 const SizedBox(width: 4),
                                 Text(
                                   'You will receive ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                  style: GoogleFonts.inter(color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
+                                  style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
                                 ),
                               ],
                             ),
@@ -1370,7 +1370,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     'CONTRACT EXPIRED',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       color: AppColors.bear,
                                       fontWeight: FontWeight.w800,
                                       fontSize: 13,
@@ -1399,7 +1399,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                       children: [
                                         Text(
                                           'Insufficient Balance',
-                                          style: GoogleFonts.inter(
+                                          style: GoogleFonts.ibmPlexSans(
                                             color: AppColors.bear,
                                             fontWeight: FontWeight.w700,
                                             fontSize: 13,
@@ -1408,7 +1408,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                         const SizedBox(height: 2),
                                         Text(
                                           'You need ${Money.wallet(totalRequiredInr - walletBalance)} more to place this order.',
-                                          style: GoogleFonts.inter(
+                                          style: GoogleFonts.ibmPlexSans(
                                             color: AppColors.ink3,
                                             fontSize: 11,
                                           ),
@@ -1436,7 +1436,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                     ),
                                     child: Text(
                                       'TOP UP',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                         fontWeight: FontWeight.w700,
                                         fontSize: 12,
                                         letterSpacing: 0.5,

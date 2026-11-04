@@ -140,7 +140,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     'Trading Titans',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink),
                   ),
                   const Spacer(),
@@ -153,7 +153,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         child: Padding(
                           padding: const EdgeInsets.only(right: AppSpacing.md),
                           child: Text('Back',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   color: AppColors.imperialGold)),
@@ -162,7 +162,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                   Text(
                     'Step ${_step + 1} of $_stepCount',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                   ),
                 ],
               ),
@@ -175,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   value: (_step + 1) / _stepCount,
                   minHeight: 5,
                   backgroundColor: AppColors.cream,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.imperialGold),
+                  valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
                   semanticsLabel: 'Setup progress',
                 ),
               ),
@@ -211,7 +211,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         )
                       : Text(
                           _step < _stepCount - 1 ? 'Continue' : 'Start trading',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                 ),
@@ -230,11 +230,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
             const SizedBox(height: 6),
             Text(subtitle,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 14, color: AppColors.ink4, height: 1.4)),
           ],
         ),
@@ -280,7 +280,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       children: [
                         Text(
                           countryName,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: AppColors.ink,
@@ -289,12 +289,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         const SizedBox(height: 2),
                         Text(
                           'Tap to choose from 250+ countries',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down_circle_outlined, color: AppColors.imperialGold, size: 24),
+                  Icon(Icons.arrow_drop_down_circle_outlined, color: AppColors.imperialGold, size: 24),
                 ],
               ),
             ),
@@ -304,7 +304,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xs),
           child: Text(
             'QUICK SELECT',
-            style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.5),
+            style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.5),
           ),
         ),
         Padding(
@@ -320,7 +320,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 selected: isSelected,
                 selectedColor: AppColors.imperialGold,
                 backgroundColor: AppColors.pureWhite,
-                labelStyle: GoogleFonts.inter(
+                labelStyle: GoogleFonts.ibmPlexSans(
                   fontSize: 12,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                   color: isSelected ? Colors.white : AppColors.ink,
@@ -352,7 +352,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Expanded(
                   child: Text(
                     'Pre-selected currency: ${_currency?.symbol ?? ''} ${_currency?.label ?? ''}',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -403,7 +403,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       children: [
                         Text(
                           'Select Country',
-                          style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                         ),
                         const Spacer(),
                         IconButton(
@@ -444,15 +444,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           leading: Text(_countryFlag(code), style: const TextStyle(fontSize: 24)),
                           title: Text(
                             name,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 14,
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                               color: isSelected ? AppColors.imperialGold : AppColors.ink,
                             ),
                           ),
                           trailing: isSelected
-                              ? const Icon(Icons.check_circle, color: AppColors.imperialGold, size: 20)
-                              : Text(code, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5)),
+                              ? Icon(Icons.check_circle, color: AppColors.imperialGold, size: 20)
+                              : Text(code, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink5)),
                           onTap: () {
                             Navigator.of(ctx).pop();
                             _selectCountry(code);
@@ -485,7 +485,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             subtitle: c.subtitle,
             leading: Text(
               c.symbol,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
                   color: _currency == c ? AppColors.imperialGold : AppColors.ink4),
@@ -496,7 +496,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Text(
             'Your virtual wallet balance is dynamically converted to your chosen currency at the live rate. You can switch currencies at any time.',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 11, color: AppColors.ink5, fontStyle: FontStyle.italic, height: 1.4),
           ),
         ),
@@ -553,7 +553,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             child: Text(
               'Choose at least one to continue.',
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
             ),
           ),
       ],
@@ -600,13 +600,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 15,
                               fontWeight: FontWeight.w800,
                               color: AppColors.ink)),
                       const SizedBox(height: 2),
                       Text(subtitle,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 12, color: AppColors.ink4, height: 1.3)),
                     ],
                   ),

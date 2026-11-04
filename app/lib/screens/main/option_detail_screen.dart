@@ -492,7 +492,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           const SizedBox(width: AppSpacing.sm),
           Text(
             _expiryCountdownText,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: _expiryCountdownColor,
@@ -569,7 +569,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         alignment: Alignment.center,
         child: Text(
           title,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             color: isSelected ? AppColors.ink : AppColors.ink4,
@@ -672,7 +672,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         icon: Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
         label: Text(
           isOptionMode ? 'VIEW OPTION CHART' : 'VIEW SPOT CHART',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         onPressed: () async {
           await Navigator.push(
@@ -733,7 +733,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 ),
                 child: Text(
                   moneyness,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: moneynessColor,
@@ -820,7 +820,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                           children: [
                             Text(
                               'Black-Scholes',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
                                 color: AppColors.goldDeep,
@@ -848,7 +848,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   ),
                   child: Text(
                     'ESTIMATED',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: AppColors.blue,
@@ -906,7 +906,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: AppColors.ink4,
@@ -916,7 +916,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           const SizedBox(height: 4),
           Text(
             '${value.toStringAsFixed(decimals)}$suffix',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: accentColor,
@@ -959,7 +959,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'Option Greeks & Pricing Model',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
@@ -968,7 +968,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   const SizedBox(height: 4),
                   Text(
                     'Calculated dynamically using the Black-Scholes-Merton model with risk-free rate r = 6.5%.',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, height: 1.4),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _greekExplainerTile(
@@ -1027,7 +1027,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                         Expanded(
                           child: Text(
                             'Note: These Greeks are calculated dynamically for educational and simulation purposes using theoretical models. Actual live execution prices may vary with liquidity and bid-ask spreads.',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 11,
                               color: AppColors.goldDeep,
                               height: 1.4,
@@ -1074,7 +1074,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 ),
                 child: Text(
                   symbol,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: color,
@@ -1084,7 +1084,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               const SizedBox(width: 8),
               Text(
                 summary,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink,
@@ -1095,7 +1095,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
           const SizedBox(height: 6),
           Text(
             explanation,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 12,
               color: AppColors.ink3,
               height: 1.45,
@@ -1154,7 +1154,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                 ),
                 child: Text(
                   _holding!.positionTag,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: isShort ? AppColors.bear : AppColors.bull,
@@ -1186,7 +1186,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               final pnlUp = positionPnl >= 0;
               return Text(
                 'P&L: ${pnlUp ? '+' : ''}${Money.wallet(positionPnl, decimals: 2)} (${pnlPct.toStringAsFixed(2)}%)',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: pnlUp ? AppColors.bull : AppColors.bear,
@@ -1219,7 +1219,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
               icon: const Icon(Icons.logout_rounded, size: 18),
               label: Text(
                 'EXIT POSITION',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.8,
@@ -1284,7 +1284,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   ),
                   child: Text(
                     isExpired ? 'EXPIRED' : 'BUY',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: isExpired ? AppColors.ink4 : AppColors.pureWhite,
@@ -1325,7 +1325,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   ),
                   child: Text(
                     isExpired ? 'EXPIRED' : 'SELL',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: isExpired ? AppColors.ink4 : AppColors.pureWhite,

@@ -81,7 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Flexible(
                         child: Text(
                           user?.name ?? 'Titan',
-                          style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.ink),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -100,7 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         : (user.email.endsWith(AppConstants.guestEmailDomain)
                             ? 'Guest account'
                             : user.email),
-                    style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   // Reads the derived tier, not `profiles.subscription_active`.
@@ -115,7 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       monetized
                           ? (plan.isPaid ? '${plan.tier.toUpperCase()} PLAN' : 'FREE PLAN')
                           : 'FREE ACCESS',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: monetized && plan.isPaid
@@ -146,7 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: Icon(Icons.lock_open_outlined,
                     size: 18, color: AppColors.pureWhite),
                 label: Text('Make account permanent \u2014 get \u20b91,100',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppColors.pureWhite,
@@ -175,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               ),
               child: Text('Challenges & Rewards',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: AppColors.pureWhite,
@@ -195,7 +195,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
                 ),
                 child: Text('Plans & top-ups',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
               ),
             ],
@@ -206,7 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Text(
                 'ACCOUNT ACTIONS',
-                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
+                style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
               ),
             ),
             if (auth.isGuest)
@@ -226,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Text(
                 'SETTINGS & SUPPORT',
-                style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
+                style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
               ),
             ),
             _menuItemAction(context, Icons.privacy_tip_outlined, 'Privacy Policy', () => _showPrivacyPolicy(context)),
@@ -271,17 +271,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                side: const BorderSide(color: AppColors.bear),
+                side: BorderSide(color: AppColors.bear),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
               ),
-              child: Text('Sign Out', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.bear, letterSpacing: 0.5)),
+              child: Text('Sign Out', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.bear, letterSpacing: 0.5)),
             ),
             const SizedBox(height: AppSpacing.sm),
             TextButton(
               onPressed: () => _confirmDeleteAccount(context, auth),
               child: Text(
                 'Delete Account',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppColors.bear.withValues(alpha: 0.8),
@@ -290,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Center(child: Text('Trading Titans v1.2', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink5))),
+            Center(child: Text('Trading Titans v1.2', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink5))),
           ],
         ),
       ),
@@ -305,18 +305,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         title: Text(
           'Delete Account?',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w800, color: AppColors.bear),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800, color: AppColors.bear),
         ),
         content: Text(
           'Are you sure you want to permanently delete your Trading Titans account? '
           'This will immediately remove your profile, trade history, demo cash, and rankings. '
           'This action is irreversible.',
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.45),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink3, height: 1.45),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.ink4, fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
@@ -324,7 +324,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               backgroundColor: AppColors.bear,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
             ),
-            child: Text('Delete Permanently', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: Text('Delete Permanently', style: GoogleFonts.ibmPlexSans(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -374,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Icon(icon, size: 20, color: AppColors.ink2),
             const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500))),
+            Expanded(child: Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500))),
                   Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
           ],
         ),
@@ -397,7 +397,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Icon(icon, size: 20, color: AppColors.ink2),
             const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500))),
+            Expanded(child: Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500))),
                   Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
           ],
         ),
@@ -455,13 +455,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 _sheetHandle(),
                 Text('Display Currency',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                 const SizedBox(height: 4),
                 Text(
                   'Changes every price, balance and profit figure in the app. '
                   'Your wallet is still held in rupees.',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, height: 1.4),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 for (final c in Currency.values)
@@ -590,13 +590,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         _sheetHandle(),
                         Text(title,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.ink)),
                         const SizedBox(height: 4),
                         Text(subtitle,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                                 fontSize: 12,
                                 color: AppColors.ink4,
                                 height: 1.4)),
@@ -619,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: shown.isEmpty
                               ? Center(
                                   child: Text('No matches',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 13,
                                           color: AppColors.ink4)),
                                 )
@@ -634,7 +634,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       contentPadding: EdgeInsets.zero,
                                       title: Text(
                                         option.value,
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 15,
                                           fontWeight: isSelected
                                               ? FontWeight.w700
@@ -643,7 +643,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         ),
                                       ),
                                       trailing: isSelected
-                                          ? const Icon(Icons.check,
+                                          ? Icon(Icons.check,
                                               size: 18,
                                               color: AppColors.imperialGold)
                                           : null,
@@ -685,13 +685,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   _sheetHandle(),
                   Text('Preferred Markets',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                   const SizedBox(height: 4),
                   Text(
                     'We open your favourite market first. You can still trade '
                     'anything, any time.',
-                    style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, height: 1.4),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   for (final m in const [
@@ -726,7 +726,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       controlAffinity: ListTileControlAffinity.trailing,
                       secondary: Icon(m.$3, size: 20, color: AppColors.ink3),
                       title: Text(m.$2,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: AppColors.ink)),
@@ -748,7 +748,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             borderRadius: BorderRadius.circular(AppRadius.md)),
                       ),
                       child: Text('Save',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -801,7 +801,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 Text(
                   'Choose Theme',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: AppColors.ink,
@@ -878,7 +878,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: isSelected ? AppColors.imperialGold : AppColors.ink,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     fontSize: 14,
@@ -886,7 +886,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               if (isSelected)
-                const Icon(
+                Icon(
                   Icons.check_circle,
                   color: AppColors.imperialGold,
                   size: 20,
@@ -923,8 +923,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w500, fontSize: 14)),
-                  Text(subtitle, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 12)),
+                  Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500, fontSize: 14)),
+                  Text(subtitle, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                 ],
               ),
             ),
@@ -939,8 +939,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.inter(color: AppColors.ink4, fontSize: 13)),
-        Text(value, style: GoogleFonts.inter(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
+        Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 13)),
+        Text(value, style: GoogleFonts.ibmPlexSans(color: valueColor ?? AppColors.ink, fontWeight: FontWeight.w700, fontSize: 14)),
       ],
     );
   }

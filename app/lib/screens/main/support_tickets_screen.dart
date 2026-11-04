@@ -87,7 +87,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
       appBar: AppBar(
         title: Text(
           'Submitted Tickets',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
         ),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
@@ -137,7 +137,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                                 const SizedBox(height: AppSpacing.md),
                                 Text(
                                   'No tickets submitted yet',
-                                  style: GoogleFonts.inter(color: AppColors.ink3, fontWeight: FontWeight.bold),
+                                  style: GoogleFonts.ibmPlexSans(color: AppColors.ink3, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
@@ -163,8 +163,8 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(count, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-            Text(label, style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink4)),
+            Text(count, style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+            Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink4)),
           ],
         ),
       ],
@@ -207,7 +207,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                 ),
                 child: Text(
                   isFeature ? 'FEATURE REQUEST' : 'BUG REPORT',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
                     color: isFeature ? AppColors.bull : AppColors.bear,
@@ -235,7 +235,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                     const SizedBox(width: 3),
                     Text(
                       isResolved ? 'RESOLVED' : 'OPEN',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 8,
                         fontWeight: FontWeight.w800,
                         color: isResolved ? AppColors.bull : AppColors.bear,
@@ -247,7 +247,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
               const Spacer(),
               Text(
                 _formatDate(ticket['created_at'] as String),
-                style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5),
+                style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5),
               ),
             ],
           ),
@@ -256,14 +256,14 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
           if (ticket['title'] != null && (ticket['title'] as String).isNotEmpty) ...[
             Text(
               ticket['title'] as String,
-              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
+              style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
             ),
             const SizedBox(height: AppSpacing.xs),
           ],
           // Content
           Text(
             ticket['content'] as String? ?? '',
-            style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink, height: 1.5),
+            style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink, height: 1.5),
           ),
           // Image attachment
           if (ticket['image_url'] != null && (ticket['image_url'] as String).isNotEmpty) ...[
@@ -288,7 +288,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
               Expanded(
                 child: Text(
                   ticket['email'] as String? ?? '',
-                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, fontWeight: FontWeight.w500),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, fontWeight: FontWeight.w500),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -325,7 +325,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                       const SizedBox(width: 4),
                       Text(
                         isResolved ? 'Resolved' : 'Mark resolved',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: isResolved ? AppColors.bull : AppColors.ink3,

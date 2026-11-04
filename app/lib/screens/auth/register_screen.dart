@@ -201,7 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: AppSpacing.lg),
                 Text('Join the Titans', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                 const SizedBox(height: 8),
-                const Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
+                Text('Real Market. Virtual Risk.', style: TextStyle(fontSize: 14, color: AppColors.goldDeep)),
                 const SizedBox(height: AppSpacing.xl),
                 Container(
                   width: double.infinity,
@@ -247,7 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           const SizedBox(width: AppSpacing.sm),
                           Text(
                             'Do you have a referral code?',
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 13,
                               color: AppColors.ink2,
                               fontWeight: FontWeight.w500,
@@ -275,7 +275,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: AppSpacing.sm),
-                        Text(_error!, style: const TextStyle(color: AppColors.bear, fontSize: 13)),
+                        Text(_error!, style: TextStyle(color: AppColors.bear, fontSize: 13)),
                       ],
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(
@@ -373,7 +373,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             onPressed: () {
                               Navigator.of(context).pop();
                             },
-                            child: const Text('Login', style: TextStyle(color: AppColors.imperialGold)),
+                            child: Text('Login', style: TextStyle(color: AppColors.imperialGold)),
                           ),
                         ],
                       ),

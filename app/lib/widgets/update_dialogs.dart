@@ -163,7 +163,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                     color: AppColors.bull.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.system_update_rounded,
                     size: 64,
                     color: AppColors.bull,
@@ -222,7 +222,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       '• ',
                                       style: TextStyle(
                                         color: AppColors.bull,
@@ -345,7 +345,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
             children: [
               Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.auto_awesome_rounded,
                     color: AppColors.bull,
                     size: 28,
@@ -396,7 +396,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       '• ',
                                       style: TextStyle(
                                         color: AppColors.bull,
@@ -530,7 +530,7 @@ class _RateAppDialogState extends State<RateAppDialog> {
           children: [
             Row(
               children: [
-                const Icon(Icons.star_rounded,
+                Icon(Icons.star_rounded,
                     color: AppColors.imperialGold, size: 28),
                 const SizedBox(width: 12),
                 Expanded(

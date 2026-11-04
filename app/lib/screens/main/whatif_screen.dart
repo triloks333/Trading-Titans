@@ -95,7 +95,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('What-If Simulator', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        title: Text('What-If Simulator', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
       ),
@@ -115,7 +115,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                 children: [
                   Text(
                     'If I had invested in… how much would I have today?',
-                    style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Row(children: [
@@ -129,7 +129,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Symbol', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+                      Text('Symbol', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
                       const SizedBox(height: AppSpacing.xs),
                       InkWell(
                         onTap: _showAssetSearchSheet,
@@ -146,7 +146,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                             children: [
                               Text(
                                 _symbol,
-                                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
+                                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
                               ),
                                     Icon(Icons.arrow_drop_down, color: AppColors.ink3),
                             ],
@@ -172,7 +172,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                       ),
                       child: _busy
                           ?       SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2))
-                          : Text('Calculate', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                          : Text('Calculate', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                     ),
                   ),
                 ],
@@ -197,22 +197,22 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                   children: [
                     Text(
                       'Result for ${_result!['symbol']}',
-                      style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Invested ${Money.wallet((_result!['amount_invested'] as num), decimals: 0)}',
-                      style: GoogleFonts.inter(color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Current value ${Money.wallet((_result!['current_value'] as num), decimals: 0)}',
-                      style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}${Money.wallet((_result!['pnl'] as num), decimals: 0)}',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: (_result!['pnl'] as num) >= 0 ? AppColors.bull : AppColors.bear,
@@ -221,20 +221,20 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Units held ${(_result!['units'] as num).toStringAsFixed(4)}',
-                      style: GoogleFonts.inter(color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       purchaseDate != null
                           ? 'Simulated purchase price on ${DateFormat('dd MMM yyyy').format(purchaseDate)}: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}'
                           : 'Simulated purchase price: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}',
-                      style: GoogleFonts.inter(color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
                     ),
                     if (_market == 'crypto') ...[
                       const SizedBox(height: AppSpacing.md),
                       Text(
                         '*Calculated using the ${_result!['symbol']}-INR pair on Yahoo Finance.',
-                        style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4, fontStyle: FontStyle.italic),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4, fontStyle: FontStyle.italic),
                       ),
                     ],
                   ],
@@ -268,7 +268,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
           child: Text(
             value.toUpperCase(),
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               color: selected ? AppColors.ink : AppColors.ink4,
               fontWeight: FontWeight.w600,
             ),
@@ -282,12 +282,12 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
+        Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
         const SizedBox(height: AppSpacing.xs),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
-          style: GoogleFonts.inter(fontSize: 16, color: AppColors.ink, fontWeight: FontWeight.w500),
+          style: GoogleFonts.ibmPlexSans(fontSize: 16, color: AppColors.ink, fontWeight: FontWeight.w500),
           decoration: InputDecoration(
             hintText: label,
             filled: true,
@@ -302,7 +302,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.imperialGold),
+              borderSide: BorderSide(color: AppColors.imperialGold),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
           ),
@@ -427,7 +427,7 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
               children: [
                 Text(
                   'Select ${widget.market == 'stock' ? 'Stock' : 'Crypto'}',
-                  style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                 ),
                 IconButton(
                   icon:       Icon(Icons.close, color: AppColors.ink3),
@@ -455,10 +455,10 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
                     onChanged: _onSearchChanged,
                     decoration: InputDecoration(
                       hintText: widget.market == 'stock' ? 'Search NSE stocks...' : 'Search crypto...',
-                      hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                      hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                       border: InputBorder.none,
                     ),
-                    style: GoogleFonts.inter(fontSize: 15, color: AppColors.ink),
+                    style: GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink),
                   ),
                 ),
               ],
@@ -494,16 +494,16 @@ class _AssetSearchBottomSheetState extends State<_AssetSearchBottomSheet> {
                           alignment: Alignment.center,
                           child: Text(
                             symbol.length >= 2 ? symbol.substring(0, 2) : symbol,
-                            style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
+                            style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.goldDeep),
                           ),
                         ),
                         title: Text(
                           symbol,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+                          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
                         ),
                         subtitle: Text(
                           name,
-                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                          style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

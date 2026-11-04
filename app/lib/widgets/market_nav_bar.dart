@@ -155,7 +155,7 @@ class MarketNavBar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 softWrap: false,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: color,
@@ -168,7 +168,7 @@ class MarketNavBar extends StatelessWidget {
             Container(
               width: 6,
               height: 6,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.imperialGold,
                 shape: BoxShape.circle,
               ),

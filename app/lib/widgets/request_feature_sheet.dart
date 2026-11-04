@@ -47,15 +47,15 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Request a Feature',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
               const SizedBox(height: AppSpacing.xs),
               Text('Tell us what we should build next!',
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
               const SizedBox(height: AppSpacing.md),
 
               Text('Feature Title',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               TextField(
@@ -71,9 +71,9 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                 },
                 decoration: InputDecoration(
                   hintText: 'Enter feature name...',
-                  hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                  hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                   border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                  focusedBorder: const OutlineInputBorder(
+                  focusedBorder: OutlineInputBorder(
                       borderSide: BorderSide(color: AppColors.imperialGold)),
                 ),
               ),
@@ -91,7 +91,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Similar requests found. Upvote instead?',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: AppColors.ink)),
@@ -102,7 +102,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                               children: [
                                 Expanded(
                                   child: Text('- ${f['title']}',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 12, color: AppColors.ink3),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis),
@@ -115,7 +115,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                                         builder: (_) => const CommunityWishlistScreen()));
                                   },
                                   child: Text('View & Upvote',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.imperialGold)),
@@ -130,7 +130,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
               const SizedBox(height: AppSpacing.md),
 
               Text('Description',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               TextField(
@@ -138,16 +138,16 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                 maxLines: 4,
                 decoration: InputDecoration(
                   hintText: 'Describe the feature in detail...',
-                  hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                  hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                   border: OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                  focusedBorder: const OutlineInputBorder(
+                  focusedBorder: OutlineInputBorder(
                       borderSide: BorderSide(color: AppColors.imperialGold)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
 
               Text('Attach an Image (Optional)',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               if (pickedBytes != null)
@@ -185,7 +185,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                   },
                   icon: const Icon(Icons.add_photo_alternate_outlined),
                   label: Text('Select Image',
-                      style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                      style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w500)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     side: BorderSide(color: AppColors.birch),
@@ -262,7 +262,7 @@ Future<void> showRequestFeatureSheet(BuildContext context) {
                               color: AppColors.pureWhite, strokeWidth: 2),
                         )
                       : Text('Submit',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                 ),
               ),

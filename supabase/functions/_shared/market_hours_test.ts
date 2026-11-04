@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { IST_CLOSE_MINUTES, IST_OPEN_MINUTES, isStockOpen } from "./market_hours.ts";
+import { IST_CLOSE_MINUTES, IST_OPEN_MINUTES, isSpecialSession, isStockOpen } from "./market_hours.ts";
 
 /// IST wall-clock helper: builds the UTC instant for a given IST time.
 /// IST is UTC+5:30, so 09:15 IST is 03:45 UTC.
@@ -40,3 +40,12 @@ Deno.test("closed on exchange holidays like Dussehra", () => {
   assertEquals(isStockOpen(utcForIst(2026, 10, 20, 11, 0)), false);
 });
 
+
+Deno.test("a special session (Muhurat) opens only its own window", () => {
+  const sessions = [{ name: "Muhurat Trading", start: "2026-11-08T18:00:00+05:30", end: "2026-11-08T19:00:00+05:30" }];
+  assertEquals(isSpecialSession(utcForIst(2026, 11, 8, 18, 0), sessions), true);
+  assertEquals(isSpecialSession(utcForIst(2026, 11, 8, 18, 59), sessions), true);
+  assertEquals(isSpecialSession(utcForIst(2026, 11, 8, 19, 0), sessions), false);
+  assertEquals(isSpecialSession(utcForIst(2026, 11, 8, 17, 59), sessions), false);
+  assertEquals(isStockOpen(utcForIst(2026, 11, 8, 18, 30)), false); // none configured yet
+});

@@ -176,7 +176,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         title: Text(
           'Notifications',
-          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold),
         ),
         actions: [
           if (_unreadCount > 0)
@@ -184,7 +184,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               onPressed: _markAllAsRead,
               child: Text(
                 'Mark all read',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   color: AppColors.imperialGold,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -280,7 +280,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         title: Text(
           title,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
             fontSize: 14,
             color: AppColors.ink,
@@ -292,7 +292,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const SizedBox(height: 2),
             Text(
               body,
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3),
+              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3),
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
             ),
@@ -336,7 +336,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             const SizedBox(height: 4),
             Text(
               timeAgo,
-              style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5),
+              style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5),
             ),
           ],
         ),
@@ -346,7 +346,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 child: Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.imperialGold,
                     shape: BoxShape.circle,
                   ),
@@ -413,12 +413,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 color: AppColors.goldPale,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.notifications_outlined, size: 16, color: AppColors.goldDeep),
+                              child: Icon(Icons.notifications_outlined, size: 16, color: AppColors.goldDeep),
                             ),
                             const SizedBox(width: AppSpacing.sm),
                             Text(
                               timeAgo,
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 12,
                                 color: AppColors.ink4,
                                 fontWeight: FontWeight.w500,
@@ -429,7 +429,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           title,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppColors.ink,
@@ -443,7 +443,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           child: SingleChildScrollView(
                             child: Text(
                               body,
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 14,
                                 color: AppColors.ink2,
                                 height: 1.5,
@@ -512,7 +512,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               ),
                               child: Text(
                                 _ctaLabel(n)!,
-                                style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                                style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700),
                               ),
                             ),
                           ),
@@ -532,7 +532,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             ),
                             child: Text(
                               'Close',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 color: AppColors.ink,
                                 fontWeight: FontWeight.w600,
                               ),

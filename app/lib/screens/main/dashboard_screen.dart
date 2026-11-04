@@ -8,6 +8,7 @@ import '../../core/theme.dart';
 import '../../core/money.dart';
 import '../../core/app_constants.dart';
 import '../../widgets/diwali_sale_banner.dart';
+import '../../widgets/muhurat_card.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/titan_showcase.dart';
 import '../../widgets/skeleton.dart';
@@ -245,8 +246,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Welcome,', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4)),
-                                      Text(user?.name ?? 'Titan', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text('Welcome,', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4)),
+                                      Text(user?.name ?? 'Titan', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                                     ],
                                   ),
                                 ),
@@ -382,6 +383,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: AppSpacing.lg),
                       // Renders nothing unless a sale is running.
                       const DiwaliSaleBanner(),
+                      // Renders nothing unless a Muhurat-style special session is scheduled.
+                      const MuhuratCard(),
                       TitanShowcase(
                         showcaseKey: _totalValueKey,
                         title: 'Portfolio Value',
@@ -427,7 +430,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           const SizedBox(width: 3),
                                           Text(
                                             'TOP UP',
-                                            style: GoogleFonts.inter(
+                                            style: GoogleFonts.ibmPlexSans(
                                               fontSize: 10.5,
                                               fontWeight: FontWeight.w800,
                                               color: Colors.white,
@@ -453,7 +456,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       '${_formatSigned(totalPnL)} (${unrealizedPnlPct.toStringAsFixed(2)}%)',
-                                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
+                                      style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear),
                                     ),
                                   ],
                                 ),
@@ -508,7 +511,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Market Pulse', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                            Text('Market Pulse', style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
                             const SizedBox(height: AppSpacing.sm),
                             SizedBox(
                               height: 120,
@@ -532,7 +535,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const HomeNewsSection(),
                       if (_holdings.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.xl),
-                        Text('Your Holdings', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                        Text('Your Holdings', style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                         const SizedBox(height: AppSpacing.sm),
                         ..._holdings.take(5).map((holding) {
                           return GestureDetector(
@@ -547,15 +550,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(holding.symbol, style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
-                                        Text('${holding.quantity.toStringAsFixed(holding.market == 'crypto' ? 4 : 0)} units · avg ${_formatValue(holding.avgPrice)}', style: GoogleFonts.inter(color: AppColors.ink4)),
+                                        Text(holding.symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                        Text('${holding.quantity.toStringAsFixed(holding.market == 'crypto' ? 4 : 0)} units · avg ${_formatValue(holding.avgPrice)}', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
                                       ],
                                     ),
                                   ),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(_formatValue(holding.current), style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text(_formatValue(holding.current), style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
                                       Text('${holding.pnl >= 0 ? '+' : '-'}${holding.pnlPct.toStringAsFixed(2)}%', style: TextStyle(color: holding.pnl >= 0 ? AppColors.bull : AppColors.bear)),
                                     ],
                                   ),
@@ -567,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                       if (_watchlist.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.xl),
-                        Text('Watchlist', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                        Text('Watchlist', style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                         const SizedBox(height: AppSpacing.sm),
                         ..._watchlist.map((quote) {
                           return GestureDetector(
@@ -582,15 +585,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(quote.symbol, style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
-                                        Text(quote.name, style: GoogleFonts.inter(color: AppColors.ink4)),
+                                        Text(quote.symbol, style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                        Text(quote.name, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
                                       ],
                                     ),
                                   ),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
-                                      Text(_formatValue(quote.price), style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
+                                      Text(_formatValue(quote.price), style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
                                       Text('${quote.changePct >= 0 ? '+' : ''}${quote.changePct.toStringAsFixed(2)}%', style: TextStyle(color: quote.changePct >= 0 ? AppColors.bull : AppColors.bear)),
                                     ],
                                   ),
@@ -630,7 +633,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
+              Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
               if (showTopUpAction)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -640,7 +643,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   child: Text(
                     '+ ADD',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 8,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
@@ -651,7 +654,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(value, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          Text(value, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink)),
         ],
       ),
     );
@@ -686,7 +689,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 child: Icon(icon, size: 20, color: AppColors.goldDeep),
               ),
-              Text(label, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink2)),
+              Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink2)),
             ],
           ),
         ),
@@ -702,11 +705,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink3), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(name, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink3), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text(price, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          Text(price, style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
           const SizedBox(height: 2),
-          Text(change, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear)),
+          Text(change, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear)),
         ],
       ),
     );

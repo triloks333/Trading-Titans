@@ -153,7 +153,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.bear),
+                        Icon(Icons.error_outline_rounded, size: 48, color: AppColors.bear),
                         const SizedBox(height: AppSpacing.md),
                         Text(
                           'Unable to load price data',
@@ -415,7 +415,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       width: double.infinity,
       child: ElevatedButton.icon(
         icon:       Icon(Icons.layers_outlined, color: AppColors.pureWhite),
-        label: Text('VIEW OPTION CHAIN', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        label: Text('VIEW OPTION CHAIN', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         onPressed: () async {
           await Navigator.push(
             context,
@@ -444,7 +444,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       width: double.infinity,
       child: ElevatedButton.icon(
         icon:       Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
-        label: Text('VIEW CHART', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        label: Text('VIEW CHART', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         onPressed: () async {
           await Navigator.push(
             context,
@@ -531,7 +531,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   ),
                   child: Text(
                     'BUY',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.pureWhite,
@@ -570,7 +570,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                   ),
                   child: Text(
                     'SELL',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.pureWhite,
@@ -738,14 +738,14 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
                 const SizedBox(width: 8),
                 Text(
                   'Price Alert',
-                  style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink),
                 ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               '${widget.displayName}  •  Current ${Money.wallet(widget.currentPrice, decimals: 2)}',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+              style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
             ),
             const SizedBox(height: 20),
 
@@ -764,7 +764,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
               controller: _targetController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onChanged: (_) => _autoDirection(),
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.ink),
+              style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.ink),
               decoration: InputDecoration(
                 labelText: 'Target price (${Money.symbol})',
                 labelStyle: TextStyle(color: AppColors.ink4),
@@ -789,7 +789,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
                 ),
                 child: _saving
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text('SET ALERT', style: GoogleFonts.inter(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    : Text('SET ALERT', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
               ),
             ),
 
@@ -798,7 +798,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
               const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
             ] else if (_alerts.isNotEmpty) ...[
               const SizedBox(height: 20),
-              Text('Active alerts', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink4, letterSpacing: 0.5)),
+              Text('Active alerts', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink4, letterSpacing: 0.5)),
               const SizedBox(height: 8),
               ..._alerts.map(_alertRow),
             ],
@@ -832,7 +832,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
               const SizedBox(width: 6),
               Text(
                 label,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontWeight: FontWeight.w700,
                   color: selected ? color : AppColors.ink4,
                 ),
@@ -861,7 +861,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
           Expanded(
             child: Text(
               'When price goes ${a.direction} ${Money.instrument(a.targetPrice, market: widget.market)}',
-              style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
+              style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink2, fontWeight: FontWeight.w600),
             ),
           ),
           GestureDetector(

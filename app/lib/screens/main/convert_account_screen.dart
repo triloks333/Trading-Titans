@@ -89,14 +89,14 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.pureWhite,
         title: Text('You are a permanent Titan',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w800)),
         content: Text(
           bonus > 0
               ? 'Your account is locked in and ${Money.wallet(bonus)} demo cash '
                   'has been added. Everything you built as a guest came with you.'
               : 'Your account is locked in. Everything you built as a guest came '
                   'with you, and you can sign back in any time.',
-          style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink3),
+          style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink3),
         ),
         actions: [
           TextButton(
@@ -105,7 +105,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
               Navigator.of(context).pop();
             },
             child: Text('Done',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     color: AppColors.imperialGold, fontWeight: FontWeight.w700)),
           ),
         ],
@@ -125,7 +125,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
         elevation: 0,
         foregroundColor: AppColors.ink,
         title: Text('Make account permanent',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
       ),
       body: SafeArea(
@@ -138,7 +138,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Already permanent',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink)),
@@ -146,7 +146,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                     Text(
                       'This account is signed in as ${user?.email ?? 'you'} and is '
                       'safe to sign out of.',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 13, color: AppColors.ink3, height: 1.5),
                     ),
                   ],
@@ -158,7 +158,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Unlock the full ₹1,100',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink)),
@@ -167,7 +167,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                       'Guest accounts start with ₹500. Attach a Google account '
                       'or an email and password and we will top you up to the '
                       'full ₹1,100.',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           fontSize: 13, color: AppColors.ink3, height: 1.5),
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -187,7 +187,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                       child: Text(
                         'Right now a guest account cannot be recovered. Sign out '
                         'or delete the app and it is gone for good.',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             fontSize: 12, color: AppColors.ink3, height: 1.45),
                       ),
                     ),
@@ -210,7 +210,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                     SvgPicture.string(_googleMark, width: 20, height: 20),
                     const SizedBox(width: AppSpacing.md),
                     Text('Continue with Google',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                             color: AppColors.ink, fontWeight: FontWeight.w600)),
                   ],
                 ),
@@ -224,7 +224,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                   style: TextButton.styleFrom(
                       minimumSize: const Size.fromHeight(48)),
                   child: Text('Use email and password instead',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                           color: AppColors.ink3, fontWeight: FontWeight.w600)),
                 )
               else
@@ -232,7 +232,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(_error!,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         color: AppColors.bear, fontSize: 13, height: 1.4)),
               ],
             ],
@@ -247,17 +247,17 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Email and password',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
         const SizedBox(height: AppSpacing.xs),
         Text(
           'Two steps: we send a link to confirm the address, then you choose a '
           'password.',
           style:
-              GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, height: 1.4),
+              GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, height: 1.4),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Text('Email', style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3)),
+        Text('Email', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3)),
         const SizedBox(height: AppSpacing.xs),
         _field(_emailController, 'you@example.com',
             keyboardType: TextInputType.emailAddress),
@@ -268,7 +268,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
               backgroundColor: AppColors.imperialGold,
               minimumSize: const Size.fromHeight(52)),
           child: Text(_linkSent ? 'Resend link' : 'Send confirmation link',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                   color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
         ),
         if (_linkSent) ...[
@@ -283,13 +283,13 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
             child: Text(
               'Link sent. Open it from your inbox, come back here, then set your '
               'password below.',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                   fontSize: 12, color: AppColors.ink3, height: 1.45),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text('New password',
-              style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink3)),
+              style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3)),
           const SizedBox(height: AppSpacing.xs),
           _field(_passwordController, '••••••••', isPassword: true),
           const SizedBox(height: AppSpacing.md),
@@ -299,7 +299,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                 backgroundColor: AppColors.ink,
                 minimumSize: const Size.fromHeight(52)),
             child: Text('Finish upgrade',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     color: AppColors.pureWhite, fontWeight: FontWeight.w600)),
           ),
         ],
@@ -327,7 +327,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(text,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 13, color: AppColors.ink, height: 1.4)),
             ),
           ],

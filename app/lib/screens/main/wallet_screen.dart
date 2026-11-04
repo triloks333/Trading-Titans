@@ -160,18 +160,18 @@ class _WalletScreenState extends State<WalletScreen> {
               : ListView(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [
-                    Text('Wallet', style: GoogleFonts.inter(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                    Text('Wallet', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
                     const SizedBox(height: AppSpacing.md),
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.xl),
                       decoration: AppCard.primary,
                       child: Column(
                         children: [
-                          Text('DEMO CASH BALANCE', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5)),
+                          Text('DEMO CASH BALANCE', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5)),
                           const SizedBox(height: AppSpacing.sm),
                           // Follows the user's display currency. The stored
                           // balance is always INR, hence the INR source.
-                          Text(Money.wallet(wallet), style: GoogleFonts.inter(fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: -0.5)),
+                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexSans(fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: -0.5)),
                           const SizedBox(height: AppSpacing.md),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
@@ -189,7 +189,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                           ? '${plan.tier.toUpperCase()} · Trading enabled'
                                           : 'Free plan')
                                       : 'Free for everyone',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                       color: monetized && active ? AppColors.bull : AppColors.ink4),
@@ -213,7 +213,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 icon: const Icon(Icons.bolt_rounded, size: 20, color: Colors.white),
                                 label: Text(
                                   'Top Up Demo Capital',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 14.5,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
@@ -256,13 +256,13 @@ class _WalletScreenState extends State<WalletScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Earn more demo cash',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
                                           color: Colors.white)),
                                   const SizedBox(height: 2),
                                   Text('Complete challenges for rewards',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 13, color: const Color(0xFFBBD7F8))),
                                 ],
                               ),
@@ -320,7 +320,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                       children: [
                                         Text(
                                           'VIP Mentorship & Plans',
-                                          style: GoogleFonts.inter(
+                                          style: GoogleFonts.ibmPlexSans(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
@@ -335,7 +335,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                           ),
                                           child: Text(
                                             '₹1L+/MO',
-                                            style: GoogleFonts.inter(
+                                            style: GoogleFonts.ibmPlexSans(
                                               fontSize: 8.5,
                                               fontWeight: FontWeight.w800,
                                               color: const Color(0xFFFFD700),
@@ -347,7 +347,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                     const SizedBox(height: 2),
                                     Text(
                                       'Twice-weekly live 1-on-1 sessions & options unlock',
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                         fontSize: 12,
                                         color: const Color(0xFFC7D2FE),
                                       ),
@@ -365,7 +365,7 @@ class _WalletScreenState extends State<WalletScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text('Transaction History', style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                          child: Text('Transaction History', style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
                         ),
                         // Trades appear below as their cash impact only. The full
                         // order detail lives on its own screen — which this tab
@@ -378,7 +378,7 @@ class _WalletScreenState extends State<WalletScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                             minimumSize: const Size(0, 36),
                           ),
-                          child: Text('Order history', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700)),
+                          child: Text('Order history', style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w700)),
                         ),
                       ],
                     ),
@@ -400,12 +400,12 @@ class _WalletScreenState extends State<WalletScreen> {
                                 child: Icon(Icons.receipt_long_rounded, size: 34, color: AppColors.imperialGold),
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              Text('No wallet activity yet', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                              Text('No wallet activity yet', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
                               const SizedBox(height: 4),
                               Text(
                                 'Rewards, referral bonuses and the cash impact of your trades will appear here.',
                                 textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+                                style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
                               ),
                             ],
                           ),
@@ -458,11 +458,11 @@ class _WalletScreenState extends State<WalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(display.label, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                Text(display.label, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(
                   created != null ? '${created.day}/${created.month}/${created.year}' : '-',
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
               ],
             ),
@@ -473,13 +473,13 @@ class _WalletScreenState extends State<WalletScreen> {
               // Ledger amounts are stored in INR, so the wallet source is right.
               Text(
                 Money.signedWallet(amount, decimals: 2),
-                style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+                style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w700, color: color),
               ),
               if (balanceAfter != null) ...[
                 const SizedBox(height: 2),
                 // The running balance is what lets a user reconcile the list
                 // against the figure at the top of the screen.
-                Text('Bal ${Money.wallet(balanceAfter)}', style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4)),
+                Text('Bal ${Money.wallet(balanceAfter)}', style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
               ],
             ],
           ),

@@ -34,7 +34,7 @@ class PlanBadge extends StatelessWidget {
       decoration: AppCard.badge(background),
       child: Text(
         isTitan ? 'TITAN' : 'PRO',
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: compact ? 9 : 10,
           fontWeight: FontWeight.w700,
           color: foreground,

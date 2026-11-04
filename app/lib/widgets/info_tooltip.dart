@@ -42,7 +42,7 @@ class TermLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = style ??
-        GoogleFonts.inter(fontSize: 12, color: AppColors.ink3);
+        GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => showTermSheet(context, term),
@@ -106,7 +106,7 @@ void showTermSheet(BuildContext context, String term) {
                 Expanded(
                   child: Text(
                     entry.term,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
@@ -118,7 +118,7 @@ void showTermSheet(BuildContext context, String term) {
             const SizedBox(height: AppSpacing.md),
             Text(
               entry.definition,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 14,
                 height: 1.5,
                 color: AppColors.ink2,
@@ -142,7 +142,7 @@ void showTermSheet(BuildContext context, String term) {
                   Expanded(
                     child: Text(
                       entry.example,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 13,
                         height: 1.4,
                         color: AppColors.ink3,
@@ -164,7 +164,7 @@ void showTermSheet(BuildContext context, String term) {
                 },
                 child: Text(
                   'View all trading terms',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: AppColors.imperialGold,
                     fontWeight: FontWeight.w700,
                   ),

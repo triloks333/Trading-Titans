@@ -36,39 +36,39 @@ Future<void> showReportIssueSheet(BuildContext context) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Report an Issue', style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
+              Text('Report an Issue', style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink)),
               const SizedBox(height: AppSpacing.xs),
-              Text('Encountered a bug? Let us know so we can fix it.', style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4)),
+              Text('Encountered a bug? Let us know so we can fix it.', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
               const SizedBox(height: AppSpacing.md),
               
-              Text('Issue Title', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+              Text('Issue Title', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               TextField(
                 controller: titleController,
                 decoration: InputDecoration(
                   hintText: 'Enter issue name...',
-                  hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                  hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                   border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               
-              Text('Description', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+              Text('Description', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               TextField(
                 controller: descController,
                 maxLines: 4,
                 decoration: InputDecoration(
                   hintText: 'Describe the bug or issue...',
-                  hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                  hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                   border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               
-              Text('Attach an Image (Optional)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+              Text('Attach an Image (Optional)', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
               const SizedBox(height: 6),
               if (pickedBytes != null)
                 Container(
@@ -108,7 +108,7 @@ Future<void> showReportIssueSheet(BuildContext context) {
                     }
                   },
                   icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text('Select Image', style: GoogleFonts.inter(fontWeight: FontWeight.w500)),
+                  label: Text('Select Image', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w500)),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                     side:       BorderSide(color: AppColors.birch),
@@ -168,7 +168,7 @@ Future<void> showReportIssueSheet(BuildContext context) {
                           width: 20,
                           child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
                         )
-                      : Text('Submit Report', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                      : Text('Submit Report', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),

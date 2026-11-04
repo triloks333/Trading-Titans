@@ -6,7 +6,7 @@ class ThemeService extends ChangeNotifier {
   factory ThemeService() => _instance;
   ThemeService._internal();
 
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.dark; // Titan Terminal is dark-first
 
   ThemeMode get themeMode => _themeMode;
 
@@ -30,7 +30,7 @@ class ThemeService extends ChangeNotifier {
         }
       };
       final prefs = await SharedPreferences.getInstance();
-      final modeStr = prefs.getString('theme_mode') ?? 'light';
+      final modeStr = prefs.getString('theme_mode') ?? 'dark';
       switch (modeStr) {
         case 'dark':
           _themeMode = ThemeMode.dark;

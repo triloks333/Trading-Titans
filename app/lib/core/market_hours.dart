@@ -98,6 +98,30 @@ class MarketHours {
   static bool isIndianHoliday([DateTime? at]) =>
       indianHolidays.contains(istDateKey(at));
 
+  // ── Special sessions ───────────────────────────────────────────────────────
+
+  /// One-off Indian sessions outside the normal week, e.g. Diwali Muhurat
+  /// trading. Loaded from `market_special_sessions` like the holiday list, so the
+  /// exchange's announced timing ships with no app release.
+  static List<SpecialSession> specialSessions = const [];
+
+  /// The special session live at [at], if any.
+  static SpecialSession? liveSpecialSession([DateTime? at]) {
+    final t = (at ?? DateTime.now()).toUtc();
+    for (final s in specialSessions) {
+      if (!t.isBefore(s.start) && t.isBefore(s.end)) return s;
+    }
+    return null;
+  }
+
+  /// The next special session that has not ended yet (live or upcoming).
+  static SpecialSession? nextSpecialSession([DateTime? at]) {
+    final t = (at ?? DateTime.now()).toUtc();
+    final upcoming = specialSessions.where((s) => t.isBefore(s.end)).toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+    return upcoming.isEmpty ? null : upcoming.first;
+  }
+
   /// Whether the given market is currently accepting fills.
   static bool isOpen(String market, {DateTime? at}) {
     if (market == 'crypto') return true;
@@ -125,6 +149,7 @@ class MarketHours {
       return minutes >= 540 && minutes < 1050; // 09:00 - 17:30 CET
     }
 
+    if (liveSpecialSession(at) != null) return true;
     final now = _ist(at);
     if (now.weekday == DateTime.saturday || now.weekday == DateTime.sunday) return false;
     if (isIndianHoliday(at)) return false;
@@ -218,6 +243,8 @@ class MarketHours {
 
   static String statusText(String market, {DateTime? at}) {
     if (market == 'crypto') return '24/7 Market';
+    final special = market == stock ? liveSpecialSession(at) : null;
+    if (special != null) return '${special.name} Live';
     if (isOpen(market, at: at)) return 'Market Open';
 
     if (market == usStock) {
@@ -314,5 +341,23 @@ class MarketHours {
       return isUsDst(at) ? '7:00 PM - 1:30 AM IST' : '8:00 PM - 2:30 AM IST';
     }
     return '9:15 AM - 3:30 PM IST';
+  }
+}
+
+/// A one-off exchange session, e.g. Diwali Muhurat trading. [start] and [end]
+/// are UTC instants; the window is half-open, [start, end).
+class SpecialSession {
+  const SpecialSession({required this.name, required this.start, required this.end});
+
+  final String name;
+  final DateTime start;
+  final DateTime end;
+
+  /// Parses a `market_special_sessions` row; null when it is malformed.
+  static SpecialSession? fromRow(Map<String, dynamic> row) {
+    final start = DateTime.tryParse('${row['opens_at']}')?.toUtc();
+    final end = DateTime.tryParse('${row['closes_at']}')?.toUtc();
+    if (start == null || end == null || !end.isAfter(start)) return null;
+    return SpecialSession(name: '${row['name'] ?? 'Special session'}', start: start, end: end);
   }
 }

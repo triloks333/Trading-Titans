@@ -120,7 +120,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                         child: Text(
                           'eg: ${widget.symbol.toLowerCase()} bse',
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             color: AppColors.ink4,
                             fontSize: 12,
                             fontWeight: FontWeight.w400,
@@ -145,7 +145,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                           Icon(Icons.chevron_left_rounded, size: 16, color: AppColors.ink),
                     Text(
                       'Watchlist 1',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         color: AppColors.ink,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -191,7 +191,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
                 ),
                 label: Text(
                   _isLandscape ? 'Portrait' : 'Landscape',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: AppColors.ink,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

@@ -93,7 +93,7 @@ class _NativeCandleChartState extends State<NativeCandleChart> {
             children: [
               Text(
                 widget.resolvedLabel,
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: AppColors.ink4,

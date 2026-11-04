@@ -220,7 +220,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                                   marketLabel,
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
                                     color: tagColor,
@@ -234,7 +234,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                       const SizedBox(width: 8),
                       Text(
                         formattedDate,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           color: AppColors.ink4,
                         ),
@@ -246,7 +246,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                   // Title
                   Text(
                     title,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
@@ -259,7 +259,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     Text(
                       cleanExcerpt,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 14.5,
                         fontWeight: FontWeight.w500,
                         color: AppColors.ink3,
@@ -299,7 +299,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
         padding: const EdgeInsets.only(top: 14, bottom: 6),
         child: Text(
           trimmed.substring(4),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 16,
             fontWeight: FontWeight.w700,
             color: AppColors.ink,
@@ -311,7 +311,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
         padding: const EdgeInsets.only(top: 16, bottom: 8),
         child: Text(
           trimmed.substring(3),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: AppColors.ink,
@@ -323,7 +323,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
         padding: const EdgeInsets.only(top: 18, bottom: 8),
         child: Text(
           trimmed.substring(2),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 20,
             fontWeight: FontWeight.w800,
             color: AppColors.ink,
@@ -336,14 +336,14 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 6, right: 8),
               child: Icon(Icons.circle, size: 6, color: AppColors.imperialGold),
             ),
             Expanded(
               child: Text(
                 trimmed.substring(2),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 14.5,
                   height: 1.6,
                   color: AppColors.ink,
@@ -371,7 +371,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
       if (match.start > lastMatchEnd) {
         spans.add(TextSpan(
           text: text.substring(lastMatchEnd, match.start),
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 14.5,
             height: 1.6,
             color: AppColors.ink,
@@ -380,7 +380,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
       }
       spans.add(TextSpan(
         text: match.group(1),
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: 14.5,
           height: 1.6,
           fontWeight: FontWeight.bold,
@@ -393,7 +393,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
     if (lastMatchEnd < text.length) {
       spans.add(TextSpan(
         text: text.substring(lastMatchEnd),
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: 14.5,
           height: 1.6,
           color: AppColors.ink,
@@ -431,7 +431,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
           // Gradient fade indicator showing reading cutoff
           Container(
             height: 4,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   AppColors.imperialGold,
@@ -458,7 +458,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                       width: 2,
                     ),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Icon(
                       Icons.lock_rounded,
                       size: 28,
@@ -471,7 +471,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                 Text(
                   'Continue Reading Full Analysis',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
@@ -481,7 +481,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                 Text(
                   'You have completed the initial breakdown. Unlock the full research note, live chart levels, and deep market thesis on our website.',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     color: AppColors.ink3,
                     height: 1.5,
@@ -512,7 +512,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                             'Read Full Article on Website',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),
@@ -549,7 +549,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                             'Read Complete Story In-App',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -570,7 +570,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
                       child: Text(
                         'thetradingtitans.com  ·  Free Educational Research',
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 11.5,
                           color: AppColors.ink4,
                           fontWeight: FontWeight.w500,
@@ -601,14 +601,14 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 20),
+              Icon(Icons.check_circle_rounded, color: AppColors.bull, size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Full Research Note Completed',
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
@@ -620,7 +620,7 @@ class _NewsReaderScreenState extends State<NewsReaderScreen> {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Explore more macroeconomic intelligence and daily institutional breakdowns on our official website blog.',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 12.5,
               color: AppColors.ink3,
               height: 1.4,

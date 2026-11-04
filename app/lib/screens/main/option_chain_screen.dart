@@ -309,7 +309,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 9,
             fontWeight: FontWeight.w700,
             color: AppColors.ink4,
@@ -319,7 +319,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 13,
             fontWeight: FontWeight.w800,
             color: accent,
@@ -369,7 +369,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 const SizedBox(width: 6),
                 Text(
                   '${Money.instrument(_spotPrice, market: widget.market)}  |  ${isUp ? '+' : ''}${Money.instrument(_change, market: widget.market)} (${isUp ? '+' : ''}${_changePct.toStringAsFixed(2)}%)',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
@@ -414,7 +414,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
               'Premiums are estimated from the live spot price and may differ from '
               'the exchange. Open interest is real NSE data. Tap a strike for its '
               'last traded close.',
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 10,
                 height: 1.35,
                 fontWeight: FontWeight.w500,
@@ -507,11 +507,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                           children: [
                             Text(
                               _formatOi(callOi),
-                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
                             ),
                             Text(
                               '${callOiChangePct >= 0 ? '+' : ''}${callOiChangePct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.bold, color: callOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.bold, color: callOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
                             ),
                           ],
                         ),
@@ -536,11 +536,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   children: [
                     Text(
                       Money.wallet(callPrice, decimals: 2),
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
                       '${callChangePct >= 0 ? '+' : ''}${callChangePct.toStringAsFixed(2)}%',
-                      style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w600, color: callChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.w600, color: callChangePct >= 0 ? AppColors.bull : AppColors.bear),
                     ),
                   ],
                 ),
@@ -563,7 +563,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
               children: [
                 Text(
                   strike.toStringAsFixed(0),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontWeight: isAtm ? FontWeight.w800 : FontWeight.w700,
                     color: isAtm ? AppColors.goldDeep : AppColors.ink,
                     fontSize: isAtm ? 12 : 11,
@@ -577,7 +577,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     Container(
                       height: 3,
                       width: 25 * callRatio,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.bear, // Call OI (red/orange)
                         borderRadius: BorderRadius.horizontal(left: Radius.circular(1.5)),
                       ),
@@ -586,7 +586,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     Container(
                       height: 3,
                       width: 25 * putRatio,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.bull, // Put OI (green)
                         borderRadius: BorderRadius.horizontal(right: Radius.circular(1.5)),
                       ),
@@ -610,11 +610,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   children: [
                     Text(
                       Money.wallet(putPrice, decimals: 2),
-                      style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink),
                     ),
                     Text(
                       '${putChangePct >= 0 ? '+' : ''}${putChangePct.toStringAsFixed(2)}%',
-                      style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.w600, color: putChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.w600, color: putChangePct >= 0 ? AppColors.bull : AppColors.bear),
                     ),
                   ],
                 ),
@@ -653,11 +653,11 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                           children: [
                             Text(
                               _formatOi(putOi),
-                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink),
                             ),
                             Text(
                               '${putOiChangePct >= 0 ? '+' : ''}${putOiChangePct.toStringAsFixed(1)}%',
-                              style: GoogleFonts.inter(fontSize: 9, fontWeight: FontWeight.bold, color: putOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
+                              style: GoogleFonts.ibmPlexSans(fontSize: 9, fontWeight: FontWeight.bold, color: putOiChangePct >= 0 ? AppColors.bull : AppColors.bear),
                             ),
                           ],
                         ),
@@ -689,7 +689,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   _derivativeType == 'futures'
                       ? '${widget.underlyingSymbol} Futures'
                       : '${widget.underlyingSymbol} Option Chain',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
@@ -705,7 +705,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     ),
                     child: Text(
                       'NSE',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 9,
                         fontWeight: FontWeight.w800,
                         color: AppColors.bull,
@@ -754,7 +754,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                           ? 'Options not available for crypto'
                           : _error!,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         color: AppColors.ink,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -766,7 +766,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                           ? 'Crypto markets only support perpetual futures contracts. You can trade futures from the stock detail screen.'
                           : 'Please check your connection or try again later.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         color: AppColors.ink4,
                         fontSize: 13,
                       ),
@@ -789,7 +789,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       ),
                       child: Text(
                         widget.market == 'crypto' ? 'Go Back' : 'Retry',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                        style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -829,7 +829,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                 alignment: Alignment.center,
                                 child: Text(
                                   'OPTIONS',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _derivativeType == 'options'
@@ -857,7 +857,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                 alignment: Alignment.center,
                                 child: Text(
                                   'FUTURES',
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: _derivativeType == 'futures'
@@ -891,7 +891,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                 children: [
                                   Text(
                                     'Expiry Date:',
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.ink3,
                                     ),
@@ -899,7 +899,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                   DropdownButton<String>(
                                     value: _selectedExpiry,
                                     dropdownColor: AppColors.pureWhite,
-                                    style: GoogleFonts.inter(
+                                    style: GoogleFonts.ibmPlexSans(
                                       fontWeight: FontWeight.bold,
                                       color: AppColors.imperialGold,
                                     ),
@@ -938,7 +938,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     child: Center(
                                       child: Text(
                                         'CALL OI',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.ink3,
@@ -951,7 +951,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     child: Center(
                                       child: Text(
                                         'CALL PRICE',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.ink3,
@@ -964,7 +964,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     child: Center(
                                       child: Text(
                                         'STRIKE',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.ink3,
@@ -977,7 +977,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     child: Center(
                                       child: Text(
                                         'PUT PRICE',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.ink3,
@@ -990,7 +990,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     child: Center(
                                       child: Text(
                                         'PUT OI',
-                                        style: GoogleFonts.inter(
+                                        style: GoogleFonts.ibmPlexSans(
                                           fontSize: 10,
                                           fontWeight: FontWeight.bold,
                                           color: AppColors.ink3,
@@ -1013,7 +1013,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                                     return Center(
                                       child: Text(
                                         'No strikes found for this expiry.',
-                                        style: GoogleFonts.inter(color: AppColors.ink4),
+                                        style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
                                       ),
                                     );
                                   }
@@ -1062,7 +1062,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
           child: Text(
             'No active futures contracts found for ${widget.underlyingSymbol}.',
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(color: AppColors.ink4),
+            style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
           ),
         ),
       );
@@ -1101,7 +1101,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       children: [
                         Text(
                           future['symbol'] as String? ?? '',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.ink,
@@ -1110,7 +1110,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                         const SizedBox(height: 3),
                         Text(
                           future['name'] as String? ?? 'Futures Contract',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 12,
                             color: AppColors.ink4,
                           ),
@@ -1123,7 +1123,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                     children: [
                       Text(
                         '${future['currency'] == 'INR' ? '₹' : (future['currency'] as String? ?? 'USDT')} ${price.toStringAsFixed(price < 10 ? 4 : 2)}',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
                           color: AppColors.ink,
@@ -1132,7 +1132,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       const SizedBox(height: 3),
                       Text(
                         '${isUp ? '+' : ''}${changePct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: isUp ? AppColors.bull : AppColors.bear,
@@ -1207,7 +1207,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       ),
                       child: Text(
                         isFutureExpired ? 'EXPIRED' : 'BUY',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                        style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1226,7 +1226,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                       ),
                       child: Text(
                         isFutureExpired ? 'EXPIRED' : 'SELL',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                        style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1245,7 +1245,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 10,
             color: AppColors.ink4,
             fontWeight: FontWeight.w600,
@@ -1254,7 +1254,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 12,
             color: AppColors.ink,
             fontWeight: FontWeight.w700,

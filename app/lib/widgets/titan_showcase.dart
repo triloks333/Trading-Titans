@@ -45,7 +45,7 @@ class TitanShowcase extends StatelessWidget {
           children: [
             Text(
               title,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
                 color: AppColors.ink,
@@ -54,7 +54,7 @@ class TitanShowcase extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               description,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 12,
                 color: AppColors.ink3,
                 height: 1.4,
@@ -76,7 +76,7 @@ class TitanShowcase extends StatelessWidget {
                   ),
                   child: Text(
                     'Skip',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       color: AppColors.ink4,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -105,7 +105,7 @@ class TitanShowcase extends StatelessWidget {
                   ),
                   child: Text(
                     isLast ? 'Finish' : 'Next',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       color: AppColors.pureWhite,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,

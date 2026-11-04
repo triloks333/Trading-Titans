@@ -47,7 +47,7 @@ class _LegalBody extends StatelessWidget {
         children: [
           Text(
             doc.title,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: AppColors.ink,
@@ -56,7 +56,7 @@ class _LegalBody extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             'Last updated: ${doc.lastUpdated}',
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5),
+            style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5),
           ),
           const SizedBox(height: AppSpacing.md),
           Expanded(
@@ -69,7 +69,7 @@ class _LegalBody extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     section.heading,
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       color: AppColors.ink,
@@ -96,7 +96,7 @@ class _LegalBody extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
         child: Text(
           text,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: 13,
             color: AppColors.ink3,
             height: 1.5,
@@ -131,7 +131,7 @@ class _Notice extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Text(
                 doc.noticeTitle ?? 'IMPORTANT',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                   color: AppColors.bear,
@@ -142,7 +142,7 @@ class _Notice extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             doc.notice!,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 12,
               color: AppColors.ink3,
               height: 1.5,
@@ -163,7 +163,7 @@ class _Bullet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = GoogleFonts.inter(
+    final base = GoogleFonts.ibmPlexSans(
       fontSize: 13,
       color: AppColors.ink3,
       height: 1.5,
@@ -221,7 +221,7 @@ class _SupportLink extends StatelessWidget {
       children: [
         Text(
           'Trading Titans Support',
-          style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink5),
+          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5),
         ),
         InkWell(
           onTap: () async {
@@ -232,7 +232,7 @@ class _SupportLink extends StatelessWidget {
           },
           child: Text(
             email,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 11,
               color: AppColors.imperialGold,
               fontWeight: FontWeight.w600,

@@ -53,7 +53,7 @@ class EmptyState extends StatelessWidget {
                     Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink,
@@ -63,7 +63,7 @@ class EmptyState extends StatelessWidget {
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 13,
                         height: 1.45,
                         color: AppColors.ink4,
@@ -85,7 +85,7 @@ class EmptyState extends StatelessWidget {
                         ),
                         child: Text(
                           actionLabel!,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ],

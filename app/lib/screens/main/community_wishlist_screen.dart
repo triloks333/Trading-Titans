@@ -143,7 +143,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.pureWhite,
-          title: Text('Update Feature Status', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
+          title: Text('Update Feature Status', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -303,7 +303,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
       ),
       child: Text(
         label,
-        style: GoogleFonts.inter(
+        style: GoogleFonts.ibmPlexSans(
           fontSize: 10,
           fontWeight: FontWeight.w700,
           color: text,
@@ -326,7 +326,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
         ),
         title: Text(
           'Community Wishlist',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
@@ -358,7 +358,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
               indicatorColor: AppColors.imperialGold,
               labelColor: AppColors.imperialGold,
               unselectedLabelColor: AppColors.ink4,
-              labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13),
+              labelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, fontSize: 13),
               tabs: const [
                 Tab(text: 'Trending'),
                 Tab(text: 'Top Voted'),
@@ -402,12 +402,12 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
             const SizedBox(height: AppSpacing.md),
             Text(
               'No requests here yet',
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+              style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Be the first to submit a request from settings!',
-              style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4),
+              style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4),
               textAlign: TextAlign.center,
             ),
           ],
@@ -448,7 +448,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
               const SizedBox(height: 4),
               Text(
                 '$upvotesCount',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: hasUpvoted ? AppColors.imperialGold : AppColors.ink2,
@@ -468,7 +468,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
                     const Spacer(),
                     Text(
                       timeAgo,
-                      style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                      style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                     ),
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, size: 18, color: AppColors.ink4),
@@ -524,7 +524,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   item['title'] as String? ?? '',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: AppColors.ink,
@@ -533,7 +533,7 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
                 const SizedBox(height: 4),
                 Text(
                   item['description'] as String? ?? '',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     color: AppColors.ink3,
                   ),

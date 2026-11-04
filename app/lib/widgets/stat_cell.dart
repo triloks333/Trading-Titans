@@ -46,7 +46,7 @@ class StatCell extends StatelessWidget {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: labelSize,
             color: AppColors.ink4,
             fontWeight: labelWeight,
@@ -55,7 +55,7 @@ class StatCell extends StatelessWidget {
         SizedBox(height: gap),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontSize: valueSize,
             fontWeight: valueWeight,
             color: valueColor ?? defaultValueColor ?? AppColors.ink2,

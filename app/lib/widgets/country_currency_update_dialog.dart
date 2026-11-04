@@ -121,7 +121,7 @@ class _CountryCurrencyUpdateDialogState
                       children: [
                         Text(
                           'Select Your Country',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: AppColors.ink),
@@ -141,7 +141,7 @@ class _CountryCurrencyUpdateDialogState
                       autofocus: true,
                       decoration: InputDecoration(
                         hintText: 'Search 250+ countries...',
-                        hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                        hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                         prefixIcon: Icon(Icons.search,
                             size: 20, color: AppColors.ink4),
                         filled: true,
@@ -170,7 +170,7 @@ class _CountryCurrencyUpdateDialogState
                               style: const TextStyle(fontSize: 24)),
                           title: Text(
                             name,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 14,
                               fontWeight: isSelected
                                   ? FontWeight.bold
@@ -181,10 +181,10 @@ class _CountryCurrencyUpdateDialogState
                             ),
                           ),
                           trailing: isSelected
-                              ? const Icon(Icons.check_circle,
+                              ? Icon(Icons.check_circle,
                                   color: AppColors.imperialGold, size: 20)
                               : Text(code,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                       fontSize: 12, color: AppColors.ink5)),
                           onTap: () {
                             Navigator.of(ctx).pop();
@@ -244,7 +244,7 @@ class _CountryCurrencyUpdateDialogState
                       color: AppColors.goldPale,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.public_rounded,
+                    child: Icon(Icons.public_rounded,
                         color: AppColors.goldDeep, size: 24),
                   ),
                   const SizedBox(width: 14),
@@ -254,7 +254,7 @@ class _CountryCurrencyUpdateDialogState
                       children: [
                         Text(
                           'Region & Currency Update',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppColors.ink,
@@ -263,7 +263,7 @@ class _CountryCurrencyUpdateDialogState
                         const SizedBox(height: 2),
                         Text(
                           'New global markets & multi-currency support',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 12, color: AppColors.ink4),
                         ),
                       ],
@@ -274,7 +274,7 @@ class _CountryCurrencyUpdateDialogState
               const SizedBox(height: 18),
               Text(
                 'YOUR COUNTRY',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: AppColors.ink4,
@@ -302,7 +302,7 @@ class _CountryCurrencyUpdateDialogState
                           children: [
                             Text(
                               countryName,
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.ink,
@@ -310,7 +310,7 @@ class _CountryCurrencyUpdateDialogState
                             ),
                             Text(
                               'Tap to search and pick country',
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                   fontSize: 11, color: AppColors.ink4),
                             ),
                           ],
@@ -333,7 +333,7 @@ class _CountryCurrencyUpdateDialogState
                     selected: isSelected,
                     selectedColor: AppColors.imperialGold,
                     backgroundColor: AppColors.cream,
-                    labelStyle: GoogleFonts.inter(
+                    labelStyle: GoogleFonts.ibmPlexSans(
                       fontSize: 11,
                       fontWeight:
                           isSelected ? FontWeight.bold : FontWeight.w500,
@@ -354,7 +354,7 @@ class _CountryCurrencyUpdateDialogState
               const SizedBox(height: 20),
               Text(
                 'PREFERRED DISPLAY CURRENCY',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   color: AppColors.ink4,
@@ -397,7 +397,7 @@ class _CountryCurrencyUpdateDialogState
                             alignment: Alignment.center,
                             child: Text(
                               c.symbol.trim(),
-                              style: GoogleFonts.inter(
+                              style: GoogleFonts.ibmPlexSans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: isSelected ? Colors.white : AppColors.ink,
@@ -411,7 +411,7 @@ class _CountryCurrencyUpdateDialogState
                               children: [
                                 Text(
                                   c.label,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
                                     color: AppColors.ink,
@@ -419,7 +419,7 @@ class _CountryCurrencyUpdateDialogState
                                 ),
                                 Text(
                                   c.subtitle,
-                                  style: GoogleFonts.inter(
+                                  style: GoogleFonts.ibmPlexSans(
                                       fontSize: 11, color: AppColors.ink4),
                                 ),
                               ],
@@ -456,7 +456,7 @@ class _CountryCurrencyUpdateDialogState
                         )
                       : Text(
                           'Confirm & Start Trading',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 14, fontWeight: FontWeight.bold),
                         ),
                 ),

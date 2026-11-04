@@ -188,7 +188,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                   'Market Intel & News',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
@@ -215,14 +215,14 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                     children: [
                       Text(
                         'View more',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.imperialGold,
                         ),
                       ),
                       const SizedBox(width: 3),
-                      const Icon(Icons.arrow_forward_rounded, size: 13, color: AppColors.imperialGold),
+                      Icon(Icons.arrow_forward_rounded, size: 13, color: AppColors.imperialGold),
                     ],
                   ),
                 ),
@@ -340,7 +340,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                                 marketLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.ibmPlexSans(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                   color: tagColor,
@@ -351,7 +351,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                           const SizedBox(width: 8),
                           Text(
                             formattedDate,
-                            style: GoogleFonts.inter(
+                            style: GoogleFonts.ibmPlexSans(
                               fontSize: 10.5,
                               color: AppColors.ink4,
                             ),
@@ -365,7 +365,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 14.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.ink,
@@ -378,7 +378,7 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                           cleanExcerpt,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 11.5,
                             color: AppColors.ink3,
                             height: 1.35,
@@ -393,14 +393,14 @@ class _HomeNewsSectionState extends State<HomeNewsSection> with SingleTickerProv
                     children: [
                       Text(
                         'Read preview',
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                           color: AppColors.imperialGold,
                         ),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(
+                      Icon(
                         Icons.lock_outline_rounded,
                         size: 13,
                         color: AppColors.imperialGold,

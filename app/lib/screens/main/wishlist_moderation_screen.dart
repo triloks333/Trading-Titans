@@ -116,7 +116,7 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
         ),
         title: Text(
           'Moderation Queue',
-          style: GoogleFonts.inter(
+          style: GoogleFonts.ibmPlexSans(
             fontWeight: FontWeight.w700,
             color: AppColors.ink,
           ),
@@ -146,12 +146,12 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
           const SizedBox(height: AppSpacing.md),
           Text(
             'Moderation queue clean!',
-            style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+            style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'All features are safe and visible.',
-            style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink4),
+            style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4),
           ),
         ],
       ),
@@ -182,11 +182,11 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber_rounded, size: 12, color: AppColors.bear),
+                    Icon(Icons.warning_amber_rounded, size: 12, color: AppColors.bear),
                     const SizedBox(width: 4),
                     Text(
                       '$reportsCount Reports',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: AppColors.bear,
@@ -199,14 +199,14 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
               const Spacer(),
               Text(
                 'Status: ${item['status']}',
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4, fontWeight: FontWeight.w500),
+                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4, fontWeight: FontWeight.w500),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             item['title'] as String? ?? '',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: AppColors.ink,
@@ -215,7 +215,7 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
           const SizedBox(height: 6),
           Text(
             item['description'] as String? ?? '',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 14,
               color: AppColors.ink3,
             ),
@@ -237,10 +237,10 @@ class _WishlistModerationScreenState extends State<WishlistModerationScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _approveFeature(item['id'] as String),
-                  icon: const Icon(Icons.check, color: AppColors.bull),
-                  label: const Text('Mark Safe', style: TextStyle(color: AppColors.bull)),
+                  icon: Icon(Icons.check, color: AppColors.bull),
+                  label: Text('Mark Safe', style: TextStyle(color: AppColors.bull)),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.bull),
+                    side: BorderSide(color: AppColors.bull),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),

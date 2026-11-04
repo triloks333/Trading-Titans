@@ -12,7 +12,7 @@ class AnalyticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Analytics', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink)),
+        title: Text('Analytics', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
         backgroundColor: AppColors.parchment,
         centerTitle: false,
       ),
@@ -55,7 +55,7 @@ class AnalyticsScreen extends StatelessWidget {
                   children: [
                     Text(
                       'TOTAL REALIZED P&L',
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink4,
@@ -67,7 +67,7 @@ class AnalyticsScreen extends StatelessWidget {
                       children: [
                         Text(
                           isProfit ? '+${Money.wallet(pnl, decimals: 2)}' : '-${Money.wallet(pnl.abs(), decimals: 2)}',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                             fontSize: 32,
                             fontWeight: FontWeight.w900,
                             color: isProfit ? AppColors.bull : AppColors.bear,
@@ -90,7 +90,7 @@ class AnalyticsScreen extends StatelessWidget {
               if (dataPoints.isNotEmpty) ...[
                 Text(
                   'Equity Curve',
-                  style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Container(
@@ -112,7 +112,7 @@ class AnalyticsScreen extends StatelessWidget {
               // Advanced Metrics Section Header
               Text(
                 'Performance Metrics',
-                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
               ),
               const SizedBox(height: AppSpacing.sm),
 
@@ -163,7 +163,7 @@ class AnalyticsScreen extends StatelessWidget {
               // Best & Worst Trades
               Text(
                 'Milestones',
-                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
               ),
               const SizedBox(height: AppSpacing.sm),
               Row(
@@ -210,7 +210,7 @@ class AnalyticsScreen extends StatelessWidget {
             children: [
               Text(
                 label.toUpperCase(),
-                style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink4, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink4, fontWeight: FontWeight.bold, letterSpacing: 0.5),
               ),
               if (progress != null)
                 SizedBox(
@@ -228,12 +228,12 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w800, color: valueColor ?? AppColors.ink),
+            style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.w800, color: valueColor ?? AppColors.ink),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+            style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -256,7 +256,7 @@ class AnalyticsScreen extends StatelessWidget {
         children: [
           Text(
             label.toUpperCase(),
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 10,
               fontWeight: FontWeight.w800,
               color: isWin ? AppColors.bull : AppColors.bear,
@@ -266,14 +266,14 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             trade?['symbol'] as String? ?? 'None',
-            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
+            style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
           ),
           const SizedBox(height: 4),
           Text(
             trade != null
                 ? '${isWin ? "+" : ""}${Money.wallet(pnlVal, decimals: 2)}'
                 : '--',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 14,
               fontWeight: FontWeight.w800,
               color: isWin ? AppColors.bull : AppColors.bear,

@@ -220,16 +220,16 @@ class _MainNavigationState extends State<MainNavigation> {
             backgroundColor: AppColors.pureWhite,
             title: Text(
               'Exit Trading Titans?',
-              style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+              style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
             ),
             content: Text(
               'Are you sure you want to exit the application?',
-              style: GoogleFonts.inter(color: AppColors.ink3),
+              style: GoogleFonts.ibmPlexSans(color: AppColors.ink3),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogCtx).pop(false),
-                child: Text('Cancel', style: GoogleFonts.inter(color: AppColors.ink4, fontWeight: FontWeight.w600)),
+                child: Text('Cancel', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontWeight: FontWeight.w600)),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.of(dialogCtx).pop(true),
@@ -239,7 +239,7 @@ class _MainNavigationState extends State<MainNavigation> {
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Text('Exit', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                child: Text('Exit', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -369,7 +369,7 @@ class _DesktopSidebar extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Trading Titans',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: AppColors.ink,
@@ -396,7 +396,7 @@ class _DesktopSidebar extends StatelessWidget {
                   user?.name ?? 'Titan',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink,
@@ -407,12 +407,12 @@ class _DesktopSidebar extends StatelessWidget {
                   guest ? 'Guest account' : (user?.email ?? ''),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 11, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   Money.wallet(user?.walletBalance ?? 0),
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                     color: AppColors.ink,
@@ -420,7 +420,7 @@ class _DesktopSidebar extends StatelessWidget {
                 ),
                 Text(
                   'Demo cash',
-                  style: GoogleFonts.inter(fontSize: 10, color: AppColors.ink4),
+                  style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink4),
                 ),
               ],
             ),
@@ -467,7 +467,7 @@ class _SidebarItem extends StatelessWidget {
                 const SizedBox(width: AppSpacing.md),
                 Text(
                   dest.label,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                     fontSize: 13.5,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? AppColors.ink : AppColors.ink3,
@@ -609,7 +609,7 @@ class _NavButton extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.clip,
               softWrap: false,
-              style: GoogleFonts.inter(
+              style: GoogleFonts.ibmPlexSans(
                 fontSize: 9.5,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: selected ? activeColor : idleColor,

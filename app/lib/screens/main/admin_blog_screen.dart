@@ -205,12 +205,12 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
       builder: (dialog) => AlertDialog(
         backgroundColor: AppColors.pureWhite,
         title: Text('Remove from the app?',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink)),
         content: Text(
           'It disappears from the app\'s news feed. The website keeps the article, '
           'so its search traffic is not lost.',
-          style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink3, height: 1.5),
+          style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink3, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -218,7 +218,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
               child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(dialog, true),
-              child: const Text('Remove',
+              child: Text('Remove',
                   style: TextStyle(color: AppColors.bear))),
         ],
       ),
@@ -237,7 +237,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
         backgroundColor: AppColors.parchment,
         centerTitle: false,
         title: Text(_editingId == null ? 'New Blog Post' : 'Edit Blog Post',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
                 fontWeight: FontWeight.bold, color: AppColors.ink)),
         actions: [
           if (_editingId != null)
@@ -308,7 +308,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                 'Supported: # headings, **bold**, *italic*, `code`, ``` fences, '
                 '- lists, 1. lists, [links](https://…) and '
                 '![images](https://…). Anything else is shown as plain text.',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 11.5, color: AppColors.ink4, height: 1.45),
               ),
             ),
@@ -318,7 +318,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
               activeThumbColor: AppColors.imperialGold,
               contentPadding: EdgeInsets.zero,
               title: Text('Published',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppColors.ink)),
@@ -326,7 +326,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                 _publish
                     ? 'Live and indexable as soon as you save.'
                     : 'Saved as a draft. Nobody outside this panel can read it.',
-                style: GoogleFonts.inter(fontSize: 12, color: AppColors.ink4),
+                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -343,13 +343,13 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                 _saving
                     ? 'Saving…'
                     : (_editingId == null ? 'Create post' : 'Save changes'),
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: AppSpacing.xl),
             Text('Existing posts',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: AppColors.ink)),
@@ -361,7 +361,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
               ))
             else if (_posts.isEmpty)
               Text('None yet.',
-                  style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4))
+                  style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4))
             else
               for (final post in _posts) _postRow(post),
             const SizedBox(height: AppSpacing.xxl),
@@ -387,7 +387,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
         maxLines: maxLines,
         validator: validator,
         onChanged: onChanged,
-        style: GoogleFonts.inter(fontSize: 14, color: AppColors.ink),
+        style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -429,7 +429,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             onPressed: _saving ? null : _pickCover,
             icon: const Icon(Icons.upload_outlined, size: 18),
             label: Text(_coverUrl == null ? 'Add cover image' : 'Replace cover',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.ibmPlexSans(
                     fontSize: 13, fontWeight: FontWeight.w600)),
           ),
         ),
@@ -445,7 +445,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
         children: [
           Text(
             'Target Market Category',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.ibmPlexSans(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: AppColors.ink2,
@@ -469,7 +469,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                     value: entry.key,
                     child: Text(
                       entry.value,
-                      style: GoogleFonts.inter(
+                      style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         color: AppColors.ink,
                         fontWeight: entry.key == 'all'
@@ -489,7 +489,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             padding: const EdgeInsets.only(top: 4, left: 4),
             child: Text(
               'Only users interested in this market will see this news in their home feed. "All Markets" shows to everyone.',
-              style: GoogleFonts.inter(fontSize: 11.5, color: AppColors.ink4),
+              style: GoogleFonts.ibmPlexSans(fontSize: 11.5, color: AppColors.ink4),
             ),
           ),
         ],
@@ -531,7 +531,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                       ),
                       child: Text(
                         marketLabel.split(' (').first,
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.ibmPlexSans(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: AppColors.imperialGold,
@@ -542,14 +542,14 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text('${post['title']}',
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.ibmPlexSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.ink)),
                 const SizedBox(height: 2),
                 Text(
                   '/blog/${post['slug']}  ·  ${published ? 'published' : 'draft'}',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.ibmPlexSans(
                       fontSize: 11.5,
                       color: published ? AppColors.bull : AppColors.ink4),
                 ),
@@ -562,7 +562,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             onPressed: () => _edit(post),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.bear),
+            icon: Icon(Icons.delete_outline, size: 20, color: AppColors.bear),
             tooltip: 'Delete',
             onPressed: () => _delete(post),
           ),

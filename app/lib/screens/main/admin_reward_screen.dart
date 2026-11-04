@@ -189,7 +189,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
         appBar: AppBar(
           title: Text(
             'Admin Panel',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.ink),
+            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
           ),
           backgroundColor: AppColors.parchment,
           centerTitle: false,
@@ -216,24 +216,24 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                     children: [
                       Text(
                         'Distribute Admin Rewards',
-                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Reward a user with dummy cash and show a celebration popup in their app.',
-                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
                       ),
                       const SizedBox(height: AppSpacing.lg),
-                      Text('User Email Address', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('User Email Address', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _rewardEmailController,
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(
                           hintText: 'user@example.com',
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Please enter email';
@@ -242,17 +242,17 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         },
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Text('Reward Amount (Demo Cash)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('Reward Amount (Demo Cash)', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _rewardAmountController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         decoration: InputDecoration(
                           hintText: 'e.g. 5000',
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           prefixText: '₹ ',
                           border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Please enter amount';
@@ -262,16 +262,16 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         },
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      Text('Celebration Message', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('Celebration Message', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _rewardMessageController,
                         maxLines: 3,
                         decoration: InputDecoration(
                           hintText: 'e.g. Thanks for reporting the critical bug! Keep up the good work.',
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Please enter a message';
@@ -293,7 +293,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                                   width: 20,
                                   child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
                                 )
-                              : Text('Send Reward', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                              : Text('Send Reward', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                         ),
                       ),
                     ],
@@ -311,12 +311,12 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                     children: [
                       Text(
                         'Send Notification',
-                        style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Send a direct custom alert or notification to a user, or broadcast to everyone.',
-                        style: GoogleFonts.inter(fontSize: 13, color: AppColors.ink4),
+                        style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
                       ),
                       const SizedBox(height: AppSpacing.md),
                       
@@ -334,23 +334,23 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                           ),
                           Text(
                             'Send to All Users (Broadcast)',
-                            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
+                            style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink),
                           ),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
 
                       if (!_sendToAll) ...[
-                        Text('User Email Address', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                        Text('User Email Address', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _notifyEmailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
                             hintText: 'user@example.com',
-                            hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                            hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                             border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                            focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                            focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                           ),
                           validator: (v) {
                             if (_sendToAll) return null;
@@ -362,15 +362,15 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         const SizedBox(height: AppSpacing.md),
                       ],
 
-                      Text('Notification Title', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('Notification Title', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _notifyTitleController,
                         decoration: InputDecoration(
                           hintText: 'e.g. Critical System Update',
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Please enter title';
@@ -379,16 +379,16 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
 
-                      Text('Notification Body', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('Notification Body', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _notifyBodyController,
                         maxLines: 3,
                         decoration: InputDecoration(
                           hintText: 'e.g. Our servers are undergoing maintenance tonight...',
-                          hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                          hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                           border:       OutlineInputBorder(borderSide: BorderSide(color: AppColors.birch)),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
+                          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: AppColors.imperialGold)),
                         ),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Please enter body message';
@@ -398,7 +398,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                       const SizedBox(height: AppSpacing.md),
 
                       // Image Selector Option
-                      Text('Attach an Image (Optional)', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
+                      Text('Attach an Image (Optional)', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.ink2)),
                       const SizedBox(height: 6),
                       if (_pickedBytes != null)
                         Container(
@@ -437,8 +437,8 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                               });
                             }
                           },
-                          icon: const Icon(Icons.add_photo_alternate_outlined, color: AppColors.goldDeep),
-                          label: Text('Select Image', style: GoogleFonts.inter(color: AppColors.ink, fontWeight: FontWeight.w600)),
+                          icon: Icon(Icons.add_photo_alternate_outlined, color: AppColors.goldDeep),
+                          label: Text('Select Image', style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w600)),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                             side:       BorderSide(color: AppColors.birch),
@@ -450,7 +450,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
 
                       // ── Optional button on the notification ──────────────
                       Text('Add a Button (Optional)',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: AppColors.ink2)),
@@ -468,7 +468,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                             .map((e) => DropdownMenuItem(
                                   value: e.key,
                                   child: Text(e.value,
-                                      style: GoogleFonts.inter(
+                                      style: GoogleFonts.ibmPlexSans(
                                           fontSize: 14, color: AppColors.ink)),
                                 ))
                             .toList(),
@@ -479,10 +479,10 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         const SizedBox(height: AppSpacing.sm),
                         TextFormField(
                           controller: _ctaLabelController,
-                          style: GoogleFonts.inter(color: AppColors.ink),
+                          style: GoogleFonts.ibmPlexSans(color: AppColors.ink),
                           decoration: InputDecoration(
                             hintText: 'Button text, e.g. Request a feature',
-                            hintStyle: GoogleFonts.inter(color: AppColors.ink5),
+                            hintStyle: GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                             border: OutlineInputBorder(
                                 borderSide: BorderSide(color: AppColors.birch)),
                           ),
@@ -498,12 +498,12 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                           const SizedBox(height: AppSpacing.sm),
                           TextFormField(
                             controller: _ctaUrlController,
-                            style: GoogleFonts.inter(color: AppColors.ink),
+                            style: GoogleFonts.ibmPlexSans(color: AppColors.ink),
                             keyboardType: TextInputType.url,
                             decoration: InputDecoration(
                               hintText: 'https://…',
                               hintStyle:
-                                  GoogleFonts.inter(color: AppColors.ink5),
+                                  GoogleFonts.ibmPlexSans(color: AppColors.ink5),
                               border: OutlineInputBorder(
                                   borderSide: BorderSide(color: AppColors.birch)),
                             ),
@@ -525,7 +525,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                         Text(
                           'Older app versions show the notification without the '
                           'button, so mention the destination in the message too.',
-                          style: GoogleFonts.inter(
+                          style: GoogleFonts.ibmPlexSans(
                               fontSize: 11, color: AppColors.ink4),
                         ),
                       ],
@@ -545,7 +545,7 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                                   width: 20,
                                   child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2),
                                 )
-                              : Text(_sendToAll ? 'Broadcast Notification' : 'Send Notification', style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
+                              : Text(_sendToAll ? 'Broadcast Notification' : 'Send Notification', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
                         ),
                       ),
                     ],
