@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'community_wishlist_screen.dart';
+import 'support_tickets_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -26,7 +28,9 @@ import 'convert_account_screen.dart';
 /// upgrade prompt instead of a composer, and a muted user is told up front rather
 /// than after typing a message.
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key});
+  /// 0 Room, 1 Tickets, 2 Wishlist.
+  const ChatScreen({super.key, this.initialTab = 0});
+  final int initialTab;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -960,7 +964,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final displayList = _displayMessages;
 
-    return Scaffold(
+    return DefaultTabController(
+      length: 3,
+      initialIndex: widget.initialTab,
+      child: Scaffold(
       backgroundColor: AppColors.parchment,
       appBar: AppBar(
         backgroundColor: AppColors.parchment,
@@ -1032,8 +1039,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: 4),
         ],
+        bottom: const TabBar(tabs: [Tab(text: 'Room'), Tab(text: 'Tickets'), Tab(text: 'Wishlist')]),
       ),
-      body: Column(
+      // Tickets and the wishlist live here so community and support share one home.
+      body: TabBarView(physics: const NeverScrollableScrollPhysics(), children: [Column(
         children: [
           Expanded(
             child: _loading
@@ -1106,7 +1115,10 @@ class _ChatScreenState extends State<ChatScreen> {
           _composer(),
         ],
       ),
-    );
+        const SupportTicketsScreen(embedded: true),
+        const CommunityWishlistScreen(embedded: true),
+      ]),
+    ));
   }
 
   Widget _bubble(ChatMessage message, {ChatMessage? previous}) {

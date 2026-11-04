@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/request_feature_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_network_image.dart';
@@ -6,7 +7,9 @@ import '../../services/supabase_service.dart';
 import 'wishlist_moderation_screen.dart';
 
 class CommunityWishlistScreen extends StatefulWidget {
-  const CommunityWishlistScreen({super.key});
+  /// Embedded inside Titans Room: no app bar, primary action as a button.
+  const CommunityWishlistScreen({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   State<CommunityWishlistScreen> createState() => _CommunityWishlistScreenState();
@@ -317,7 +320,17 @@ class _CommunityWishlistScreenState extends State<CommunityWishlistScreen> with 
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.parchment,
-      appBar: AppBar(
+      floatingActionButton: widget.embedded
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await showRequestFeatureSheet(context);
+                _fetchWishlist();
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Request a feature'),
+            )
+          : null,
+      appBar: widget.embedded ? null : AppBar(
         backgroundColor: AppColors.pureWhite,
         elevation: 0,
         leading: IconButton(

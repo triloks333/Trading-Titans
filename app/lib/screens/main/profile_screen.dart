@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'chat_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,8 +19,6 @@ import '../../core/countries.dart';
 import '../../core/currency.dart';
 import '../../widgets/crown_logo.dart';
 import '../../widgets/plan_badge.dart';
-import '../../widgets/request_feature_sheet.dart';
-import '../../widgets/report_issue_sheet.dart';
 import 'subscribe_screen.dart';
 import 'convert_account_screen.dart';
 import 'challenges_screen.dart';
@@ -31,11 +30,9 @@ import 'whatif_screen.dart';
 import 'watchlist_screen.dart';
 import 'notifications_screen.dart';
 import 'refer_earn_screen.dart';
-import 'support_tickets_screen.dart';
 import 'admin_analytics_screen.dart';
 import 'admin_blog_screen.dart';
 import 'admin_reward_screen.dart';
-import 'community_wishlist_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -52,14 +49,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Hides plan badges and the top-up route while the app is free.
     final monetized = context.watch<AppFlagsService>().monetizationEnabled;
     final plan = context.watch<PlanService>();
-    final themeService = context.watch<ThemeService>();
+    context.watch<ThemeService>(); // rebuild on theme change
     // Watched so the row subtitles and every money figure on this screen update
     // the moment the preference changes.
-    final currencyService = context.watch<CurrencyService>();
+    context.watch<CurrencyService>();
     
-    String themeName = 'Light Mode';
-    if (themeService.themeMode == ThemeMode.dark) themeName = 'Dark Mode';
-    if (themeService.themeMode == ThemeMode.system) themeName = 'System Default';
 
     return Scaffold(
       body: SafeArea(
@@ -202,92 +196,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: AppSpacing.lg),
             
             
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Text(
-                'ACCOUNT ACTIONS',
-                style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
-              ),
-            ),
             if (auth.isGuest)
-              _menuItem(context, Icons.lock_open_outlined,
-                  'Make account permanent', const ConvertAccountScreen()),
-            _menuItem(context, Icons.star, 'Watchlist', const WatchlistScreen()),
-            _menuItem(context, Icons.bar_chart, 'Analytics', const AnalyticsScreen()),
-            _menuItem(context, Icons.receipt_long, 'Order History', const OrdersScreen()),
-            _menuItem(context, Icons.notifications_outlined, 'Notifications', const NotificationsScreen()),
-            _menuItem(context, Icons.card_giftcard, 'Refer & Earn', const ReferEarnScreen()),
-            _menuItem(context, Icons.lightbulb_outline, 'What-If Simulator', const WhatIfScreen()),
-            _menuItem(context, Icons.medical_services_outlined, 'Autopsy', const AutopsyScreen()),
-            _menuItem(context, Icons.school_outlined, 'Trading Glossary', const GlossaryScreen()),
-            
-            const SizedBox(height: AppSpacing.md),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Text(
-                'SETTINGS & SUPPORT',
-                style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.ink4, letterSpacing: 0.8),
-              ),
-            ),
-            _menuItemAction(context, Icons.privacy_tip_outlined, 'Privacy Policy', () => _showPrivacyPolicy(context)),
-            _menuItemAction(context, Icons.gavel_outlined, 'Terms & Conditions', () => _showTerms(context)),
-            _menuItemAction(context, Icons.rocket_launch_outlined, 'Request a Feature', () => _showRequestFeature(context)),
-            _menuItem(context, Icons.forum_outlined, 'Community Wishlist', const CommunityWishlistScreen()),
-            _menuItemAction(context, Icons.bug_report_outlined, 'Report an Issue', () => _showReportIssue(context)),
-            _menuItemAction(context, Icons.replay_circle_filled_outlined, 'Replay App Tour', () => _replayTour(context)),
-            _menuItemActionWithSubtitle(context, Icons.palette_outlined, 'App Theme', themeName, () => _showThemeSelector(context)),
-            _menuItemActionWithSubtitle(
-              context,
-              Icons.currency_exchange_outlined,
-              'Display Currency',
-              currencyService.displayCurrency.label,
-              () => _showCurrencySelector(context),
-            ),
-            _menuItemActionWithSubtitle(
-              context,
-              Icons.tune_outlined,
-              'Preferred Markets',
-              _marketsSummary(currencyService.preferredMarkets),
-              () => _showMarketsSelector(context),
-            ),
-            _menuItemActionWithSubtitle(
-              context,
-              Icons.public_outlined,
-              'Trading From',
-              _locationSummary(currencyService),
-              () => _showLocationSelector(context),
-            ),
-            if (user?.isAdmin == true) ...[
-              _menuItem(context, Icons.rate_review_outlined, 'Submitted Tickets', const SupportTicketsScreen()),
-              _menuItem(context, Icons.admin_panel_settings_outlined, 'Admin Panel', const AdminRewardScreen()),
-              _menuItem(context, Icons.insights_outlined, 'User Analytics', const AdminAnalyticsScreen()),
-              _menuItem(context, Icons.newspaper_outlined, 'Post Market News & Blogs', const AdminBlogScreen()),
-            ],
-
-            const SizedBox(height: AppSpacing.md),
+              _group('Account', [
+                _row(context, Icons.lock_open_outlined, 'Make account permanent', screen: const ConvertAccountScreen()),
+              ]),
+            _group('Trading', [
+              _row(context, Icons.star_outline_rounded, 'Watchlists', screen: const WatchlistScreen()),
+              _row(context, Icons.receipt_long, 'Order history', screen: const OrdersScreen()),
+              _row(context, Icons.bar_chart, 'Analytics', screen: const AnalyticsScreen()),
+              _row(context, Icons.medical_services_outlined, 'Trade autopsy', screen: const AutopsyScreen()),
+              _row(context, Icons.lightbulb_outline, 'What-If simulator', screen: const WhatIfScreen()),
+              _row(context, Icons.school_outlined, 'Trading glossary', screen: const GlossaryScreen()),
+              _row(context, Icons.card_giftcard, 'Refer & earn', screen: const ReferEarnScreen()),
+            ]),
+            _group('More', [
+              _row(context, Icons.forum_outlined, 'Titans Room', subtitle: 'Chat, support tickets & wishlist', screen: const ChatScreen()),
+              _row(context, Icons.notifications_outlined, 'Notifications', screen: const NotificationsScreen()),
+              _row(context, Icons.settings_outlined, 'Settings',
+                  subtitle: 'Theme, currency, markets, legal, account', onTap: () => _openSettings(context)),
+            ]),
+            if (user?.isAdmin == true)
+              _group('Admin', [
+                _row(context, Icons.admin_panel_settings_outlined, 'Admin panel', screen: const AdminRewardScreen()),
+                _row(context, Icons.insights_outlined, 'User analytics', screen: const AdminAnalyticsScreen()),
+                _row(context, Icons.newspaper_outlined, 'Post market news & blogs', screen: const AdminBlogScreen()),
+              ]),
             OutlinedButton(
-              onPressed: () async {
-                await auth.logout();
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(color: AppColors.bear),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-              ),
-              child: Text('Sign Out', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.bear, letterSpacing: 0.5)),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(
-              onPressed: () => _confirmDeleteAccount(context, auth),
-              child: Text(
-                'Delete Account',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.bear.withValues(alpha: 0.8),
-                  decoration: TextDecoration.underline,
-                ),
-              ),
+              onPressed: auth.logout,
+              style: OutlinedButton.styleFrom(foregroundColor: AppColors.bear, side: BorderSide(color: AppColors.bear)),
+              child: const Text('Sign out'),
             ),
             const SizedBox(height: AppSpacing.xl),
             Center(child: Text('Trading Titans v1.2', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink5))),
@@ -355,55 +292,85 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _menuItem(BuildContext context, IconData icon, String label, Widget screen) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: OutlinedButton(
-        onPressed: () async {
-          final authService = context.read<AuthService>();
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-          await authService.refreshUser();
-        },
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
-          side:       BorderSide(color: AppColors.birch),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          backgroundColor: AppColors.pureWhite,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.ink2),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500))),
-                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
-          ],
-        ),
-      ),
-    );
-  }
+  /// One grouped-list row. [screen] pushes a page and refreshes the user on
+  /// return; otherwise [onTap] runs.
+  Widget _row(BuildContext context, IconData icon, String label,
+          {Widget? screen, VoidCallback? onTap, String? subtitle, Color? color}) =>
+      ListTile(
+        onTap: screen == null
+            ? onTap
+            : () async {
+                final authService = context.read<AuthService>();
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+                await authService.refreshUser();
+              },
+        leading: Icon(icon, size: 20, color: color ?? AppColors.ink3),
+        title: Text(label, style: AppFonts.sans(size: 14, weight: FontWeight.w500, color: color ?? AppColors.ink)),
+        subtitle: subtitle == null ? null : Text(subtitle, style: AppText.bodySmall),
+        trailing: Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.ink4),
+      );
 
-  Widget _menuItemAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: AppSpacing.lg),
-          side:       BorderSide(color: AppColors.birch),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          backgroundColor: AppColors.pureWhite,
+  /// A titled group of rows in one bordered card.
+  Widget _group(String title, List<Widget> rows) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.sm),
+            child: Text(title.toUpperCase(), style: AppText.sectionLabel),
+          ),
+          Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+                color: AppColors.pureWhite,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.birch)),
+            child: Column(children: [
+              for (var i = 0; i < rows.length; i++) ...[if (i > 0) Divider(color: AppColors.birch), rows[i]],
+            ]),
+          ),
+        ]),
+      );
+
+  /// Every preference in one place. Selectors run on the Profile context so
+  /// their sheets and dialogs open above this page.
+  void _openSettings(BuildContext context) => Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text('Settings', style: AppText.cardTitle)),
+          body: ListenableBuilder(
+            listenable: ThemeService(),
+            builder: (ctx, _) {
+              final currency = ctx.watch<CurrencyService>();
+              final auth = ctx.read<AuthService>();
+              const modes = {ThemeMode.dark: 'Dark', ThemeMode.light: 'Light', ThemeMode.system: 'System default'};
+              return ListView(padding: const EdgeInsets.all(AppSpacing.lg), children: [
+                _group('Appearance', [
+                  _row(ctx, Icons.palette_outlined, 'App theme',
+                      subtitle: modes[ThemeService().themeMode], onTap: () => _showThemeSelector(context)),
+                  _row(ctx, Icons.currency_exchange_outlined, 'Display currency',
+                      subtitle: currency.displayCurrency.label, onTap: () => _showCurrencySelector(context)),
+                ]),
+                _group('Trading', [
+                  _row(ctx, Icons.tune_outlined, 'Preferred markets',
+                      subtitle: _marketsSummary(currency.preferredMarkets), onTap: () => _showMarketsSelector(context)),
+                  _row(ctx, Icons.public_outlined, 'Trading from',
+                      subtitle: _locationSummary(currency), onTap: () => _showLocationSelector(context)),
+                ]),
+                _group('Help & about', [
+                  _row(ctx, Icons.replay_circle_filled_outlined, 'Replay app tour', onTap: () => _replayTour(context)),
+                  _row(ctx, Icons.privacy_tip_outlined, 'Privacy policy', onTap: () => _showPrivacyPolicy(context)),
+                  _row(ctx, Icons.gavel_outlined, 'Terms & conditions', onTap: () => _showTerms(context)),
+                ]),
+                _group('Account', [
+                  _row(ctx, Icons.delete_outline_rounded, 'Delete account',
+                      subtitle: 'Permanently removes all data', color: AppColors.bear,
+                      onTap: () => _confirmDeleteAccount(context, auth)),
+                ]),
+                Center(child: Text('Trading Titans v1.2 · Kashivwealth Management LLP', style: AppText.bodySmall)),
+              ]);
+            },
+          ),
         ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.ink2),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500))),
-                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
-          ],
-        ),
-      ),
-    );
-  }
+      ));
 
   void _showPrivacyPolicy(BuildContext context) =>
       showLegalSheet(context, LegalDocs.privacy);
@@ -411,12 +378,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _showTerms(BuildContext context) =>
       showLegalSheet(context, LegalDocs.terms);
 
-  /// Lives in widgets/request_feature_sheet.dart so a notification can open it
-  /// too — `cta_route: 'feature'` lands on the same sheet.
-  void _showRequestFeature(BuildContext context) =>
-      showRequestFeatureSheet(context);
-
-  void _showReportIssue(BuildContext context) => showReportIssueSheet(context);
 
   /// Human-readable summary of the preferred-market selection, for the row
   /// subtitle.
@@ -898,42 +859,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _menuItemActionWithSubtitle(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String subtitle,
-    VoidCallback onTap,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: AppSpacing.lg),
-          side:       BorderSide(color: AppColors.birch),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-          backgroundColor: AppColors.pureWhite,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: AppColors.ink2),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: GoogleFonts.ibmPlexSans(color: AppColors.ink, fontWeight: FontWeight.w500, fontSize: 14)),
-                  Text(subtitle, style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
-                ],
-              ),
-            ),
-                  Icon(Icons.chevron_right, size: 18, color: AppColors.ink4),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _detailRow(String label, String value, {Color? valueColor}) {
     return Row(

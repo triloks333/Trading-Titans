@@ -11,7 +11,6 @@ import '../../widgets/app_network_image.dart';
 import '../../services/nav_tab_service.dart';
 import 'stock_detail_screen.dart';
 import 'subscribe_screen.dart';
-import 'community_wishlist_screen.dart';
 import 'orders_screen.dart';
 import 'refer_earn_screen.dart';
 import '../../widgets/request_feature_sheet.dart';
@@ -618,7 +617,7 @@ Future<void> openNotificationCta(
       return;
     case 'wishlist':
       await Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const CommunityWishlistScreen()),
+        MaterialPageRoute(builder: (_) => const ChatScreen(initialTab: 2)),
       );
       return;
     case 'orders':

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/report_issue_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../widgets/app_network_image.dart';
@@ -6,7 +7,9 @@ import '../../services/supabase_service.dart';
 import '../../widgets/skeleton.dart';
 
 class SupportTicketsScreen extends StatefulWidget {
-  const SupportTicketsScreen({super.key});
+  /// Embedded inside Titans Room: no app bar, primary action as a button.
+  const SupportTicketsScreen({super.key, this.embedded = false});
+  final bool embedded;
 
   @override
   State<SupportTicketsScreen> createState() => _SupportTicketsScreenState();
@@ -84,7 +87,17 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
     final unresolvedCount = _tickets.length - resolvedCount;
 
     return Scaffold(
-      appBar: AppBar(
+      floatingActionButton: widget.embedded
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await showReportIssueSheet(context);
+                _load();
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Report an issue'),
+            )
+          : null,
+      appBar: widget.embedded ? null : AppBar(
         title: Text(
           'Submitted Tickets',
           style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
