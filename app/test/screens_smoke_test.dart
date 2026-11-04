@@ -34,7 +34,11 @@ import 'package:mobile/screens/main/community_wishlist_screen.dart';
 import 'package:mobile/screens/main/compete_screen.dart';
 import 'package:mobile/screens/main/convert_account_screen.dart';
 import 'package:mobile/screens/main/dashboard_screen.dart';
+import 'package:mobile/models/quote.dart';
 import 'package:mobile/screens/main/glossary_quiz_screen.dart';
+import 'package:mobile/screens/main/option_chain_screen.dart';
+import 'package:mobile/screens/main/order_entry_screen.dart';
+import 'package:mobile/screens/main/stock_detail_screen.dart';
 import 'package:mobile/screens/main/glossary_screen.dart';
 import 'package:mobile/screens/main/muhurat_screen.dart';
 import 'package:mobile/screens/main/news_list_screen.dart';
@@ -50,7 +54,17 @@ import 'package:mobile/screens/main/wallet_screen.dart';
 import 'package:mobile/screens/main/watchlist_screen.dart';
 import 'package:mobile/screens/main/whatif_screen.dart';
 
+Quote _reliance() => Quote(
+      symbol: 'RELIANCE', yfSymbol: 'RELIANCE.NS', name: 'Reliance Industries', price: 2948.30,
+      previousClose: 2915.65, change: 32.65, changePct: 1.12, currency: 'INR', market: 'stock',
+      open: 2918.40, dayHigh: 2956.00, dayLow: 2911.10, volume: 6420000,
+    );
+
 final screens = <String, Widget Function()>{
+  'Stock detail': () => const StockDetailScreen(symbol: 'RELIANCE', market: 'stock', name: 'Reliance Industries'),
+  'Order entry · buy': () => OrderEntryScreen(quote: _reliance(), isBuy: true),
+  'Order entry · sell': () => OrderEntryScreen(quote: _reliance(), isBuy: false),
+  'Option chain': () => const OptionChainScreen(underlyingSymbol: 'NIFTY', spotPrice: 24318.45),
   'Onboarding': () => const OnboardingScreen(),
   'Login': () => const LoginScreen(),
   'Register': () => const RegisterScreen(),
