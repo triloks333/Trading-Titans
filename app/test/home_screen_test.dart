@@ -90,6 +90,9 @@ void main() {
     expect(realisedCurve(orders, const Duration(days: 1), now: now), [0, 50]);
     expect(realisedCurve(orders, const Duration(days: 7), now: now), [0, -20, 30]);
     expect(realisedCurve(orders, null, now: now), [0, 100, 80, 130]);
+    // Book value walks back from today's total; the last step is open-position P&L.
+    expect(valueCurve(orders, const Duration(days: 7), total: 1100, unrealised: 40, now: now), [1030, 1010, 1060, 1100]);
+    expect(valueCurve(const [], null, total: 1100, unrealised: 0, now: now), [1100, 1100]);
   });
 
   const pushes = <String, Type>{
@@ -127,10 +130,11 @@ void main() {
     await tester.tap(find.text('Search'));
     expect(requests.where((r) => r >= 0), [NavTabService.trade, NavTabService.wallet, NavTabService.trade]);
 
-    expect(find.text('No closed trades in 1M'), findsOneWidget);
+    expect(find.byType(CustomPaint), findsWidgets);
+    expect(find.textContaining('1M  +'), findsOneWidget);
     await tester.tap(find.text('1Y'));
     await tester.pump();
-    expect(find.text('No closed trades in 1Y'), findsOneWidget);
+    expect(find.textContaining('1Y  +'), findsOneWidget);
     expect(find.text('TOTAL PORTFOLIO VALUE · DEMO CASH'), findsOneWidget);
   });
 }

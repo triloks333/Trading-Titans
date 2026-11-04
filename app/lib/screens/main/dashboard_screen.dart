@@ -61,6 +61,15 @@ List<double> realisedCurve(List<Order> orders, Duration? range, {DateTime? now})
   return [0, for (final f in fills) sum += f.pnl];
 }
 
+/// Portfolio value across [range], ending at [total] now. No value history is
+/// stored, so it is rebuilt backwards: each closing fill moves the book value by
+/// its realised P&L, and the last step marks open positions to market.
+List<double> valueCurve(List<Order> orders, Duration? range, {required double total, required double unrealised, DateTime? now}) {
+  final r = realisedCurve(orders, range, now: now);
+  final start = total - unrealised - r.last;
+  return [for (final v in r) start + v, total];
+}
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -82,6 +91,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _unread = 0;
   String _range = '1M';
   Timer? _pollTimer;
+  // Index strip auto-advances one chip every 10 s, wrapping to the start.
+  final _ticker = ScrollController();
+  final List<GlobalKey> _chipKeys = [];
+  Timer? _tickerTimer;
+  int _tickerAt = 0;
 
   final _valueKey = GlobalKey(), _actionsKey = GlobalKey(), _pulseKey = GlobalKey(), _alertsKey = GlobalKey();
 
@@ -90,12 +104,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _pollTimer = Timer.periodic(AppConstants.dashboardPricePoll, (_) => _refreshPrices());
+    _tickerTimer = Timer.periodic(const Duration(seconds: 10), (_) => _advanceTicker());
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _tickerTimer?.cancel();
+    _ticker.dispose();
     super.dispose();
+  }
+
+  void _advanceTicker() {
+    if (!_ticker.hasClients || _ticker.position.maxScrollExtent <= 0 || _chipKeys.isEmpty) return;
+    _tickerAt = (_tickerAt + 1) % _chipKeys.length;
+    // Offset of chip i = widths of the chips before it plus their 8 dp gaps.
+    var offset = 0.0;
+    for (final k in _chipKeys.take(_tickerAt)) {
+      offset += (k.currentContext?.size?.width ?? 0) + 8;
+    }
+    if (offset > _ticker.position.maxScrollExtent + 1) {
+      _tickerAt = 0;
+      offset = 0;
+    }
+    _ticker.animateTo(offset.clamp(0, _ticker.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 600), curve: Curves.easeInOutCubic);
   }
 
   Future<void> _refreshPrices() async {
@@ -162,9 +195,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadExtras() async {
+    SupabaseService().listBlogPosts().then((posts) {
+      if (mounted) setState(() => _news = posts.where((p) => p['published_at'] != null).toList());
+    }).catchError((_) {});
     final results = await Future.wait<Object?>([
       SupabaseService().getOrders(limit: 500).catchError((_) => <Order>[]),
-      SupabaseService().listBlogPosts().catchError((_) => <Map<String, dynamic>>[]),
+      Future.value(null),
       ChatService.instance.loadRecent(),
       SharedPreferences.getInstance(),
     ]);
@@ -173,7 +209,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final seen = DateTime.tryParse((results[3] as SharedPreferences).getString(_chatSeenKey) ?? '');
     setState(() {
       _orders = results[0] as List<Order>;
-      _news = (results[1] as List<Map<String, dynamic>>).where((p) => p['published_at'] != null).toList();
       _lastChat = chats.isEmpty ? null : chats.last;
       _newChats = seen == null ? 0 : chats.where((m) => m.createdAt.isAfter(seen)).length;
     });
@@ -334,6 +369,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
       ]);
 
+  GlobalKey _chipKey(int i) {
+    while (_chipKeys.length <= i) {
+      _chipKeys.add(GlobalKey());
+    }
+    return _chipKeys[i];
+  }
+
   Widget _indexStrip() => TitanShowcase(
         showcaseKey: _pulseKey,
         title: 'Market pulse',
@@ -341,11 +383,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Container(
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
           child: SingleChildScrollView(
+            controller: _ticker,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
             child: Row(children: [
-              for (final q in _overview)
+              for (final (i, q) in _overview.indexed)
                 Padding(
+                  key: _chipKey(i),
                   padding: const EdgeInsets.only(right: 8),
                   child: _outlined(
                     onTap: () => _openQuote(q),
@@ -380,7 +424,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = wallet + _positions;
     final dayBase = total - _dayPnl;
     final allTime = realised + _unrealised;
-    final curve = realisedCurve(_orders, kHomeRanges[_range]);
+    final curve = valueCurve(_orders, kHomeRanges[_range], total: total, unrealised: _unrealised);
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 18, AppSpacing.lg, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -470,20 +514,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _chart(List<double> curve) {
-    final last = curve.last;
-    final empty = curve.length < 2;
+    final change = curve.last - curve.first;
+    final pct = curve.first > 0 ? change / curve.first * 100 : 0.0;
+    final label = '$_range  ${_signed(change)} (${change >= 0 ? '+' : ''}${pct.toStringAsFixed(2)}%)';
     return Semantics(
-      label: empty ? 'No closed trades in this range' : 'Realised P&L over $_range: ${_signed(last)}',
+      label: 'Portfolio value over $label',
       child: SizedBox(
         height: 80,
         child: Stack(children: [
-          Positioned.fill(child: CustomPaint(painter: _SparkPainter(empty ? const [0, 0] : curve, empty ? AppColors.ink5 : _tone(last)))),
-          Positioned(
-            left: 0,
-            top: 0,
-            child: Text(empty ? 'No closed trades in $_range' : 'Realised P&L · $_range  ${_signed(last)}',
-                style: AppFonts.mono(size: 11, color: AppColors.ink4)),
-          ),
+          Positioned.fill(child: CustomPaint(painter: _SparkPainter(curve, _tone(change)))),
+          Positioned(left: 0, top: 0, child: Text(label, style: AppFonts.mono(size: 11, color: AppColors.ink4))),
         ]),
       ),
     );
@@ -734,9 +774,10 @@ class _SparkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final lo = values.reduce((a, b) => a < b ? a : b), hi = values.reduce((a, b) => a > b ? a : b);
-    final span = hi - lo == 0 ? 1 : hi - lo;
+    final flat = hi == lo;
+    final span = flat ? 1 : hi - lo;
     // Leave the top 18 dp for the caption.
-    Offset at(int i) => Offset(size.width * i / (values.length - 1), 18 + (size.height - 22) * (1 - (values[i] - lo) / span));
+    Offset at(int i) => Offset(size.width * i / (values.length - 1), 18 + (size.height - 22) * (flat ? 0.5 : 1 - (values[i] - lo) / span));
     final line = Path()..moveTo(at(0).dx, at(0).dy);
     for (var i = 1; i < values.length; i++) {
       line.lineTo(at(i).dx, at(i).dy);
