@@ -385,6 +385,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const DiwaliSaleBanner(),
                       // Renders nothing unless a Muhurat-style special session is scheduled.
                       const MuhuratCard(),
+                      _buildRoomCard(),
                       TitanShowcase(
                         showcaseKey: _totalValueKey,
                         title: 'Portfolio Value',
@@ -670,32 +671,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildActionTile(IconData icon, String label, {required VoidCallback onTap}) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: AppCard.secondary,
-          child: Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                margin: const EdgeInsets.only(bottom: 4),
-                decoration:       BoxDecoration(
-                  color: AppColors.goldPale,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 20, color: AppColors.goldDeep),
-              ),
-              Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink2)),
-            ],
+  Widget _buildActionTile(IconData icon, String label, {required VoidCallback onTap}) => Expanded(
+        child: Material(
+          color: AppColors.pureWhite,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Column(children: [
+                Icon(icon, size: 20, color: AppColors.goldMid),
+                const SizedBox(height: 4),
+                Text(label, style: AppFonts.sans(size: 11.5, weight: FontWeight.w500, color: AppColors.ink)),
+              ]),
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+
+  /// Titans Room entry: chat, support tickets and the wishlist in one place.
+  Widget _buildRoomCard() => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        child: Material(
+          color: AppColors.pureWhite,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg), side: BorderSide(color: AppColors.birch)),
+          child: ListTile(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatScreen())),
+            leading: Icon(Icons.forum_outlined, color: AppColors.goldMid),
+            title: Row(children: [
+              Text('Titans Room', style: AppText.bodyBold),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: AppCard.badge(AppColors.bullLight),
+                child: Text('LIVE', style: AppText.badge.copyWith(color: AppColors.bull)),
+              ),
+            ]),
+            subtitle: Text('Chat, support tickets & wishlist', style: AppText.bodySmall),
+            trailing: Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+          ),
+        ),
+      );
 
   Widget _buildTickerCard(String name, String price, String change, bool isPositive) {
     return Container(
@@ -707,9 +724,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           Text(name, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink3), maxLines: 1, overflow: TextOverflow.ellipsis),
           const SizedBox(height: 4),
-          Text(price, style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink)),
+          Text(price, style: AppFonts.mono(size: 15, weight: FontWeight.w600, color: AppColors.ink)),
           const SizedBox(height: 2),
-          Text(change, style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear)),
+          Text('${isPositive ? '▲' : '▼'} $change', style: AppFonts.mono(size: 12, weight: FontWeight.w600, color: isPositive ? AppColors.bull : AppColors.bear)),
         ],
       ),
     );
