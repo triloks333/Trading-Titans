@@ -454,67 +454,37 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     );
   }
 
+  /// Side colour for the whole ticket: green to buy, red to sell.
+  Color get _sideColor => widget.isBuy ? AppColors.bull : AppColors.bear;
+
+  /// One selectable chip for every option row on the ticket (product, input
+  /// mode, validity): side-tinted when selected, outlined otherwise.
   Widget _buildToggleTab(String title, bool isSelected, VoidCallback onTap, {bool isExpanded = false}) {
-    Widget tab = GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: isExpanded ? double.infinity : null,
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? (widget.isBuy ? AppColors.blue : AppColors.bear) : Colors.transparent,
-          borderRadius: BorderRadius.circular(100),
-          border: Border.all(
-            color: isSelected ? Colors.transparent : AppColors.birch,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: GoogleFonts.ibmPlexSans(
-              color: isSelected ? Colors.white : AppColors.ink4,
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
-            ),
-          ),
+    final tab = Material(
+      color: isSelected ? _sideColor.withValues(alpha: AppColors.isDark ? 0.18 : 0.10) : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        side: BorderSide(color: isSelected ? _sideColor : AppColors.birch, width: isSelected ? 1.5 : 1),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        child: Container(
+          width: isExpanded ? double.infinity : null,
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          child: Text(title,
+              style: AppFonts.sans(
+                  size: 14, weight: FontWeight.w600, color: isSelected ? _sideColor : AppColors.ink3)),
         ),
       ),
     );
-    
-    if (isExpanded) {
-      return Expanded(child: tab);
-    }
-    return tab;
+    return isExpanded ? Expanded(child: tab) : tab;
   }
 
-  Widget _buildValidityOption(String title) {
-    bool isSelected = _validity == title;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _validity = title),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.pureWhite : AppColors.warmWhite,
-            border: Border.all(
-              color: isSelected ? (widget.isBuy ? AppColors.blue : AppColors.bear) : AppColors.birch,
-              width: isSelected ? 1.5 : 1,
-            ),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Text(
-              title,
-              style: GoogleFonts.ibmPlexSans(
-                color: isSelected ? (widget.isBuy ? AppColors.blue : AppColors.bear) : AppColors.ink3,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _buildValidityOption(String title) =>
+      _buildToggleTab(title, _validity == title, () => setState(() => _validity = title), isExpanded: true);
 
   Map<String, double> get _chargesPreview {
     final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
@@ -767,7 +737,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthService>();
     final walletBalance = authProvider.user?.walletBalance ?? 0.0;
-    final color = widget.isBuy ? AppColors.blue : AppColors.bear;
+    final color = _sideColor;
 
     return Scaffold(
       backgroundColor: AppColors.parchment,
