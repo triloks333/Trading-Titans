@@ -308,119 +308,64 @@ class _ChatScreenState extends State<ChatScreen> {
     _focusNode.requestFocus();
   }
 
+  /// Chat notification controls: unmute, or mute for 8h / 1 day / 1 week.
+  /// @everyone priority alerts and direct mentions always get through.
   Future<void> _showNotificationMuteSheet() async {
     final isMuted = await ChatService.isChatMuted();
     if (!mounted) return;
+    Future<void> act(BuildContext sheet, Future<void> Function() change, String told) async {
+      Navigator.pop(sheet);
+      await change();
+      await _checkMuteStatus();
+      _tell(told);
+    }
+
+    const options = [
+      (Icons.timer_outlined, 'Mute for 8 hours', Duration(hours: 8), 'Muted for 8 hours. (@everyone will still alert you)'),
+      (Icons.bedtime_outlined, 'Mute for 1 day', Duration(days: 1), 'Muted for 1 day.'),
+      (Icons.volume_mute_outlined, 'Mute for 1 week', Duration(days: 7), 'Muted for 1 week.'),
+    ];
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
+      showDragHandle: true,
       builder: (sheet) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-              child: Row(
-                children: [
-                  Icon(
-                    isMuted
-                        ? Icons.notifications_off_rounded
-                        : Icons.notifications_active_outlined,
-                    color: isMuted ? AppColors.bear : AppColors.imperialGold,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isMuted
-                          ? 'Chat Notifications: Muted'
-                          : 'Chat Notifications',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                ],
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.xl, 0, AppSpacing.xl, AppSpacing.sm),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Chat notifications', style: AppFonts.sans(size: 18, weight: FontWeight.w700, color: AppColors.ink)),
+              Text(isMuted ? 'Muted' : 'Active: tray alerts for new messages', style: AppText.bodySmall),
+            ]),
+          ),
+          ListTile(
+            leading: Icon(Icons.notifications_active_outlined, color: AppColors.goldMid),
+            title: Text('All messages', style: AppText.bodyBold),
+            subtitle: Text('Receive tray alerts for all community messages', style: AppText.bodySmall),
+            trailing: isMuted ? null : Icon(Icons.check_rounded, color: AppColors.goldMid),
+            onTap: () => isMuted
+                ? act(sheet, ChatService.unmuteNotifications, 'Notifications unmuted.')
+                : Navigator.pop(sheet),
+          ),
+          for (final (icon, label, d, told) in options)
+            ListTile(
+              leading: Icon(icon, color: AppColors.ink3),
+              title: Text(label, style: AppText.bodyBold),
+              onTap: () => act(sheet, () => ChatService.muteNotificationsFor(d), told),
+            ),
+          Container(
+            margin: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.lg),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: AppCard.badge(AppColors.titanGoldSoft),
+            child: Row(children: [
+              Icon(Icons.campaign_rounded, size: 16, color: AppColors.titanGold),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text('@everyone priority alerts and direct @mentions still notify you.',
+                    style: AppFonts.sans(size: 12, color: AppColors.titanGold)),
               ),
-            ),
-            const Divider(height: 1),
-            if (isMuted)
-              ListTile(
-                leading: Icon(Icons.notifications_active_rounded,
-                    color: AppColors.bull),
-                title: Text('Unmute notifications',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontWeight: FontWeight.w600, color: AppColors.ink)),
-                subtitle: Text('Receive tray alerts for all community messages',
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 12, color: AppColors.ink4)),
-                onTap: () async {
-                  Navigator.pop(sheet);
-                  await ChatService.unmuteNotifications();
-                  await _checkMuteStatus();
-                  _tell('Notifications unmuted.');
-                },
-              ),
-            ListTile(
-              leading: Icon(Icons.timer_outlined,
-                  color: AppColors.imperialGold),
-              title: Text('Mute for 8 hours',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontWeight: FontWeight.w600, color: AppColors.ink)),
-              subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12, color: AppColors.ink4)),
-              onTap: () async {
-                Navigator.pop(sheet);
-                await ChatService.muteNotificationsFor(
-                    const Duration(hours: 8));
-                await _checkMuteStatus();
-                _tell('Muted for 8 hours. (@everyone will still alert you)');
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.bedtime_outlined,
-                  color: AppColors.imperialGold),
-              title: Text('Mute for 1 day',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontWeight: FontWeight.w600, color: AppColors.ink)),
-              subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12, color: AppColors.ink4)),
-              onTap: () async {
-                Navigator.pop(sheet);
-                await ChatService.muteNotificationsFor(
-                    const Duration(days: 1));
-                await _checkMuteStatus();
-                _tell('Muted for 1 day.');
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.volume_mute_outlined,
-                  color: AppColors.imperialGold),
-              title: Text('Mute for 1 week',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontWeight: FontWeight.w600, color: AppColors.ink)),
-              subtitle: Text('@everyone priority alerts will still notify you',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12, color: AppColors.ink4)),
-              onTap: () async {
-                Navigator.pop(sheet);
-                await ChatService.muteNotificationsFor(
-                    const Duration(days: 7));
-                await _checkMuteStatus();
-                _tell('Muted for 1 week.');
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -555,7 +500,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           fontWeight: FontWeight.w700,
                           color: u.isAdmin
                               ? AppColors.imperialGold
-                              : const Color(0xFF4F46E5),
+                              : AppColors.violet,
                         ),
                       ),
                     ),
@@ -823,15 +768,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
+      showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: AppSpacing.sm),
             if (isMine && message.kind == 'text')
               ListTile(
                 leading:
@@ -875,9 +816,8 @@ class _ChatScreenState extends State<ChatScreen> {
             if (isAdmin) ...[
               ListTile(
                 leading: Icon(Icons.delete_outline, color: AppColors.bear),
-                title: Text('Delete message (Everyone)',
-                    style:
-                        GoogleFonts.ibmPlexSans(fontSize: 15, color: AppColors.ink)),
+                title: Text('Delete for everyone',
+                    style: AppFonts.sans(size: 15, weight: FontWeight.w500, color: AppColors.bear)),
                 onTap: () async {
                   Navigator.pop(sheet);
                   final ok =
@@ -891,11 +831,10 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               if (!isMine)
                 ListTile(
-                  leading: Icon(Icons.volume_off_outlined,
-                      color: AppColors.bear),
+                  leading: Icon(Icons.volume_off_outlined, color: AppColors.titanGold),
                   title: Text('Mute this user for 1 day',
-                      style: GoogleFonts.ibmPlexSans(
-                          fontSize: 15, color: AppColors.ink)),
+                      style: AppFonts.sans(size: 15, weight: FontWeight.w500, color: AppColors.titanGold)),
+                  subtitle: Text('Admin only', style: AppText.bodySmall),
                   onTap: () async {
                     Navigator.pop(sheet);
                     final until =
@@ -1126,181 +1065,114 @@ class _ChatScreenState extends State<ChatScreen> {
     final isMine = message.userId == auth.user?.id;
     // Your own messages carry no name, the same as WhatsApp: you know who you are.
     final showAuthor = !isMine && previous?.userId != message.userId;
-
-    final currentUserName = auth.user?.name ?? '';
-    final bool isMentioned = !isMine &&
-        ((message.body?.contains('@everyone') == true) ||
-            (currentUserName.isNotEmpty &&
-                (message.body
-                        ?.toLowerCase()
-                        .contains('@${currentUserName.toLowerCase()}') ??
-                    false)));
-
-    // Asymmetrical luxury radii for sleek distinction
-    final bubbleRadius = isMine
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(4),
-          )
-        : const BorderRadius.only(
-            topLeft: Radius.circular(16),
-            topRight: Radius.circular(16),
-            bottomRight: Radius.circular(16),
-            bottomLeft: Radius.circular(4),
-          );
-
+    final body = message.body ?? '';
+    final me = (auth.user?.name ?? '').toLowerCase();
+    final isAnnouncement = !isMine && body.contains('@everyone');
+    final isMentioned = !isMine && !isAnnouncement && me.isNotEmpty && body.toLowerCase().contains('@$me');
     final routeMeta = ChatRouteMeta.find(message.actionRoute, message.body);
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: () => _showMessageActions(message),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.82),
-          decoration: BoxDecoration(
-            color: isMine ? AppColors.goldLight : AppColors.pureWhite,
-            borderRadius: bubbleRadius,
-            border: Border.all(
-              color: isMentioned
-                  ? AppColors.imperialGold
-                  : isMine
-                      ? AppColors.imperialGold.withValues(alpha: 0.25)
-                      : AppColors.birch,
-              width: isMentioned ? 1.5 : 1.0,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isMentioned
-                    ? AppColors.imperialGold.withValues(alpha: 0.14)
-                    : Colors.black.withValues(alpha: 0.03),
-                blurRadius: isMentioned ? 6 : 4,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isMentioned)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 5),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.imperialGold.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          message.body?.contains('@everyone') == true
-                              ? Icons.workspace_premium
-                              : Icons.alternate_email,
-                          size: 11,
-                          color: AppColors.imperialGold,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          message.body?.contains('@everyone') == true
-                              ? 'PRIORITY ANNOUNCEMENT'
-                              : 'MENTIONED YOU',
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.imperialGold,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (showAuthor)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        message.authorName ?? 'Titan',
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: message.authorIsAdmin
-                              ? AppColors.imperialGold
-                              : AppColors.ink3,
-                        ),
-                      ),
-                      if (message.authorIsAdmin) ...[
-                        const SizedBox(width: 5),
-                        _adminTag(),
-                      ],
-                      if (message.authorTier != null &&
-                          message.authorTier != 'free') ...[
-                        const SizedBox(width: 4),
-                        PlanBadge(tier: message.authorTier!, compact: true),
-                      ],
-                    ],
-                  ),
-                ),
-              if (message.isImage && message.mediaPath != null)
-                _media(message.mediaPath!, message),
-              if (message.isVoice)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.mic_none, size: 16, color: AppColors.ink4),
-                      const SizedBox(width: 4),
-                      Text('Voice note — update the app to play',
-                          style: GoogleFonts.ibmPlexSans(
-                              fontSize: 12, color: AppColors.ink4)),
-                    ],
-                  ),
-                ),
-              if (message.body != null && message.body!.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: _buildMessageText(message.body!, isMine),
-                ),
-              if (routeMeta != null)
-                ChatRouteAttachmentCard(meta: routeMeta, isMine: isMine),
-              const SizedBox(height: 2),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (message.isEdited) ...[
-                      Text(
-                        'edited ',
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 9.5,
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.ink5,
-                        ),
-                      ),
-                    ],
-                    Text(_stamp(message.createdAt),
-                        style: GoogleFonts.ibmPlexSans(
-                            fontSize: 10, color: AppColors.ink5)),
-                  ],
-                ),
-              ),
-            ],
-          ),
+    // Titan Terminal bubbles: mine tinted with the accent, others on the card
+    // surface, mentions in accent, @everyone as a full-width gold announcement.
+    final Color fill, edge;
+    if (isAnnouncement) {
+      (fill, edge) = (AppColors.titanGoldSoft, AppColors.titanGold);
+    } else if (isMentioned) {
+      (fill, edge) = (AppColors.goldPale, AppColors.goldMid);
+    } else if (isMine) {
+      (fill, edge) = (AppColors.goldPale, AppColors.goldBorder);
+    } else {
+      (fill, edge) = (AppColors.pureWhite, AppColors.birch);
+    }
+    const r = Radius.circular(12), tail = Radius.circular(4);
+
+    final bubble = GestureDetector(
+      onLongPress: () => _showMessageActions(message),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * (isAnnouncement ? 1 : 0.76)),
+        decoration: BoxDecoration(
+          color: fill,
+          border: Border.all(color: edge),
+          borderRadius: isAnnouncement
+              ? BorderRadius.circular(AppRadius.lg)
+              : BorderRadius.only(topLeft: r, topRight: r, bottomLeft: isMine ? r : tail, bottomRight: isMine ? tail : r),
         ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (isAnnouncement || isMentioned)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(isAnnouncement ? Icons.campaign_rounded : Icons.alternate_email, size: 13, color: edge),
+                const SizedBox(width: 4),
+                Text(isAnnouncement ? 'PRIORITY ANNOUNCEMENT' : 'MENTIONED YOU', style: AppText.badge.copyWith(color: edge)),
+                if (isAnnouncement) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: AppCard.badge(AppColors.titanGold),
+                    child: Text('BYPASSES MUTE', style: AppText.badge.copyWith(fontSize: 8.5, color: AppColors.parchment)),
+                  ),
+                ],
+              ]),
+            ),
+          if (showAuthor || isAnnouncement)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(message.authorName ?? 'Titan',
+                    style: AppFonts.sans(size: 12.5, weight: FontWeight.w600,
+                        color: message.authorIsAdmin ? AppColors.goldMid : AppColors.ink2)),
+                if (message.authorIsAdmin) ...[const SizedBox(width: 5), _adminTag()],
+                if (message.authorTier != null && message.authorTier != 'free') ...[
+                  const SizedBox(width: 4),
+                  PlanBadge(tier: message.authorTier!, compact: true),
+                ],
+              ]),
+            ),
+          if (message.isImage && message.mediaPath != null) _media(message.mediaPath!, message),
+          if (message.isVoice)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.mic_none, size: 16, color: AppColors.ink4),
+                const SizedBox(width: 4),
+                Text('Voice note — update the app to play', style: AppText.bodySmall),
+              ]),
+            ),
+          if (body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: _buildMessageText(body, isMine)),
+          if (routeMeta != null) ChatRouteAttachmentCard(meta: routeMeta, isMine: isMine),
+          const SizedBox(height: 2),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text('${message.isEdited ? 'edited · ' : ''}${_stamp(message.createdAt)}',
+                style: AppFonts.sans(size: 10, color: AppColors.ink5)),
+          ),
+        ]),
       ),
     );
+
+    if (isMine) return Align(alignment: Alignment.centerRight, child: bubble);
+    if (isAnnouncement) return bubble;
+    // Others: an initial avatar on the first message of a run, a gutter after.
+    return Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+      SizedBox(
+        width: 34,
+        child: showAuthor
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: message.authorIsAdmin ? AppColors.imperialGold : AppColors.cream,
+                  child: Text((message.authorName ?? 'T').trim().characters.firstOrNull?.toUpperCase() ?? 'T',
+                      style: AppFonts.sans(size: 12, weight: FontWeight.w600,
+                          color: message.authorIsAdmin ? Colors.white : AppColors.ink3)),
+                ),
+              )
+            : null,
+      ),
+      Flexible(child: bubble),
+    ]);
   }
 
   Widget _buildMessageText(String body, bool isMine) {
@@ -1364,7 +1236,7 @@ class _ChatScreenState extends State<ChatScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 2),
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
             decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+              color: AppColors.violetLight,
               borderRadius: BorderRadius.circular(5),
             ),
             child: Text(
@@ -1372,7 +1244,7 @@ class _ChatScreenState extends State<ChatScreen> {
               style: GoogleFonts.ibmPlexSans(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF4F46E5),
+                color: AppColors.violet,
               ),
             ),
           ),
@@ -1482,13 +1354,6 @@ class _ChatScreenState extends State<ChatScreen> {
         decoration: BoxDecoration(
           color: AppColors.pureWhite,
           border: Border(top: BorderSide(color: AppColors.birch)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, -2),
-            ),
-          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1498,7 +1363,7 @@ class _ChatScreenState extends State<ChatScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: AppColors.goldLight.withValues(alpha: 0.5),
+                  color: AppColors.goldPale,
                   border: Border(bottom: BorderSide(color: AppColors.birch)),
                 ),
                 child: Row(
@@ -1611,21 +1476,28 @@ class _ChatScreenState extends State<ChatScreen> {
                         hintText: _editingMessage != null
                             ? 'Edit message...'
                             : 'Message the room',
+                        // Pill input, as in the design; fill and focus come from the theme.
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide(color: AppColors.birch),
                         ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide(color: AppColors.birch),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(22),
+                          borderSide: BorderSide(color: AppColors.goldMid, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      _editingMessage != null
-                          ? Icons.check_circle_rounded
-                          : Icons.send_rounded,
-                      color: _sending
-                          ? AppColors.ink5
-                          : AppColors.imperialGold,
-                    ),
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                        backgroundColor: AppColors.imperialGold, foregroundColor: Colors.white, fixedSize: const Size(44, 44)),
+                    icon: Icon(_editingMessage != null ? Icons.check_rounded : Icons.arrow_upward_rounded),
                     tooltip: _editingMessage != null ? 'Save edit' : 'Send',
                     onPressed: _sending ? null : _sendText,
                   ),
