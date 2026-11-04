@@ -18,7 +18,7 @@ class MaintenanceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final inkColor = isDark ? AppColors.cream : Palette.dark.card;
-    const goldColor = Color(0xFFF1C40F);
+    final goldColor = AppColors.titanGold;
 
     // Self-safe: tolerate an empty/whitespace message by showing the default
     // copy, even though AuthService also substitutes a default (R10.3-R10.5).
@@ -37,7 +37,7 @@ class MaintenanceScreen extends StatelessWidget {
                   color: goldColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.construction_rounded,
                   size: 80,
                   color: goldColor,
@@ -64,7 +64,7 @@ class MaintenanceScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
-              const SizedBox(
+              SizedBox(
                 width: 40,
                 height: 40,
                 child: CircularProgressIndicator(
@@ -209,7 +209,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                       color: isDark ? Palette.dark.card2 : AppColors.warmWhite,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isDark ? const Color(0xFF334155) : AppColors.birch,
+                        color: AppColors.birch,
                       ),
                     ),
                     child: Column(
@@ -235,7 +235,7 @@ class _HardUpdateScreenState extends State<HardUpdateScreen> {
                                         style: TextStyle(
                                           fontSize: 13,
                                           height: 1.4,
-                                          color: isDark ? AppColors.ink5 : const Color(0xFF334155),
+                                          color: AppColors.ink3,
                                         ),
                                       ),
                                     ),
@@ -409,7 +409,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
                                         style: TextStyle(
                                           fontSize: 12,
                                           height: 1.3,
-                                          color: isDark ? AppColors.ink5 : const Color(0xFF475569),
+                                          color: AppColors.ink3,
                                         ),
                                       ),
                                     ),

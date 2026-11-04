@@ -96,7 +96,7 @@ class ChatRouteMeta {
       subtitle: 'Master Options, Greeks & market terms',
       icon: Icons.menu_book_rounded,
       buttonLabel: 'Open Glossary',
-      accentColor: const Color(0xFF0D9488),
+      accentColor: AppColors.bull,
       onOpen: (context) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const GlossaryScreen()),
       ),

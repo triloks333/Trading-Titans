@@ -288,7 +288,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                               child: ElevatedButton(
                                 onPressed: () => _navigateToOrder(true),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4A84F6),
+                                  backgroundColor: AppColors.bull, // buy is green across the app
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(
@@ -314,7 +314,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                               child: ElevatedButton(
                                 onPressed: () => _navigateToOrder(false),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE55B5B),
+                                  backgroundColor: AppColors.bear,
                                   elevation: 0,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(
@@ -345,16 +345,16 @@ class _StockActionSheetState extends State<StockActionSheet> {
                             onTap: _navigateToDetail,
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.bar_chart,
-                                  color: Color(0xFF4A84F6),
+                                  color: AppColors.goldMid,
                                   size: 20,
                                 ),
                                 const SizedBox(width: AppSpacing.xs),
                                 Text(
                                   'View chart',
                                   style: GoogleFonts.ibmPlexSans(
-                                    color: const Color(0xFF4A84F6),
+                                    color: AppColors.goldMid,
                                     fontWeight: FontWeight.w500,
                                     fontSize: 13,
                                   ),
@@ -383,16 +383,16 @@ class _StockActionSheetState extends State<StockActionSheet> {
                               },
                               child: Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.toc,
-                                    color: Color(0xFF4A84F6),
+                                    color: AppColors.goldMid,
                                     size: 20,
                                   ),
                                   const SizedBox(width: AppSpacing.xs),
                                   Text(
                                     'Option chain',
                                     style: GoogleFonts.ibmPlexSans(
-                                      color: const Color(0xFF4A84F6),
+                                      color: AppColors.goldMid,
                                       fontWeight: FontWeight.w500,
                                       fontSize: 13,
                                     ),
