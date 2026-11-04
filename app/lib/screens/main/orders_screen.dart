@@ -621,15 +621,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFFF3E0),
-                              borderRadius: BorderRadius.circular(6),
+                              color: AppColors.titanGoldSoft,
+                              borderRadius: BorderRadius.circular(AppRadius.tag),
                             ),
                             child: Text(
                               'VIRTUAL CASH',
                               style: GoogleFonts.ibmPlexSans(
                                 fontSize: 9,
                                 fontWeight: FontWeight.w800,
-                                color: const Color(0xFFE65100),
+                                color: AppColors.titanGold,
                                 letterSpacing: 0.5,
                               ),
                             ),
@@ -1069,7 +1069,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           value,
           style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
             fontSize: 14,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
             color: valueColor ?? AppColors.ink,
           ),
         ),

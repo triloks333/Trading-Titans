@@ -250,66 +250,36 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
   Widget _segmentButton(String value) {
     final selected = _market == value;
     return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _market = value;
-            _symbol = value == 'stock' ? 'RELIANCE' : 'BTC';
-            _result = null;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.pureWhite : AppColors.cream,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.birch),
-          ),
-          child: Text(
-            value.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: GoogleFonts.ibmPlexSans(
-              color: selected ? AppColors.ink : AppColors.ink4,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
+      child: ChoiceChip(
+        label: SizedBox(width: double.infinity, child: Text(value == 'stock' ? 'Stocks' : 'Crypto', textAlign: TextAlign.center)),
+        selected: selected,
+        showCheckmark: false,
+        labelStyle: AppFonts.sans(size: 14, weight: FontWeight.w600, color: selected ? AppColors.goldMid : AppColors.ink3),
+        side: BorderSide(color: selected ? AppColors.goldMid : AppColors.birch),
+        onSelected: (_) => setState(() {
+          _market = value;
+          _symbol = value == 'stock' ? 'RELIANCE' : 'BTC';
+          _result = null;
+        }),
       ),
     );
   }
 
-  Widget _inputField(String label, TextEditingController controller, TextInputType keyboardType) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-        const SizedBox(height: AppSpacing.xs),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          style: GoogleFonts.ibmPlexSans(fontSize: 16, color: AppColors.ink, fontWeight: FontWeight.w500),
-          decoration: InputDecoration(
-            hintText: label,
-            filled: true,
-            fillColor: AppColors.cream,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide:       BorderSide(color: AppColors.birch),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide:       BorderSide(color: AppColors.birch),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppColors.imperialGold),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+  /// Labelled input; border, fill and focus ring come from the theme.
+  Widget _inputField(String label, TextEditingController controller, TextInputType keyboardType) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink3)),
+          const SizedBox(height: AppSpacing.xs),
+          TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            style: AppFonts.mono(size: 16, weight: FontWeight.w500, color: AppColors.ink),
+            decoration: InputDecoration(hintText: label),
           ),
-        ),
-      ],
-    );
-  }
+        ],
+      );
+
 }
 
 class _AssetSearchBottomSheet extends StatefulWidget {

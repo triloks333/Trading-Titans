@@ -160,7 +160,7 @@ class _WalletScreenState extends State<WalletScreen> {
               : ListView(
                   padding: const EdgeInsets.all(AppSpacing.lg),
                   children: [
-                    Text('Wallet', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                    Text('Wallet', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
                     const SizedBox(height: AppSpacing.md),
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -171,7 +171,7 @@ class _WalletScreenState extends State<WalletScreen> {
                           const SizedBox(height: AppSpacing.sm),
                           // Follows the user's display currency. The stored
                           // balance is always INR, hence the INR source.
-                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: -0.5)),
+                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 40, fontWeight: FontWeight.w600, color: AppColors.ink, letterSpacing: -0.5)),
                           const SizedBox(height: AppSpacing.md),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
@@ -263,7 +263,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                   const SizedBox(height: 2),
                                   Text('Complete challenges for rewards',
                                       style: GoogleFonts.ibmPlexSans(
-                                          fontSize: 13, color: const Color(0xFFBBD7F8))),
+                                          fontSize: 13, color: Palette.dark.ink3)),
                                 ],
                               ),
                             ),
@@ -285,21 +285,8 @@ class _WalletScreenState extends State<WalletScreen> {
                         },
                         child: Container(
                           padding: const EdgeInsets.all(AppSpacing.lg),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(AppRadius.lg),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF4338CA).withValues(alpha: 0.25),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
+                          // Premium card: theme-independent dark surface with a crown border.
+                          decoration: AppCard.darkCta.copyWith(border: Border.all(color: AppColors.crown), boxShadow: const []),
                           child: Row(
                             children: [
                               Container(
@@ -349,7 +336,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                       'Twice-weekly live 1-on-1 sessions & options unlock',
                                       style: GoogleFonts.ibmPlexSans(
                                         fontSize: 12,
-                                        color: const Color(0xFFC7D2FE),
+                                        color: Palette.dark.ink3,
                                       ),
                                     ),
                                   ],

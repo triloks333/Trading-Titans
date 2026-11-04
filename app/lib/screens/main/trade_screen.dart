@@ -255,7 +255,7 @@ class _TradeScreenState extends State<TradeScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Trade', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      Text('Trade', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
                       const SizedBox(height: 2),
                       Text('Real markets. Virtual stakes.', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
                     ],
@@ -636,7 +636,7 @@ class _LivePrice extends StatelessWidget {
               Money.instrument(q.price, market: market),
               style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                 fontSize: 14,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 color: isStale ? AppColors.ink4 : AppColors.ink,
               ),
             ),

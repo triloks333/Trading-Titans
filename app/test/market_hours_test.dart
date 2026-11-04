@@ -41,7 +41,7 @@ void main() {
       expect(MarketHours.isOpen('crypto'), true);
     });
 
-    test('stock open/closed matches IST 9:15-15:15 window logic', () {
+    test('stock open/closed matches the IST 9:15-15:30 window', () {
       // We cannot easily inject the clock, but we CAN assert the contract:
       // the function is deterministic and crypto is unconditionally open while
       // stock depends on the current IST time. Verify the boundary math by
@@ -49,15 +49,14 @@ void main() {
       final nowIst = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
       final minutes = nowIst.hour * 60 + nowIst.minute;
       final isWeekend = nowIst.weekday == DateTime.saturday || nowIst.weekday == DateTime.sunday;
-      final expectedOpen = !isWeekend && minutes >= 555 && minutes < 915;
+      final expectedOpen = !isWeekend && !MarketHours.isIndianHoliday() && minutes >= 555 && minutes < 930;
       expect(MarketHours.isOpen('stock'), expectedOpen);
     });
 
-    test('boundary constants: 9:15 = 555 min, 15:15 = 915 min', () {
-      // Documents the intended window so a future edit that changes these is
-      // caught in review. 9*60+15 = 555, 15*60+15 = 915.
+    test('boundary constants: 9:15 = 555 min, 15:30 = 930 min', () {
+      // Documents the NSE window the implementation uses (closes 15:30, not 15:15).
       expect(9 * 60 + 15, 555);
-      expect(15 * 60 + 15, 915);
+      expect(15 * 60 + 30, 930);
     });
   });
 

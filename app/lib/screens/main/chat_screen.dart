@@ -1580,7 +1580,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         '/',
                         style: GoogleFonts.ibmPlexMono(
                           fontSize: 16,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.imperialGold,
                         ),
                       ),

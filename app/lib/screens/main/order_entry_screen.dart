@@ -658,7 +658,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 Money.instrument(grandTotal.abs(), market: widget.quote.market),
                 style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
                   fontSize: 14,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w600,
                   color: widget.isExitOrder
                       ? (estimatedPnl >= 0 ? AppColors.bull : AppColors.bear)
                       : (grandTotal >= 0 ? AppColors.bull : AppColors.bear),
@@ -1287,7 +1287,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                                   children: [
                                     Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
                                     Flexible(
-                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: color, fontWeight: FontWeight.w600, fontSize: 14)),
                                     ),
                                     Text(' • ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
                                     Text('Avail. ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),

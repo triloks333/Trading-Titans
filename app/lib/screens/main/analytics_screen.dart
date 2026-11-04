@@ -199,7 +199,7 @@ class AnalyticsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.birch),
       ),
       child: Column(
@@ -210,7 +210,7 @@ class AnalyticsScreen extends StatelessWidget {
             children: [
               Text(
                 label.toUpperCase(),
-                style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink4, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                style: AppText.sectionLabel.copyWith(fontSize: 10),
               ),
               if (progress != null)
                 SizedBox(
@@ -228,7 +228,7 @@ class AnalyticsScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.w800, color: valueColor ?? AppColors.ink),
+            style: AppFonts.mono(size: 19, weight: FontWeight.w600, color: valueColor ?? AppColors.ink),
           ),
           const SizedBox(height: 4),
           Text(

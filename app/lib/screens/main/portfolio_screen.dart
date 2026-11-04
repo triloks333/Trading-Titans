@@ -346,7 +346,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Portfolio', style: GoogleFonts.ibmPlexSans(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                            Text('Portfolio', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
                             const SizedBox(height: 2),
                             Text('Track your holdings and P&L', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
                           ],
@@ -354,53 +354,42 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       ),
                       const SizedBox(height: AppSpacing.md),
                       
-                      // Combined Summary Card (Aesthetic design upgrade)
+                      // Summary: current value + total P&L, then capital / today, then allocation.
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                         padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: BoxDecoration(
-                          color: AppColors.ink,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: AppShadows.md,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('DEPLOYED CAPITAL', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                            const SizedBox(height: 4),
-                            Text(_fmt(_totalInvested), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.pureWhite)),
-                            const SizedBox(height: AppSpacing.lg),
-                            Row(
-                              children: [
-                                _summaryCardItem('Current Value', _fmt(_totalCurrent)),
-                                Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
-                                _summaryCardItem(
-                                  'Today P&L',
-                                  _fmtSigned(_totalDayPnl),
-                                  color: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear,
-                                ),
-                                Container(width: 1, height: 32, color: AppColors.ink4.withValues(alpha: 0.3)),
-                                _summaryCardItem(
-                                  'Total P&L', 
-                                  '${_fmtSigned(_totalPnl)} (${_totalPnlPct.toStringAsFixed(2)}%)',
-                                  color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear,
-                                ),
-                              ],
+                        decoration: AppCard.primary,
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text('CURRENT VALUE', style: AppText.sectionLabel),
+                                const SizedBox(height: 4),
+                                Text(_fmt(_totalCurrent), style: AppText.valueLarge.copyWith(fontSize: 28)),
+                              ]),
                             ),
-                          ],
-                        ),
+                            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                              Text('TOTAL P&L', style: AppText.sectionLabel),
+                              const SizedBox(height: 4),
+                              Text(_fmtSigned(_totalPnl),
+                                  style: AppFonts.mono(size: 17, weight: FontWeight.w600, color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear)),
+                              Text('${_totalPnl >= 0 ? '+' : ''}${_totalPnlPct.toStringAsFixed(2)}%',
+                                  style: AppFonts.mono(size: 12, color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear)),
+                            ]),
+                          ]),
+                          Divider(height: AppSpacing.xl, color: AppColors.birch),
+                          Row(children: [
+                            _summaryCardItem('Deployed capital', _fmt(_totalInvested)),
+                            _summaryCardItem('Today', _fmtSigned(_totalDayPnl),
+                                color: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear),
+                          ]),
+                          ..._allocation(),
+                        ]),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      
                       TabBar(
                         isScrollable: true,
                         tabAlignment: TabAlignment.start,
-                        labelColor: AppColors.ink,
-                        unselectedLabelColor: AppColors.ink4,
-                        indicatorColor: AppColors.imperialGold,
-                        indicatorWeight: 3,
-                        labelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, fontSize: 13),
-                        unselectedLabelStyle: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 13),
                         tabs: [
                           Tab(text: 'Holdings (${equityHoldings.length})'),
                           Tab(text: 'F&O Positions (${_foPositions.length})'),
@@ -427,18 +416,52 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     );
   }
 
-  Widget _summaryCardItem(String label, String value, {Color? color}) {
-    return StatCell(
-      label: label,
-      value: value,
-      valueColor: color,
-      labelSize: 11,
-      labelWeight: FontWeight.w500,
-      gap: 2,
-      valueSize: 15,
-      valueWeight: FontWeight.bold,
-      defaultValueColor: AppColors.pureWhite,
-    );
+  Widget _summaryCardItem(String label, String value, {Color? color}) => StatCell(
+        label: label,
+        value: value,
+        valueColor: color,
+        labelSize: 11,
+        labelWeight: FontWeight.w500,
+        gap: 2,
+        valueSize: 15,
+        valueWeight: FontWeight.w600,
+      );
+
+  static const _marketNames = {
+    'stock': 'India', 'us_stock': 'US', 'crypto': 'Crypto', 'pakistan_stock': 'Pakistan', 'italy_stock': 'Italy'};
+
+  /// Allocation of open holdings by market (derivatives grouped as F&O), as a
+  /// stacked bar plus legend. Empty when nothing is held.
+  List<Widget> _allocation() {
+    final byMarket = <String, double>{};
+    for (final h in _holdings.where((h) => h.quantity != 0 && h.current > 0)) {
+      final key = h.instrumentType == 'EQUITY' ? (_marketNames[h.market] ?? h.market) : 'F&O';
+      byMarket[key] = (byMarket[key] ?? 0) + h.current;
+    }
+    final total = byMarket.values.fold<double>(0, (a, b) => a + b);
+    if (total <= 0) return const [];
+    final parts = byMarket.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final colors = [AppColors.goldMid, AppColors.titanGold, AppColors.violet, AppColors.bull, AppColors.ink4];
+    Color c(int i) => colors[i % colors.length];
+    return [
+      const SizedBox(height: AppSpacing.md),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Row(children: [
+          for (var i = 0; i < parts.length; i++)
+            Expanded(flex: (parts[i].value / total * 1000).round().clamp(1, 1000), child: Container(height: 8, color: c(i))),
+        ]),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Wrap(spacing: AppSpacing.md, runSpacing: 4, children: [
+        for (var i = 0; i < parts.length; i++)
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: c(i), borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 4),
+            Text('${parts[i].key} ${(parts[i].value / total * 100).round()}%', style: AppText.bodySmall),
+          ]),
+      ]),
+    ];
   }
 
   Widget _buildHoldingsList(List<Holding> list) {
@@ -646,7 +669,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                       Text(
                         'LTP ${Money.instrument(h.displayCurrentPrice, market: h.market)}',
                         style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.ink,
                           fontSize: 13,
                         ),
@@ -872,7 +895,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   Text(
                     'LTP ${Money.wallet(estPrice, decimals: 2)}',
                     style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.ink,
                       fontSize: 13,
                     ),
