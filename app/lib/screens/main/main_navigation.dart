@@ -496,69 +496,37 @@ class NavDest {
 /// never drift apart — the index is what [_MainNavigationState._getScreen] and
 /// [NavTabService.tabRequest] both key off.
 const List<NavDest> kMainNavDests = [
-  NavDest(Icons.dashboard_outlined, Icons.dashboard_rounded, 'Home'),
-  NavDest(Icons.swap_horiz_outlined, Icons.swap_horiz_rounded, 'Trade'),
-  NavDest(Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'Portfolio'),
-  NavDest(Icons.account_balance_wallet_outlined,
-      Icons.account_balance_wallet_rounded, 'Wallet'),
-  // The leaderboard. CompeteScreen was written but never wired to anything —
-  // no import, no route — so it had been unreachable in the shipped app.
+  NavDest(Icons.home_outlined, Icons.home_rounded, 'Home'),
+  NavDest(Icons.swap_vert_rounded, Icons.swap_vert_rounded, 'Trade'),
+  NavDest(Icons.insert_chart_outlined_rounded, Icons.insert_chart_rounded, 'Portfolio'),
+  NavDest(Icons.account_balance_wallet_outlined, Icons.account_balance_wallet_rounded, 'Wallet'),
+  // The leaderboard (CompeteScreen).
   NavDest(Icons.emoji_events_outlined, Icons.emoji_events_rounded, 'League'),
   NavDest(Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
 ];
 
-/// Floating, glassy navbar with an animated "expanding pill" for the active
-/// item. Theme-aware via AppColors (works in both light and dark). It lives in
-/// the bottomNavigationBar slot so its height stays reserved — no screen
-/// content is ever hidden behind it.
+/// Titan Terminal tab bar: docked flush to the bottom, one equal slot per
+/// destination with a permanent label, so six tabs never overflow at 360dp.
+/// Lives in the bottomNavigationBar slot so its height stays reserved.
 class _FloatingNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   const _FloatingNavBar({required this.currentIndex, required this.onTap});
 
-  static const List<NavDest> _dests = kMainNavDests;
-
   @override
-  Widget build(BuildContext context) {
-    final dark = AppColors.isDark;
-    return SafeArea(
-      top: false,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.pureWhite.withValues(alpha: dark ? 0.92 : 0.96),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: AppColors.birch),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.ink.withValues(alpha: dark ? 0.55 : 0.16),
-              blurRadius: 28,
-              spreadRadius: -4,
-              offset: const Offset(0, 12),
-            ),
-          ],
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
+            child: Row(children: [
+              for (var i = 0; i < kMainNavDests.length; i++)
+                Expanded(child: _NavButton(dest: kMainNavDests[i], selected: i == currentIndex, onTap: () => onTap(i))),
+            ]),
+          ),
         ),
-        // One equal slot per destination. Expanded is what makes the bar
-        // width-proof: with six items the previous design — icon-only until
-        // selected, then expanding to reveal a label — wanted about 400dp on a
-        // 360dp phone, so it had to be scaled down to fit and came out cramped.
-        // Fixed slots with a small permanent label read better at six and cannot
-        // overflow at any width.
-        child: Row(
-          children: List.generate(_dests.length, (i) {
-            return Expanded(
-              child: _NavButton(
-                dest: _dests[i],
-                selected: i == currentIndex,
-                onTap: () => onTap(i),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
+      );
 }
 
 class _NavButton extends StatelessWidget {
@@ -569,54 +537,23 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color activeColor = AppColors.imperialGold;
-    final Color idleColor = AppColors.ink4;
+    final color = selected ? AppColors.goldMid : AppColors.ink4;
     return Semantics(
-      // The label is small and the icons are the primary signal, so it is stated
-      // here explicitly rather than left to a screen reader to infer.
       label: dest.label,
       button: true,
       selected: selected,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: InkResponse(
         onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The pill hugs the icon only. Sizing it to the whole slot would put
-            // six touching blocks of gold across the bar.
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.goldPale : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                selected ? dest.activeIcon : dest.icon,
-                size: 21,
-                color: selected ? activeColor : idleColor,
-              ),
-            ),
+        radius: 32,
+        child: SizedBox(
+          height: 52,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(selected ? dest.activeIcon : dest.icon, size: 22, color: color),
             const SizedBox(height: 3),
-            // Always visible, so no destination is a guessing game — which is the
-            // trade the old expand-on-select design was making. Clipped rather
-            // than wrapped: a second line would change the bar's height as the
-            // user moves between tabs.
-            Text(
-              dest.label,
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-              softWrap: false,
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 9.5,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? activeColor : idleColor,
-                letterSpacing: 0.1,
-              ),
-            ),
-          ],
+            // Clipped, never wrapped: a second line would change the bar height.
+            Text(dest.label, maxLines: 1, softWrap: false, overflow: TextOverflow.clip,
+                style: AppFonts.sans(size: 10.5, weight: selected ? FontWeight.w600 : FontWeight.w500, color: color)),
+          ]),
         ),
       ),
     );
