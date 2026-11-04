@@ -7,12 +7,16 @@ class SwipeButton extends StatefulWidget {
   final Color color;
   final bool isLoading;
 
+  /// Label colour; white unless the fill is too light for it.
+  final Color textColor;
+
   const SwipeButton({
     super.key,
     required this.text,
     required this.onSwipeComplete,
     required this.color,
     this.isLoading = false,
+    this.textColor = Colors.white,
   });
 
   @override
@@ -113,7 +117,7 @@ class _SwipeButtonState extends State<SwipeButton> with SingleTickerProviderStat
                   : Text(
                       widget.text,
                       style: GoogleFonts.ibmPlexSans(
-                        color: Colors.white,
+                        color: widget.textColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         letterSpacing: 1.2,

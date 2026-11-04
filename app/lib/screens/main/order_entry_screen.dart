@@ -7,6 +7,8 @@ import '../../core/theme.dart';
 import '../../core/money.dart';
 import '../../models/quote.dart';
 import '../../services/auth_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../services/supabase_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/fo_instruments_service.dart';
@@ -43,6 +45,12 @@ class OrderEntryScreen extends StatefulWidget {
 }
 
 class _OrderEntryScreenState extends State<OrderEntryScreen> {
+  /// Buy or sell. Starts from how the ticket was opened; the toggle switches it
+  /// (except on an exit, which closes a known side).
+  late bool _isBuy = widget.isBuy;
+  bool _showSummary = false;
+  final _atMarket = TextEditingController(), _minutes = TextEditingController();
+
   late final TextEditingController _qtyController;
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _triggerPriceController = TextEditingController();
@@ -183,6 +191,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     _triggerPriceController.dispose();
     _disclosedQtyController.dispose();
     _moneyController.dispose();
+    _atMarket.dispose();
+    _minutes.dispose();
     super.dispose();
   }
 
@@ -236,7 +246,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     }
 
     final orderQty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
-    final isMarginDerivative = widget.instrumentType == 'FUTURE' || (widget.instrumentType == 'OPTION' && !widget.isBuy);
+    final isMarginDerivative = widget.instrumentType == 'FUTURE' || (widget.instrumentType == 'OPTION' && !_isBuy);
     final marginPct = isMarginDerivative ? 0.15 : 1.0;
     
     final existingQty = _existingHolding != null 
@@ -244,7 +254,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         : 0.0;
         
     if (existingQty != 0.0) {
-      if (existingQty > 0 && !widget.isBuy) {
+      if (existingQty > 0 && !_isBuy) {
         final netQty = existingQty - orderQty;
         if (netQty >= 0) {
           return 0.0;
@@ -253,7 +263,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           return shortQty * _price * marginPct;
         }
       }
-      if (existingQty < 0 && widget.isBuy) {
+      if (existingQty < 0 && _isBuy) {
         final netQty = existingQty + orderQty;
         if (netQty <= 0) {
           return 0.0;
@@ -302,7 +312,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       final order = await SupabaseService().placeOrder(
         symbol: widget.quote.symbol,
         market: widget.quote.market,
-        side: widget.isBuy ? 'buy' : 'sell',
+        side: _isBuy ? 'buy' : 'sell',
         quantity: _isCrypto ? _quantityValue : (_quantityValue * _lotSize),
         price: _price,
         isMarket: _isMarket,
@@ -333,7 +343,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       SupabaseService().evaluateChallenges();
 
       if (!mounted) return;
-      final side = widget.isBuy ? 'BUY' : 'SELL';
+      final side = _isBuy ? 'BUY' : 'SELL';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           // The removed local push was the instant signal for whether the order
@@ -455,36 +465,47 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   }
 
   /// Side colour for the whole ticket: green to buy, red to sell.
-  Color get _sideColor => widget.isBuy ? AppColors.bull : AppColors.bear;
+  Color get _sideColor => _isBuy ? AppColors.bull : AppColors.bear;
+  Color get _onSide => _isBuy && AppColors.isDark ? const Color(0xFF04140B) : Colors.white;
 
-  /// One selectable chip for every option row on the ticket (product, input
-  /// mode, validity): side-tinted when selected, outlined otherwise.
-  Widget _buildToggleTab(String title, bool isSelected, VoidCallback onTap, {bool isExpanded = false}) {
-    final tab = Material(
-      color: isSelected ? _sideColor.withValues(alpha: AppColors.isDark ? 0.18 : 0.10) : Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        side: BorderSide(color: isSelected ? _sideColor : AppColors.birch, width: isSelected ? 1.5 : 1),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Container(
-          width: isExpanded ? double.infinity : null,
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          child: Text(title,
-              style: AppFonts.sans(
-                  size: 14, weight: FontWeight.w600, color: isSelected ? _sideColor : AppColors.ink3)),
+  /// The design's chip: accent-tinted when selected, outlined otherwise.
+  Widget _chip(String title, bool isSelected, VoidCallback? onTap) => Expanded(
+        child: Material(
+          color: isSelected ? AppColors.goldPale : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            side: BorderSide(color: isSelected ? AppColors.goldMid : AppColors.birch),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              height: 36,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: isSelected ? AppColors.goldMid : AppColors.ink3)),
+            ),
+          ),
         ),
-      ),
-    );
-    return isExpanded ? Expanded(child: tab) : tab;
-  }
+      );
+
+  Widget _chipRow(List<Widget> chips) => Row(children: [
+        for (var i = 0; i < chips.length; i++) ...[if (i > 0) const SizedBox(width: 6), chips[i]],
+      ]);
+
+  /// Market, Limit, SL, SL-M map onto the two flags the order engine reads.
+  String get _orderType => _isStoploss ? (_isMarket ? 'SL-M' : 'SL') : (_isMarket ? 'Market' : 'Limit');
+  void _setOrderType(String t) => setState(() {
+        _isMarket = t == 'Market' || t == 'SL-M';
+        _isStoploss = t == 'SL' || t == 'SL-M';
+      });
 
   Widget _buildValidityOption(String title) =>
-      _buildToggleTab(title, _validity == title, () => setState(() => _validity = title), isExpanded: true);
+      _chip(title == 'DAY' ? 'Day' : title, _validity == title, () => setState(() => _validity = title));
 
   Map<String, double> get _chargesPreview {
     final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
@@ -496,7 +517,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     }
     return SupabaseService().calculateTransactionCharges(
       instrumentType: widget.instrumentType,
-      side: widget.isBuy ? 'buy' : 'sell',
+      side: _isBuy ? 'buy' : 'sell',
       quantity: qty,
       price: _price,
       isIntraday: _isIntraday,
@@ -515,14 +536,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     final isDeriv = widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION';
     final marginUsed = widget.marginUsed ?? 0.0;
     
-    double grandTotal = totalValue + (widget.isBuy ? totalCharges : 0);
+    double grandTotal = totalValue + (_isBuy ? totalCharges : 0);
     double estimatedPnl = 0.0;
 
     if (widget.isExitOrder) {
       if (_existingHolding != null) {
         final avgPrice = (_existingHolding!['avg_price'] ?? _existingHolding!['avg_entry_price'] as num?)?.toDouble() ?? 0.0;
         if (avgPrice > 0) {
-          final sideSign = widget.isBuy ? -1 : 1;
+          final sideSign = _isBuy ? -1 : 1;
           estimatedPnl = (price - avgPrice) * qty * sideSign;
         }
       }
@@ -536,10 +557,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         grandTotal = totalValue - totalCharges;
       }
     } else if (isDeriv && !widget.isExitOrder) {
-      final isOptionBuy = widget.instrumentType == 'OPTION' && widget.isBuy;
+      final isOptionBuy = widget.instrumentType == 'OPTION' && _isBuy;
       final marginRequired = isOptionBuy ? totalValue : (totalValue * 0.15);
       grandTotal = marginRequired + totalCharges;
-    } else if (!widget.isExitOrder && !widget.isBuy && _marginRequired > 0) {
+    } else if (!widget.isExitOrder && !_isBuy && _marginRequired > 0) {
       // Equity/crypto short: margin is blocked (money out), not proceeds received.
       grandTotal = _marginRequired + totalCharges;
     }
@@ -617,7 +638,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               estimatedPnl >= 0 ? AppColors.bull : AppColors.bear,
             ),
           ] else ...[
-            if (isDeriv && (widget.instrumentType == 'FUTURE' || !widget.isBuy)) ...[
+            if (isDeriv && (widget.instrumentType == 'FUTURE' || !_isBuy)) ...[
               const SizedBox(height: 4),
               _buildBillRow(
                 'Initial Margin Required (15%)',
@@ -625,7 +646,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 AppColors.ink3,
               ),
             ],
-            if (!isDeriv && !widget.isBuy && _marginRequired > 0) ...[
+            if (!isDeriv && !_isBuy && _marginRequired > 0) ...[
               const SizedBox(height: 4),
               _buildBillRow(
                 'Margin Required (100%)',
@@ -647,7 +668,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               Text(
                 widget.isExitOrder 
                     ? (grandTotal >= 0 ? 'You Receive (approx.)' : 'Total Payable')
-                    : ((!widget.isBuy && !isDeriv && _marginRequired <= 0) ? 'You Receive (approx.)' : 'Total Payable'),
+                    : ((!_isBuy && !isDeriv && _marginRequired <= 0) ? 'You Receive (approx.)' : 'Total Payable'),
                 style: GoogleFonts.ibmPlexSans(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
@@ -733,708 +754,437 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     );
   }
 
+  /// Label above a field, as in the design.
+  Widget _label(String text) =>
+      Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(text, style: AppFonts.sans(size: 12, weight: FontWeight.w500, color: AppColors.ink3)));
+
+  /// 48 dp mono field with an optional trailing stepper or prefix.
+  Widget _field(TextEditingController c,
+      {bool enabled = true,
+      String? hint,
+      String? prefix,
+      bool decimal = true,
+      VoidCallback? onStep,
+      String stepLabel = 'Increase',
+      List<TextInputFormatter>? formatters}) =>
+      Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.pureWhite : AppColors.cream,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.birch),
+        ),
+        child: Row(children: [
+          if (prefix != null)
+            Padding(padding: const EdgeInsets.only(left: 12), child: Text(prefix, style: AppFonts.mono(size: 16, color: AppColors.ink4))),
+          Expanded(
+            child: TextField(
+              controller: c,
+              enabled: enabled,
+              keyboardType: decimal ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.number,
+              inputFormatters: formatters,
+              style: AppFonts.mono(size: 16, weight: FontWeight.w500, color: enabled ? AppColors.ink : AppColors.ink4),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: AppFonts.mono(size: 16, color: AppColors.ink4),
+                filled: false,
+                isDense: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+          if (onStep != null)
+            Semantics(
+              button: true,
+              label: stepLabel,
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: onStep,
+                child: Container(
+                  width: 44,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(border: Border(left: BorderSide(color: AppColors.birch))),
+                  child: Icon(Icons.add_rounded, size: 20, color: AppColors.ink),
+                ),
+              ),
+            ),
+        ]),
+      );
+
+  /// Adds one unit (one lot for F&O, 0.01 for crypto, 1 share otherwise).
+  void _stepQty() {
+    if (_isCrypto) {
+      final v = (double.tryParse(_qtyController.text) ?? 0) + 0.01;
+      _qtyController.text = v.toStringAsFixed(v < 1 ? 4 : 2);
+    } else {
+      _qtyController.text = ((int.tryParse(_qtyController.text) ?? 0) + 1).toString();
+    }
+  }
+
+  Widget _header() {
+    final q = widget.quote;
+    final up = q.change >= 0;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+      child: Row(children: [
+        AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.pop(context)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(
+                child: Text(q.symbol,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: AppCard.badge(AppColors.cream),
+                child: Text(_exchangeLabel, style: AppText.badge.copyWith(color: AppColors.ink3)),
+              ),
+            ]),
+            Text.rich(
+              TextSpan(style: AppFonts.mono(size: 12, color: AppColors.ink3), children: [
+                if (widget.instrumentType == 'OPTION')
+                  TextSpan(text: '${widget.optionType} ${Money.wallet(widget.strikePrice ?? 0, decimals: 0)} · ${widget.expiryDate} · '),
+                TextSpan(text: Money.instrument(q.price, market: q.market)),
+                TextSpan(
+                    text: ' ${up ? '▲' : '▼'}${q.changePct.abs().toStringAsFixed(2)}%',
+                    style: TextStyle(color: up ? AppColors.bull : AppColors.bear)),
+              ]),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ]),
+        ),
+        ListenableBuilder(
+          listenable: ThemeService(),
+          builder: (_, _) => AuthIconButton(
+            icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+            label: 'Toggle light or dark theme',
+            onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  /// Buy / Sell segmented control. Locked on an exit, which closes a known side.
+  Widget _sideToggle() {
+    Widget seg(String label, bool buy) {
+      final on = _isBuy == buy;
+      final bg = buy ? AppColors.bull : AppColors.bear;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: on,
+          label: label,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: widget.isExitOrder ? null : () => setState(() => _isBuy = buy),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: on ? bg : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+              child: Text(label,
+                  style: AppFonts.sans(
+                      size: 13,
+                      weight: FontWeight.w600,
+                      color: on ? (buy && AppColors.isDark ? const Color(0xFF04140B) : Colors.white) : AppColors.ink3)),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Row(children: [seg('Buy', true), const SizedBox(width: 4), seg('Sell', false)]),
+    );
+  }
+
+  Widget _exitBanner() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.bearLight,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.bear.withValues(alpha: 0.3)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.exit_to_app_rounded, size: 14, color: AppColors.bear),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text('Closing existing position — no additional margin required',
+                  style: AppFonts.sans(size: 11, weight: FontWeight.w600, color: AppColors.bear)),
+            ),
+          ]),
+          if (widget.marginUsed != null && _isDerivative) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Your margin blocked: ${Money.wallet(widget.marginUsed!, decimals: 0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
+              style: AppFonts.mono(size: 10, color: AppColors.ink3),
+            ),
+          ],
+        ]),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthService>();
-    final walletBalance = authProvider.user?.walletBalance ?? 0.0;
+    final walletBalance = context.watch<AuthService>().user?.walletBalance ?? 0.0;
     final color = _sideColor;
+    final optionLabels = widget.instrumentType == 'OPTION';
+    final moneyMode = _inputByMoney && _isCrypto;
+    final marketHint = Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market));
 
     return Scaffold(
-      backgroundColor: AppColors.parchment,
-      appBar: AppBar(
-        backgroundColor: AppColors.pureWhite,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: AppColors.ink),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.quote.symbol,
-              style: GoogleFonts.ibmPlexSans(
-                color: AppColors.ink,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            if (widget.instrumentType == 'OPTION')
-              Text(
-                '${widget.optionType} | Strike: ${Money.wallet(widget.strikePrice ?? 0, decimals: 0)} | Exp: ${widget.expiryDate}',
-                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                  color: AppColors.ink4,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.more_vert, color: AppColors.ink4),
-            onPressed: () {},
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Container(
-            color: AppColors.parchment,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '$_exchangeLabel  ${Money.instrument(widget.quote.price, market: widget.quote.market)}',
-                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
+      body: SafeArea(
+        child: Column(children: [
+          _header(),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 14, AppSpacing.lg, 24),
               children: [
-                // MAIN CARD
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.pureWhite,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: AppShadows.sm,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Type toggle — hidden for exit orders
-                      if (!_isCrypto && !widget.isExitOrder) ...[
-                        Row(
-                          children: [
-                            _buildToggleTab(
-                              widget.instrumentType == 'OPTION' ? 'MIS' : 'Intraday',
-                              _isIntraday,
-                              () => setState(() => _isIntraday = true),
-                              isExpanded: true,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildToggleTab(
-                              widget.instrumentType == 'OPTION' ? 'NRML' : 'Longterm',
-                              !_isIntraday,
-                              () => setState(() => _isIntraday = false),
-                              isExpanded: true,
-                            ),
-                          ],
-                        ),
-                        // Product type description for options
-                        if (widget.instrumentType == 'OPTION') ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            _isIntraday
-                                ? 'MIS — Auto-squared off at 3:20 PM. Lower margin.'
-                                : 'NRML — Carry forward until expiry. Full margin.',
-                            style: GoogleFonts.ibmPlexSans(
-                              fontSize: 11,
-                              color: AppColors.ink4,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 24),
-                      ],
-                      // Exit order banner (replaces the product type tabs)
-                      if (widget.isExitOrder && !_isCrypto) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: AppColors.bear.withValues(alpha: 0.07),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.bear.withValues(alpha: 0.15)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.exit_to_app_rounded, size: 14, color: AppColors.bear),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Closing existing position — no additional margin required',
-                                    style: GoogleFonts.ibmPlexSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.bear,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                               // 15% margin disclaimer for F&O
-                              if (widget.marginUsed != null &&
-                                  (widget.instrumentType == 'FUTURE' || widget.instrumentType == 'OPTION')) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Your margin blocked: ${Money.wallet(widget.marginUsed!, decimals: 0)} (~15% of notional). P&L is calculated on the full notional position value. Since you bought only at 15% margin, exiting is also capped/calculated at 15% margin.',
-                                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                                    fontSize: 10,
-                                    color: AppColors.ink3,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      
-                      // Quantity section
-                      _buildTermHelp(),
-                      if (_isCrypto) ...[
-                        // Mode toggle: Qty vs Amount
-                        Row(
-                          children: [
-                            _buildToggleTab('Quantity', !_inputByMoney, () => setState(() => _inputByMoney = false), isExpanded: true),
-                            const SizedBox(width: 12),
-                            _buildToggleTab('Amount (${Money.symbol})', _inputByMoney, () => setState(() => _inputByMoney = true), isExpanded: true),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        if (_inputByMoney) ...[
-                          // Money input
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Amount to invest', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 4),
-                              TextField(
-                                controller: _moneyController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
-                                decoration: InputDecoration(
-                                  prefixText: '${Money.symbol} ',
-                                  prefixStyle: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: AppColors.ink3),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'You will get ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, color: AppColors.ink4),
-                              ),
-                            ],
-                          ),
-                        ] else ...[
-                          // Decimal quantity input for crypto
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Quantity', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 4),
-                                    TextField(
-                                      controller: _qtyController,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
-                                      decoration: InputDecoration(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text('Price', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                                        GestureDetector(
-                                          onTap: () => setState(() => _isMarket = !_isMarket),
-                                          child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    TextField(
-                                      controller: _priceController,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      enabled: !_isMarket,
-                                      style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
-                                      decoration: InputDecoration(
-                                        hintText: _isMarket
-                                    ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
-                                    : '0.00',
-                                        filled: _isMarket,
-                                        fillColor: AppColors.parchment,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                                        disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ] else ...[
-                        // Original stock/option quantity+price row
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _isDerivative
-                                        ? 'Qty (Lots)'
-                                        : 'Quantity',
-                                    style: GoogleFonts.ibmPlexSans(
-                                      fontSize: 12,
-                                      color: AppColors.ink3,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (_isDerivative)
-                                    Text(
-                                      '1 Lot = $_lotSize qty',
-                                      style: GoogleFonts.ibmPlexSans(
-                                        fontSize: 10,
-                                        color: AppColors.ink5,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: _qtyController,
-                                    keyboardType: TextInputType.number,
-                                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                    style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500),
-                                    decoration: InputDecoration(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Price
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text('Price', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                                      GestureDetector(
-                                        onTap: () => setState(() => _isMarket = !_isMarket),
-                                        child: Text(_isMarket ? 'Limit' : 'Market', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  TextField(
-                                    controller: _priceController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    enabled: !_isMarket,
-                                    style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.w500, color: _isMarket ? AppColors.ink5 : AppColors.ink),
-                                    decoration: InputDecoration(
-                                      hintText: _isMarket
-                                    ? Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market))
-                                    : '0.00',
-                                      filled: _isMarket,
-                                      fillColor: AppColors.parchment,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                                      disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                
+                _sideToggle(),
                 const SizedBox(height: 16),
-                
-                // Toggles (hide for crypto)
-                if (!_isCrypto)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.pureWhite,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: AppShadows.sm,
-                    ),
-                    child: Column(
-                      children: [
-                        SwitchListTile(
-                          title: Row(
-                            children: [
-                              Text('Stoploss', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 14)),
-                              const SizedBox(width: 4),
-                              Icon(Icons.info_outline, size: 16, color: color),
-                            ],
-                          ),
-                          value: _isStoploss,
-                          activeThumbColor: color,
-                          activeTrackColor: color.withValues(alpha: 0.5),
-                          onChanged: (val) => setState(() => _isStoploss = val),
-                        ),
-                        if (_isStoploss)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                            child: TextField(
-                              controller: _triggerPriceController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(
-                                labelText: 'Trigger Price',
-                                labelStyle: TextStyle(color: AppColors.ink4),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
-                              ),
-                            ),
-                          ),
-                        const Divider(height: 1),
-                        SwitchListTile(
-                          title: Row(
-                            children: [
-                              Text('Market protection', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w600, fontSize: 14)),
-                              const SizedBox(width: 4),
-                              Icon(Icons.info_outline, size: 16, color: color),
-                            ],
-                          ),
-                          value: _isMarketProtection,
-                          activeThumbColor: color,
-                          activeTrackColor: color.withValues(alpha: 0.5),
-                          onChanged: (val) => setState(() => _isMarketProtection = val),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Advanced Toggle (hide for crypto)
-                if (!_isCrypto) ...[
-                  const SizedBox(height: 24),
-                  GestureDetector(
-                    onTap: () => setState(() => _isAdvancedOpen = !_isAdvancedOpen),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Advanced',
-                          style: GoogleFonts.ibmPlexSans(
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Icon(
-                          _isAdvancedOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                          color: color,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (_isAdvancedOpen) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.pureWhite,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: AppShadows.sm,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Validity', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _buildValidityOption('DAY'),
-                              const SizedBox(width: 8),
-                              _buildValidityOption('IOC'),
-                              const SizedBox(width: 8),
-                              _buildValidityOption('Minutes'),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Disclosed Qty.', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: _disclosedQtyController,
-                                      keyboardType: TextInputType.number,
-                                      decoration: InputDecoration(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Minutes', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      enabled: _validity == 'Minutes',
-                                      decoration: InputDecoration(
-                                        hintText: '1 minute',
-                                        filled: _validity != 'Minutes',
-                                        fillColor: AppColors.parchment,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                        disabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.birch)),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                if (widget.isExitOrder && !_isCrypto) ...[_exitBanner(), const SizedBox(height: 16)],
+                // Product: hidden for crypto and exits, which have no product choice.
+                if (!_isCrypto && !widget.isExitOrder) ...[
+                  _chipRow([
+                    _chip(optionLabels ? 'NRML' : 'Delivery', !_isIntraday, () => setState(() => _isIntraday = false)),
+                    _chip(optionLabels ? 'MIS' : 'Intraday', _isIntraday, () => setState(() => _isIntraday = true)),
+                  ]),
+                  if (optionLabels) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _isIntraday ? 'MIS — Auto-squared off at 3:20 PM. Lower margin.' : 'NRML — Carry forward until expiry. Full margin.',
+                      style: AppFonts.sans(size: 11, color: AppColors.ink4),
                     ),
                   ],
+                  const SizedBox(height: 16),
                 ],
-                const SizedBox(height: 80), // Padding for footer
+                Text('ORDER TYPE', style: AppText.sectionLabel),
+                const SizedBox(height: 6),
+                _chipRow([
+                  for (final t in _isCrypto ? const ['Market', 'Limit'] : const ['Market', 'Limit', 'SL', 'SL-M'])
+                    _chip(t, _orderType == t, () => _setOrderType(t)),
+                ]),
+                const SizedBox(height: 16),
+                _buildTermHelp(),
+                if (_isCrypto) ...[
+                  _chipRow([
+                    _chip('Quantity', !_inputByMoney, () => setState(() => _inputByMoney = false)),
+                    _chip('Amount (${Money.symbol})', _inputByMoney, () => setState(() => _inputByMoney = true)),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
+                if (moneyMode) ...[
+                  _label('Amount to invest'),
+                  _field(_moneyController, prefix: Money.symbol),
+                  const SizedBox(height: 6),
+                  Text('Fractional quantity is calculated from the amount: ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
+                      style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+                ] else
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _label(_isDerivative ? 'Qty (lots) · 1 lot = $_lotSize' : 'Quantity'),
+                        _field(
+                          _qtyController,
+                          decimal: _isCrypto,
+                          formatters: _isCrypto ? null : [FilteringTextInputFormatter.digitsOnly],
+                          onStep: _stepQty,
+                          stepLabel: 'Increase quantity',
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        _label('Price'),
+                        _isMarket
+                            ? _field(_atMarket, enabled: false, hint: 'At market')
+                            : _field(_priceController, hint: marketHint),
+                      ]),
+                    ),
+                  ]),
+                if (_isStoploss) ...[
+                  const SizedBox(height: 16),
+                  _label('Stoploss trigger'),
+                  _field(_triggerPriceController, hint: marketHint),
+                ],
+                if (!_isCrypto) ...[
+                  const SizedBox(height: 16),
+                  Text('VALIDITY', style: AppText.sectionLabel),
+                  const SizedBox(height: 6),
+                  _chipRow([_buildValidityOption('DAY'), _buildValidityOption('IOC'), _buildValidityOption('Minutes')]),
+                  const SizedBox(height: 16),
+                  _advanced(),
+                ],
               ],
             ),
           ),
-          
-          // FOOTER
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-            decoration: BoxDecoration(
-              color: AppColors.pureWhite,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  offset: const Offset(0, -4),
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Live charges breakdown — shown when quantity > 0
-                  if (_quantityValue > 0)
-                    _buildChargeBreakdownPanel(color),
-                  Builder(
-                    builder: (context) {
-                      final marginRequiredInr = Money.inrValueOf(_marginRequired, market: widget.quote.market);
-                      final chargesInr = Money.inrValueOf(_chargesPreview['total_charges'] ?? 0.0, market: widget.quote.market);
-                      final totalRequiredInr = marginRequiredInr + (_marginRequired > 0 ? chargesInr : 0.0);
-                      final hasInsufficientBalance = totalRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Text(_inputByMoney && _isCrypto ? 'Amount ' : ((widget.instrumentType == 'OPTION' && widget.isBuy) ? 'Total ' : 'Margin '), style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
-                                    Flexible(
-                                      child: Text(Money.instrument(_marginRequired, market: widget.quote.market), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: color, fontWeight: FontWeight.w600, fontSize: 14)),
-                                    ),
-                                    Text(' • ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)),
-                                    Text('Avail. ', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
-                                    Flexible(
-                                      child: Text(Money.wallet(walletBalance), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: hasInsufficientBalance ? AppColors.bear : color, fontSize: 12, fontWeight: hasInsufficientBalance ? FontWeight.bold : FontWeight.normal)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.birch),
-                                ),
-                                child: Icon(Icons.show_chart, size: 16, color: AppColors.ink),
-                              )
-                            ],
-                          ),
-                          if (_inputByMoney && _isCrypto && _quantityValue > 0) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.info_outline, size: 14, color: AppColors.ink4),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'You will receive ≈ ${_quantityValue.toStringAsFixed(8)} ${widget.quote.symbol}',
-                                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: AppColors.ink3, fontSize: 12, fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          // Show expired notice OR insufficient balance warning OR swipe button
-                          if (_isContractExpired) ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              decoration: BoxDecoration(
-                                color: AppColors.bear.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.bear.withValues(alpha: 0.25)),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'CONTRACT EXPIRED',
-                                    style: GoogleFonts.ibmPlexSans(
-                                      color: AppColors.bear,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else if (hasInsufficientBalance) ...[
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppColors.bear.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: AppColors.bear.withValues(alpha: 0.2)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.account_balance_wallet_outlined, color: AppColors.bear, size: 20),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Insufficient Balance',
-                                          style: GoogleFonts.ibmPlexSans(
-                                            color: AppColors.bear,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'You need ${Money.wallet(totalRequiredInr - walletBalance)} more to place this order.',
-                                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                                            color: AppColors.ink3,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton(
-                                    onPressed: () async {
-                                      final auth = context.read<AuthService>();
-                                      await Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (context) => const SubscribeScreen(initialTabIndex: 1),
-                                        ),
-                                      );
-                                      if (mounted) await auth.refreshUser();
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.bull,
-                                      foregroundColor: AppColors.pureWhite,
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      elevation: 0,
-                                    ),
-                                    child: Text(
-                                      'TOP UP',
-                                      style: GoogleFonts.ibmPlexSans(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else ...[
-                            SwipeButton(
-                              text: widget.isBuy ? 'SWIPE TO BUY' : 'SWIPE TO SELL',
-                              color: color,
-                              isLoading: _isLoading,
-                              onSwipeComplete: _submitOrder,
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          ),
-        ],
+          _footer(walletBalance, color),
+        ]),
       ),
+    );
+  }
+
+  Widget _advanced() => Container(
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.birch),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          InkWell(
+            onTap: () => setState(() => _isAdvancedOpen = !_isAdvancedOpen),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(children: [
+                Expanded(
+                  child: Text('Advanced · disclosed qty, market protection',
+                      style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+                ),
+                Icon(_isAdvancedOpen ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+          if (_isAdvancedOpen)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _label('Disclosed qty'),
+                      _field(_disclosedQtyController, decimal: false),
+                    ]),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      _label('Minutes'),
+                      _field(_minutes, enabled: _validity == 'Minutes', hint: '1 minute', decimal: false),
+                    ]),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Market protection', style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
+                  subtitle: Text('Caps how far a market order can fill from the last price.', style: AppText.bodySmall),
+                  value: _isMarketProtection,
+                  onChanged: (v) => setState(() => _isMarketProtection = v),
+                ),
+              ]),
+            ),
+        ]),
+      );
+
+  /// One-line "Required + charges · Avail." summary (tap for the full bill),
+  /// then the expired notice, the top-up prompt, or the swipe to place.
+  Widget _footer(double walletBalance, Color color) {
+    final chargesNative = _chargesPreview['total_charges'] ?? 0.0;
+    final marginRequiredInr = Money.inrValueOf(_marginRequired, market: widget.quote.market);
+    final chargesInr = Money.inrValueOf(chargesNative, market: widget.quote.market);
+    final totalRequiredInr = marginRequiredInr + (_marginRequired > 0 ? chargesInr : 0.0);
+    final insufficient = totalRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
+    final requiredLabel =
+        _inputByMoney && _isCrypto ? 'Amount' : ((widget.instrumentType == 'OPTION' && _isBuy) ? 'Total' : 'Required');
+    TextSpan mono(String t, {Color? c}) => TextSpan(text: t, style: AppFonts.mono(size: 12, color: c ?? AppColors.ink));
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 16),
+      decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (_showSummary && _quantityValue > 0) _buildChargeBreakdownPanel(color),
+        InkWell(
+          onTap: _quantityValue > 0 ? () => setState(() => _showSummary = !_showSummary) : null,
+          child: Row(children: [
+            Expanded(
+              child: Text.rich(TextSpan(style: AppFonts.sans(size: 12, color: AppColors.ink4), children: [
+                TextSpan(text: '$requiredLabel '),
+                mono(Money.instrument(_marginRequired, market: widget.quote.market)),
+                const TextSpan(text: ' + charges '),
+                mono(Money.instrument(chargesNative, market: widget.quote.market), c: AppColors.ink4),
+              ])),
+            ),
+            Text.rich(TextSpan(style: AppFonts.sans(size: 12, color: AppColors.ink4), children: [
+              const TextSpan(text: 'Avail. '),
+              mono(Money.wallet(walletBalance), c: insufficient ? AppColors.bear : AppColors.ink),
+            ])),
+            if (_quantityValue > 0)
+              Icon(_showSummary ? Icons.expand_more_rounded : Icons.expand_less_rounded, size: 18, color: AppColors.ink4),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        if (_isContractExpired)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: AppColors.bearLight,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.bear.withValues(alpha: 0.3)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.error_outline_rounded, color: AppColors.bear, size: 18),
+              const SizedBox(width: 8),
+              Text('CONTRACT EXPIRED', style: AppFonts.sans(size: 13, weight: FontWeight.w700, color: AppColors.bear, spacing: 0.8)),
+            ]),
+          )
+        else if (insufficient)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.bearLight,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.bear.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              Icon(Icons.account_balance_wallet_outlined, color: AppColors.bear, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Insufficient balance', style: AppFonts.sans(size: 13, weight: FontWeight.w700, color: AppColors.bear)),
+                  const SizedBox(height: 2),
+                  Text('You need ${Money.wallet(totalRequiredInr - walletBalance)} more to place this order.',
+                      style: AppFonts.mono(size: 11, color: AppColors.ink3)),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () async {
+                  final auth = context.read<AuthService>();
+                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SubscribeScreen(initialTabIndex: 1)));
+                  if (mounted) await auth.refreshUser();
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 40), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                child: const Text('Top up'),
+              ),
+            ]),
+          )
+        else
+          SwipeButton(
+            text: _isBuy ? 'Swipe to buy' : 'Swipe to sell',
+            color: color,
+            textColor: _onSide,
+            isLoading: _isLoading,
+            onSwipeComplete: _submitOrder,
+          ),
+      ]),
     );
   }
 }
