@@ -1,42 +1,66 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../../core/theme.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import '../../core/market_hours.dart';
 import '../../core/money.dart';
-import '../../models/quote.dart';
+import '../../core/theme.dart';
 import '../../models/portfolio.dart';
 import '../../models/price_alert.dart';
+import '../../models/quote.dart';
+import '../../services/fo_instruments_service.dart';
 import '../../services/market_service.dart';
 import '../../services/supabase_service.dart';
-import '../../core/market_hours.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import 'fullscreen_chart_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'order_entry_screen.dart';
 import 'option_chain_screen.dart';
-import '../../widgets/instrument_chart.dart';
+import 'order_entry_screen.dart';
 
+/// Chart range buttons and the `market-history` range each one fetches.
+const Map<String, String> kStockRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', '5Y': '5y'};
+
+/// Compact volume: 6.42M, 1.20B, 84.5K.
+String compactVolume(num v) {
+  if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(2)}B';
+  if (v >= 1e6) return '${(v / 1e6).toStringAsFixed(2)}M';
+  if (v >= 1e3) return '${(v / 1e3).toStringAsFixed(1)}K';
+  return v.toStringAsFixed(0);
+}
 
 class StockDetailScreen extends StatefulWidget {
   final String symbol;
   final String market;
   final String name;
 
-  const StockDetailScreen({super.key, required this.symbol, required this.market, required this.name});
+  /// A price the caller already has, painted at once while the live quote loads.
+  final Quote? initialQuote;
+
+  const StockDetailScreen({super.key, required this.symbol, required this.market, required this.name, this.initialQuote});
 
   @override
   State<StockDetailScreen> createState() => _StockDetailScreenState();
 }
 
 class _StockDetailScreenState extends State<StockDetailScreen> {
-  Quote? _quote;
+  late Quote? _quote = widget.initialQuote;
   bool _isWatched = false;
   Holding? _holding;
+  List<PriceAlert> _alerts = const [];
   Timer? _pollTimer;
   bool _hasError = false;
+  String _range = '1D';
+  final Map<String, List<double>> _history = {}; // closes per range, fetched once each
+  ({double low, double high})? _yearRange;
+  int? _lotSize;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadHistory(_range);
+    _loadExtras();
     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshQuote());
   }
 
@@ -55,34 +79,58 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       final quote = await MarketService.quote(widget.symbol, widget.market);
       if (mounted) {
         setState(() {
-          _quote = quote;
-          if (quote != null) {
-            _hasError = false;
-          } else if (_quote == null) {
-            _hasError = true;
-          }
+          _quote = quote ?? _quote;
+          _hasError = _quote == null;
         });
       }
     } catch (_) {
-      if (mounted && _quote == null) {
-        setState(() {
-          _hasError = true;
-        });
-      }
+      if (mounted && _quote == null) setState(() => _hasError = true);
     }
   }
 
-
   Future<void> _loadUserData() async {
-    final holdings = await SupabaseService().getHoldings();
-    final watchCheck = await SupabaseService().isWatched(widget.symbol, widget.market);
-    final holding = holdings.where((h) => h.symbol == widget.symbol && h.market == widget.market).firstOrNull;
-    if (mounted) {
-      setState(() {
-        _isWatched = watchCheck;
-        _holding = holding;
-      });
-    }
+    try {
+      final results = await Future.wait<Object>([
+        SupabaseService().getHoldings(),
+        SupabaseService().isWatched(widget.symbol, widget.market),
+        SupabaseService().getPriceAlerts(symbol: widget.symbol, market: widget.market, activeOnly: true),
+      ]);
+      final holding = (results[0] as List<Holding>)
+          .where((h) => h.symbol == widget.symbol && h.market == widget.market && h.quantity != 0)
+          .firstOrNull;
+      if (mounted) {
+        setState(() {
+          _holding = holding;
+          _isWatched = results[1] as bool;
+          _alerts = results[2] as List<PriceAlert>;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadHistory(String range) async {
+    if (_history.containsKey(range)) return;
+    _history[range] = const [];
+    try {
+      final pts = await SupabaseService().getHistory(widget.symbol, widget.market, kStockRanges[range]!);
+      if (mounted) setState(() => _history[range] = [for (final p in pts) if (p['v'] is num) (p['v'] as num).toDouble()]);
+    } catch (_) {}
+  }
+
+  /// 52-week range from a year of closes, and the F&O lot size for NSE names.
+  Future<void> _loadExtras() async {
+    try {
+      final year = await SupabaseService().getHistory(widget.symbol, widget.market, '1y');
+      final closes = [for (final p in year) if (p['v'] is num) (p['v'] as num).toDouble()];
+      if (mounted && closes.isNotEmpty) {
+        setState(() => _yearRange = (low: closes.reduce((a, b) => a < b ? a : b), high: closes.reduce((a, b) => a > b ? a : b)));
+      }
+    } catch (_) {}
+    if (widget.market != 'stock') return;
+    try {
+      final lot = await FoInstrumentsService().getLotSize(widget.symbol);
+      if (mounted && lot > 1) setState(() => _lotSize = lot);
+    } catch (_) {}
   }
 
   Future<void> _toggleWatch() async {
@@ -94,381 +142,421 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         await SupabaseService().removeFromWatchlist(widget.symbol, widget.market);
       }
     } catch (_) {
-      setState(() => _isWatched = !_isWatched);
+      if (mounted) setState(() => _isWatched = !_isWatched);
     }
   }
 
-  void _showPriceAlertSheet() {
-    final currentPrice = _quote?.price ?? 0.0;
-    showModalBottomSheet(
+  Future<void> _showPriceAlertSheet() async {
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _PriceAlertSheet(
+      builder: (_) => _PriceAlertSheet(
         symbol: widget.symbol,
         market: widget.market,
         displayName: _displaySymbol,
-        currentPrice: currentPrice,
+        currentPrice: _quote?.price ?? 0.0,
       ),
     );
+    _loadUserData();
   }
 
+  Future<void> _push(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    _loadData();
+  }
+
+  void _openProChart() =>
+      _push(FullscreenChartScreen(symbol: widget.symbol, market: widget.market, name: widget.name, quote: _quote));
 
   bool get _isUp => (_quote?.change ?? 0) >= 0;
   Color get _changeColor => _isUp ? AppColors.bull : AppColors.bear;
+  String _px(double v) => Money.instrument(v, market: widget.market);
 
-  /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM)
+  /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM).
   String get _displaySymbol {
     var s = widget.symbol;
-    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
-      s = s.substring(4);
-    }
+    if (s.startsWith('NSE:') || s.startsWith('BSE:')) s = s.substring(4);
     return s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
   }
+
+  String get _exchange => switch (widget.market) {
+        'crypto' => 'Crypto',
+        'us_stock' => 'US',
+        'pakistan_stock' => 'PSX',
+        'italy_stock' => 'Borsa Italiana',
+        _ => 'NSE',
+      };
 
   @override
   Widget build(BuildContext context) {
     final q = _quote;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_displaySymbol),
-        backgroundColor: AppColors.parchment,
-        actions: [
-          IconButton(
-            tooltip: 'Price alert',
-            icon: Icon(Icons.notifications_outlined, color: AppColors.ink4),
-            onPressed: _quote == null ? null : _showPriceAlertSheet,
-          ),
-          IconButton(
-            icon: Icon(_isWatched ? Icons.star : Icons.star_border, color: _isWatched ? AppColors.goldDeep : AppColors.ink4),
-            onPressed: _toggleWatch,
-          ),
-        ],
-      ),
-      body: q == null
-          ? (_hasError
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+      body: SafeArea(
+        child: Column(children: [
+          _header(),
+          Expanded(
+            child: q == null
+                ? (_hasError ? _error() : const Center(child: CircularProgressIndicator()))
+                : RefreshIndicator(
+                    onRefresh: _loadData,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        Icon(Icons.error_outline_rounded, size: 48, color: AppColors.bear),
-                        const SizedBox(height: AppSpacing.md),
-                        Text(
-                          'Unable to load price data',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          'Please check your connection or try again.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.ink4),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _hasError = false;
-                            });
-                            _loadData();
-                          },
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.ink,
-                            foregroundColor: AppColors.pureWhite,
-                          ),
-                        ),
+                        _priceHeader(q),
+                        _chart(q),
+                        _rangeRow(),
+                        _toolButtons(),
+                        if (_holding != null) _positionCard(_holding!),
+                        _keyStats(q),
+                        _alertsCard(),
                       ],
                     ),
                   ),
-                )
-              : const Center(child: CircularProgressIndicator()))
-          : SafeArea(
-              top: false,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildPriceCard(q),
-                          const SizedBox(height: AppSpacing.lg),
-                          _buildChartCard(q),
-                          const SizedBox(height: AppSpacing.lg),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildViewChartButton(),
-                              ),
-                              if (widget.market == 'stock') ...[
-                                const SizedBox(width: AppSpacing.md),
-                                Expanded(
-                                  child: _buildOptionChainButton(),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _buildMarketStatus(),
-                          const SizedBox(height: AppSpacing.lg),
-                          _buildStatsCard(q),
-                          if (_holding != null) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            _buildPositionCard(),
-                          ],
-                          const SizedBox(height: AppSpacing.lg),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _buildBottomBar(),
-                ],
-              ),
-            ),
+          ),
+          if (q != null) _bottomBar(),
+        ]),
+      ),
     );
   }
 
-  /// Quote header: name, big monospace price, arrowed change pill.
-  Widget _buildPriceCard(Quote q) => Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: AppCard.primary,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.name, style: AppText.bodySmall),
-          const SizedBox(height: AppSpacing.xs),
-          Text(Money.instrument(q.price, market: q.market), style: AppText.valueLarge),
-          const SizedBox(height: AppSpacing.sm),
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-              decoration: AppCard.badge(_isUp ? AppColors.bullLight : AppColors.bearLight),
-              child: Text(
-                '${_isUp ? '▲ +' : '▼ '}${Money.instrument(q.change, market: widget.market)} (${q.changePct.toStringAsFixed(2)}%)',
-                style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: _changeColor),
+  Widget _header() => Container(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_displaySymbol,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+              Text('$_exchange · ${widget.name}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+            ]),
+          ),
+          Semantics(
+            button: true,
+            label: _isWatched ? 'Remove from watchlist' : 'Add to watchlist',
+            excludeSemantics: true,
+            child: Material(
+              color: AppColors.pureWhite,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+              child: InkWell(
+                onTap: _toggleWatch,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(_isWatched ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 22, color: _isWatched ? AppColors.titanGold : AppColors.ink),
+                ),
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(q.market.toUpperCase(), style: AppText.badge.copyWith(color: AppColors.ink4)),
-          ]),
+          ),
+          const SizedBox(width: 8),
+          ListenableBuilder(
+            listenable: ThemeService(),
+            builder: (_, _) => AuthIconButton(
+              icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+              label: 'Toggle light or dark theme',
+              onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+            ),
+          ),
         ]),
       );
 
-  Widget _buildChartCard(Quote q) {
-    return Container(
-      height: 350,
-      decoration: BoxDecoration(
-        // The chart page's own dark surface, so the frame and the chart do not
-        // meet in two different shades at the rounded corners.
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.xl - 1),
-        child: Stack(
-          children: [
-            InstrumentChart(
-              symbol: widget.symbol,
-              market: widget.market,
-              livePrice: q.price,
+  Widget _error() => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.error_outline_rounded, size: 48, color: AppColors.bear),
+            const SizedBox(height: AppSpacing.md),
+            Text('Unable to load price data', style: AppFonts.sans(size: 18, weight: FontWeight.w700, color: AppColors.ink)),
+            const SizedBox(height: AppSpacing.xs),
+            Text('Please check your connection or try again.', textAlign: TextAlign.center, style: AppText.body),
+            const SizedBox(height: AppSpacing.lg),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() => _hasError = false);
+                _loadData();
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.6),
-                shape: const CircleBorder(),
-                child: IconButton(
-                  icon: const Icon(Icons.fullscreen_rounded, color: Colors.white),
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FullscreenChartScreen(
-                          symbol: widget.symbol,
-                          market: widget.market,
-                          name: widget.name,
-                          quote: _quote,
-                        ),
-                      ),
-                    );
-                    _loadData();
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Key stats as a two-column grid of label/value cells.
-  Widget _buildStatsCard(Quote q) {
-    String px(double v) => Money.instrument(v, market: q.market);
-    final stats = <(String, String, Color?)>[
-      ('Prev close', px(q.previousClose), null),
-      if (q.open != null) ('Open', px(q.open!), null),
-      if (q.dayHigh != null) ('Day high', px(q.dayHigh!), null),
-      if (q.dayLow != null) ('Day low', px(q.dayLow!), null),
-      if (q.volume != null && q.volume! > 0) ('Volume', q.volume!.toString(), null),
-      ('Day change', '${_isUp ? '+' : ''}${q.changePct.toStringAsFixed(2)}%', _changeColor),
-      ('Market', q.market == 'crypto' ? 'Crypto' : 'NSE/BSE', null),
-      ('Currency', q.currency, null),
-    ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('KEY STATS', style: AppText.sectionLabel),
-      const SizedBox(height: AppSpacing.sm),
-      Container(
-        decoration: AppCard.primary,
-        child: LayoutBuilder(builder: (context, c) => Wrap(children: [
-              for (final (label, value, color) in stats)
-                Container(
-                  width: c.maxWidth / 2,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
-                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(label, style: AppText.bodySmall),
-                    const SizedBox(height: 2),
-                    Text(value, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: color ?? AppColors.ink)),
-                  ]),
-                ),
-            ])),
-      ),
-    ]);
-  }
-
-  Widget _buildPositionCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.warmWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-                Text('Your Position',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
-          const SizedBox(height: AppSpacing.sm),
-          Text('Quantity ${_holding!.quantity.toStringAsFixed(4)}',
-              style:       TextStyle(color: AppColors.ink4)),
-          const SizedBox(height: AppSpacing.xs),
-          Text('Avg price ${Money.instrument(_holding!.displayAvgPrice, market: _holding!.market)}',
-              style:       TextStyle(color: AppColors.ink4)),
-        ],
-      ),
-    );
-  }
-
-  bool get _marketOpen => MarketHours.isOpen(widget.market);
-
-  Widget _buildOptionChainButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        icon:       Icon(Icons.layers_outlined, color: AppColors.pureWhite),
-        label: Text('VIEW OPTION CHAIN', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OptionChainScreen(
-                underlyingSymbol: widget.symbol,
-                spotPrice: _quote?.price ?? 0.0,
-                market: widget.market,
-              ),
-            ),
-          );
-          _loadData();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.imperialGold,
-          foregroundColor: AppColors.pureWhite,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildViewChartButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        icon:       Icon(Icons.bar_chart_rounded, color: AppColors.pureWhite),
-        label: Text('VIEW CHART', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => FullscreenChartScreen(
-                symbol: widget.symbol,
-                market: widget.market,
-                name: widget.name,
-                quote: _quote,
-              ),
-            ),
-          );
-          _loadData();
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.ink2,
-          foregroundColor: AppColors.pureWhite,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMarketStatus() {
-    final open = _marketOpen;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: open ? AppColors.bullLight : AppColors.bearLight,
-        borderRadius: BorderRadius.circular(AppRadius.tag),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(open ? Icons.check_circle : Icons.lock, size: 14, color: open ? AppColors.bull : AppColors.bear),
-          const SizedBox(width: 6),
-          Text(
-            MarketHours.statusText(widget.market),
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: open ? AppColors.bull : AppColors.bear),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Sticky Buy / Sell bar. Both open the same order ticket on a side.
-  Widget _buildBottomBar() => Container(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.sm),
-        decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
-        child: SafeArea(
-          child: Row(children: [
-            Expanded(child: _sideButton(isBuy: true)),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(child: _sideButton(isBuy: false)),
           ]),
         ),
       );
 
+  Widget _priceHeader(Quote q) {
+    final open = MarketHours.isOpen(widget.market);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 16, AppSpacing.lg, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_px(q.price), style: AppFonts.mono(size: 32, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.6)),
+        ),
+        Text.rich(TextSpan(children: [
+          TextSpan(
+            text: '${_isUp ? '▲ +' : '▼ −'}${_px(q.change.abs())} (${_isUp ? '+' : '−'}${q.changePct.abs().toStringAsFixed(2)}%)',
+            style: AppFonts.mono(size: 14, color: _changeColor),
+          ),
+          TextSpan(
+            text: open ? '  today · live' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
+            style: AppFonts.sans(size: 14, color: AppColors.ink4),
+          ),
+        ])),
+      ]),
+    );
+  }
+
+  /// Area chart for the chosen range with a dashed previous-close line on 1D.
+  Widget _chart(Quote q) {
+    final closes = _history[_range] ?? const [];
+    final series = _range == '1D' && closes.isNotEmpty ? [...closes, q.price] : closes;
+    final up = series.length < 2 ? _isUp : series.last >= series.first;
+    return Semantics(
+      label: series.length < 2
+          ? 'Price chart loading'
+          : '$_range price chart, ${up ? 'up' : 'down'} ${((series.last / series.first - 1) * 100).abs().toStringAsFixed(2)}%',
+      child: SizedBox(
+        height: 180,
+        width: double.infinity,
+        child: series.length < 2
+            ? Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.ink4)))
+            : CustomPaint(
+                painter: _AreaChart(
+                  series,
+                  up ? AppColors.bull : AppColors.bear,
+                  baseline: _range == '1D' ? q.previousClose : null,
+                  baselineColor: AppColors.ink4,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _chip(String label, bool on, VoidCallback onTap, {String? semantics, Widget? child}) => Material(
+        color: on ? AppColors.goldPale : Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm), side: BorderSide(color: on ? AppColors.goldMid : AppColors.birch)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Semantics(
+            label: semantics,
+            button: true,
+            child: Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              alignment: Alignment.center,
+              child: child ??
+                  Text(label, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: on ? AppColors.goldMid : AppColors.ink3)),
+            ),
+          ),
+        ),
+      );
+
+  Widget _rangeRow() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 8),
+        child: Row(children: [
+          for (final r in kStockRanges.keys) ...[
+            Expanded(
+              child: _chip(r, r == _range, () {
+                setState(() => _range = r);
+                _loadHistory(r);
+              }),
+            ),
+            const SizedBox(width: 6),
+          ],
+          _chip('', false, _openProChart,
+              semantics: 'Open full-screen chart', child: Icon(Icons.fullscreen_rounded, size: 18, color: AppColors.ink3)),
+        ]),
+      );
+
+  Widget _toolButtons() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 0),
+        child: Row(children: [
+          Expanded(child: _toolButton('Pro chart', _openProChart)),
+          if (widget.market == 'stock') ...[
+            const SizedBox(width: 8),
+            Expanded(
+              child: _toolButton(
+                'Option chain',
+                () => _push(OptionChainScreen(underlyingSymbol: widget.symbol, spotPrice: _quote?.price ?? 0.0, market: widget.market)),
+              ),
+            ),
+          ],
+        ]),
+      );
+
+  Widget _toolButton(String label, VoidCallback onTap) => SizedBox(
+        height: 44,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(backgroundColor: AppColors.cream, minimumSize: const Size(0, 44)),
+          onPressed: onTap,
+          child: Text(label, style: AppFonts.sans(size: 14, weight: FontWeight.w600)),
+        ),
+      );
+
+  Widget _card({required Widget child, EdgeInsets margin = const EdgeInsets.all(AppSpacing.lg)}) => Container(
+        margin: margin,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.birch),
+        ),
+        child: child,
+      );
+
+  Widget _tag(String text, Color fg, Color bg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(bg),
+        child: Text(text, style: AppText.badge.copyWith(color: fg)),
+      );
+
+  Widget _positionCard(Holding h) {
+    final long = h.quantity > 0;
+    final tone = h.pnl >= 0 ? AppColors.bull : AppColors.bear;
+    Widget cell(String label, String value, {Color? color, bool end = false}) => Expanded(
+          child: Column(crossAxisAlignment: end ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
+            Text(label, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+            Text(value, style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: color ?? AppColors.ink)),
+          ]),
+        );
+    return _card(
+      child: Column(children: [
+        Row(children: [
+          Expanded(child: Text('YOUR POSITION', style: AppText.sectionLabel)),
+          long ? _tag('LONG', AppColors.bull, AppColors.bullLight) : _tag('SHORT', AppColors.bear, AppColors.bearLight),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          cell('Qty', h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)),
+          cell('Avg', Money.instrument(h.displayAvgPrice, market: h.market)),
+          cell('P&L', '${h.pnl >= 0 ? '+' : '−'}${Money.wallet(h.pnl.abs(), decimals: 2)}', color: tone, end: true),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _keyStats(Quote q) {
+    final stats = <(String, String)>[
+      if (q.open != null) ('Open', _px(q.open!)),
+      ('Prev close', _px(q.previousClose)),
+      if (_yearRange != null) ...[('52W high', _px(_yearRange!.high)), ('52W low', _px(_yearRange!.low))],
+      if (q.volume != null && q.volume! > 0) ('Volume', compactVolume(q.volume!)),
+      if (q.avgTradePrice != null && q.avgTradePrice! > 0) ('Avg trade price', _px(q.avgTradePrice!)),
+      if (q.upperCircuit != null && q.upperCircuit! > 0) ('Upper circuit', _px(q.upperCircuit!)),
+      if (q.lowerCircuit != null && q.lowerCircuit! > 0) ('Lower circuit', _px(q.lowerCircuit!)),
+      if (_lotSize != null) ('Lot size (F&O)', '$_lotSize'),
+      ('Currency', q.currency),
+    ];
+    final low = q.dayLow, high = q.dayHigh;
+    final pos = low != null && high != null && high > low ? ((q.price - low) / (high - low)).clamp(0.0, 1.0) : null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('KEY STATS', style: AppText.sectionLabel),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.pureWhite,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.birch),
+          ),
+          child: LayoutBuilder(
+            builder: (_, c) => Wrap(children: [
+              for (final (k, v) in stats)
+                Container(
+                  width: c.maxWidth / 2,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(k, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+                    const SizedBox(height: 2),
+                    Text(v, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+                  ]),
+                ),
+            ]),
+          ),
+        ),
+        if (pos != null) ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: Text.rich(TextSpan(style: AppFonts.sans(size: 11, color: AppColors.ink4), children: [
+                const TextSpan(text: 'Day low '),
+                TextSpan(text: _px(low!), style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+              ])),
+            ),
+            Text.rich(TextSpan(style: AppFonts.sans(size: 11, color: AppColors.ink4), children: [
+              const TextSpan(text: 'Day high '),
+              TextSpan(text: _px(high!), style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+            ])),
+          ]),
+          const SizedBox(height: 6),
+          Semantics(
+            label: 'Price is ${(pos * 100).round()}% of the way from day low to day high',
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(value: pos, minHeight: 6, color: _changeColor, backgroundColor: AppColors.cream),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _alertsCard() => _card(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Expanded(child: Text('PRICE ALERTS', style: AppText.sectionLabel)),
+            _chip('+ Set alert', true, _showPriceAlertSheet),
+          ]),
+          if (_alerts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text('Get a notification when $_displaySymbol crosses a price.', style: AppFonts.sans(size: 13, color: AppColors.ink4)),
+            ),
+          for (final a in _alerts)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(children: [
+                Expanded(
+                  child: Text.rich(TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink), children: [
+                    TextSpan(text: a.isAbove ? 'Crosses above ' : 'Falls below '),
+                    TextSpan(text: _px(a.targetPrice), style: AppFonts.mono(size: 13, color: AppColors.ink)),
+                  ])),
+                ),
+                _tag('ACTIVE', AppColors.ink3, AppColors.cream),
+              ]),
+            ),
+        ]),
+      );
+
+  /// Sell left, Buy right, as in the design. Both open the order ticket on a side.
+  Widget _bottomBar() => Container(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 16),
+        decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          Expanded(child: _sideButton(isBuy: false)),
+          const SizedBox(width: 10),
+          Expanded(child: _sideButton(isBuy: true)),
+        ]),
+      );
+
   Widget _sideButton({required bool isBuy}) => SizedBox(
-        height: 52,
+        height: 48,
         child: ElevatedButton(
           onPressed: _quote == null ? null : () => _openOrder(isBuy),
           style: ElevatedButton.styleFrom(
-              backgroundColor: isBuy ? AppColors.bull : AppColors.bear, foregroundColor: Colors.white),
-          child: Text(isBuy ? 'Buy' : 'Sell', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: Colors.white)),
+            backgroundColor: isBuy ? AppColors.bull : AppColors.bear,
+            foregroundColor: isBuy && AppColors.isDark ? const Color(0xFF04140B) : Colors.white,
+          ),
+          child: Text(isBuy ? 'Buy' : 'Sell'),
         ),
       );
 
@@ -476,12 +564,57 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     final sym = widget.symbol.toUpperCase();
     final isOption = sym.contains('-CE') || sym.contains('-PE');
     final isFuture = sym.contains('FUT') || sym.contains('FUTURE');
-    await Navigator.push(context, MaterialPageRoute(
-      builder: (_) => OrderEntryScreen(
-        quote: _quote!, isBuy: isBuy, instrumentType: isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY')),
-    ));
-    _loadData();
+    await _push(OrderEntryScreen(quote: _quote!, isBuy: isBuy, instrumentType: isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY')));
   }
+}
+
+/// Line with a soft fill under it, scaled to the series; optional dashed baseline.
+class _AreaChart extends CustomPainter {
+  _AreaChart(this.values, this.color, {this.baseline, required this.baselineColor});
+  final List<double> values;
+  final Color color;
+  final double? baseline;
+  final Color baselineColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    var lo = values.reduce((a, b) => a < b ? a : b), hi = values.reduce((a, b) => a > b ? a : b);
+    if (baseline != null && baseline! > 0) {
+      lo = lo < baseline! ? lo : baseline!;
+      hi = hi > baseline! ? hi : baseline!;
+    }
+    final span = hi == lo ? 1.0 : hi - lo;
+    double y(double v) => 16 + (size.height - 32) * (1 - (v - lo) / span);
+    Offset at(int i) => Offset(size.width * i / (values.length - 1), y(values[i]));
+
+    if (baseline != null && baseline! > 0) {
+      final by = y(baseline!);
+      final dash = Paint()
+        ..color = baselineColor
+        ..strokeWidth = 1;
+      for (var x = 0.0; x < size.width; x += 7) {
+        canvas.drawLine(Offset(x, by), Offset((x + 3).clamp(0, size.width), by), dash);
+      }
+    }
+    final line = Path()..moveTo(at(0).dx, at(0).dy);
+    for (var i = 1; i < values.length; i++) {
+      line.lineTo(at(i).dx, at(i).dy);
+    }
+    final fill = Path.from(line)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(fill, Paint()..color = color.withValues(alpha: 0.14));
+    canvas.drawPath(line, Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeJoin = StrokeJoin.round);
+    canvas.drawCircle(at(values.length - 1), 4, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_AreaChart old) => old.values != values || old.color != color || old.baseline != baseline;
 }
 
 /// Bottom sheet for creating and managing price alerts for a single symbol.
