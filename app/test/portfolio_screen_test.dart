@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:mobile/core/symbols.dart';
 import 'package:mobile/core/theme.dart';
 import 'package:mobile/models/portfolio.dart';
 import 'package:mobile/screens/main/analytics_screen.dart';
@@ -110,5 +111,12 @@ void main() {
     expect(ltpDayChangePct(h()), closeTo(0.667, 0.001));
     expect(ltpDayChangePct(h(prev: 0)), 0);
     expect(ltpDayChangePct(h(nativePrev: 8, ccy: 'USD')), closeTo(25, 0.001), reason: 'US uses the dollar close');
+  });
+
+  test('displaySymbol strips exchange prefix and series suffix', () {
+    expect(displaySymbol('NSE:CUPID-EQ'), 'CUPID');
+    expect(displaySymbol('BSE:TATA-BE'), 'TATA');
+    expect(displaySymbol('BTC'), 'BTC');
+    expect(displaySymbol('M&M'), 'M&M');
   });
 }

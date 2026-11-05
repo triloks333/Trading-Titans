@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/app_constants.dart';
 import '../core/money.dart';
+import '../core/symbols.dart';
+import '../services/fo_instruments_service.dart';
 import '../models/quote.dart';
 import '../services/market_service.dart';
 import '../screens/main/stock_detail_screen.dart';
@@ -52,18 +54,20 @@ class _StockActionSheetState extends State<StockActionSheet> {
   Timer? _pollTimer;
 
   /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM)
-  static String _cleanSymbol(String sym) {
-    var s = sym;
-    if (s.startsWith('NSE:') || s.startsWith('BSE:')) {
-      s = s.substring(4);
-    }
-    return s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
-  }
+  static String _cleanSymbol(String sym) => displaySymbol(sym);
+
+  /// Option chain only for names with real F&O contracts (not ETFs).
+  bool _hasFo = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    if (widget.market == 'stock') {
+      FoInstrumentsService().hasFo(widget.symbol).then((fo) {
+        if (mounted) setState(() => _hasFo = fo);
+      }).catchError((_) {});
+    }
     // The sheet used to fetch once and freeze for as long as it stayed open.
     _pollTimer = Timer.periodic(
       AppConstants.dashboardPricePoll,
@@ -362,7 +366,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
                               ],
                             ),
                           ),
-                          if (widget.market == 'stock')
+                          if (widget.market == 'stock' && _hasFo)
                             GestureDetector(
                               onTap: () async {
                                 final navigator = Navigator.of(context);

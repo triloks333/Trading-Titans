@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../core/symbols.dart';
 import '../../core/theme.dart';
 import '../../core/app_constants.dart';
 import '../../core/market_hours.dart';
@@ -743,7 +744,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     final pnl = '${Money.signedInstrument(h.displayPnl, market: h.market, decimals: 2)}'
         '${closed ? ' realised' : ' (${pct >= 0 ? '+' : '−'}${pct.abs().toStringAsFixed(2)}%)'}';
     return _row(
-      symbol: h.symbol,
+      symbol: displaySymbol(h.symbol),
       tags: [
         _tag(_exchange[h.market] ?? h.market.toUpperCase()),
         if (closed) _tag('CLOSED'),
@@ -793,10 +794,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               ]),
               const SizedBox(height: 4),
               Row(children: [
-                Flexible(child: Text(h.symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold)),
-                _tag(_exchange[h.market] ?? h.market.toUpperCase()),
-                if (h.isShort) _tag('SHORT', fg: AppColors.bear, bg: AppColors.bearLight),
-                const Spacer(),
+                Expanded(
+                  child: Row(children: [
+                    Flexible(child: Text(displaySymbol(h.symbol), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold)),
+                    _tag(_exchange[h.market] ?? h.market.toUpperCase()),
+                    if (h.isShort) _tag('SHORT', fg: AppColors.bear, bg: AppColors.bearLight),
+                  ]),
+                ),
+                const SizedBox(width: 8),
                 Text(Money.signedInstrument(h.displayPnl, market: h.market, decimals: 2),
                     style: AppFonts.mono(size: 15, weight: FontWeight.w600, color: pnlColor)),
               ]),

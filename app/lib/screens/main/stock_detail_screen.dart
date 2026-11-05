@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/market_hours.dart';
 import '../../core/money.dart';
+import '../../core/symbols.dart';
 import '../../core/theme.dart';
 import '../../models/portfolio.dart';
 import '../../models/price_alert.dart';
@@ -182,11 +183,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   String _px(double v) => Money.instrument(v, market: widget.market);
 
   /// Clean symbol for display (strips NSE:, BSE:, -EQ, -SM).
-  String get _displaySymbol {
-    var s = widget.symbol;
-    if (s.startsWith('NSE:') || s.startsWith('BSE:')) s = s.substring(4);
-    return s.replaceAll(RegExp(r'-(EQ|SM|BE|BZ)$'), '');
-  }
+  String get _displaySymbol => displaySymbol(widget.symbol);
 
   String get _exchange => switch (widget.market) {
         'crypto' => 'Crypto',
