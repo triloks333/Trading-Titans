@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../core/theme.dart';
+
 import '../../core/money.dart';
-import '../../services/auth_service.dart';
-import '../../services/supabase_service.dart';
-import '../../widgets/skeleton.dart';
+import '../../core/theme.dart';
+import '../../models/portfolio.dart';
+import '../../models/position_model.dart';
 import '../../services/app_flags_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/plan_service.dart';
-import 'subscribe_screen.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/skeleton.dart';
 import 'challenges_screen.dart';
 import 'orders_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'refer_earn_screen.dart';
+import 'subscribe_screen.dart';
 
 /// How one `wallet_transactions` row is presented.
 class WalletTxDisplay {
@@ -105,9 +111,14 @@ class WalletScreen extends StatefulWidget {
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
+/// Credited to both sides of a referral by handle_new_user (see
+/// 20261024010000_allow_pkr_eur_and_new_markets_and_guest_cash.sql).
+const double kReferralReward = 500;
+
 class _WalletScreenState extends State<WalletScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _txns = [];
+  double _invested = 0, _blocked = 0;
 
   @override
   void initState() {
@@ -119,359 +130,273 @@ class _WalletScreenState extends State<WalletScreen> {
     setState(() => _loading = true);
     final auth = context.read<AuthService>();
     try {
-      // The wallet's OWN statement. This used to call getOrders(), which showed
-      // the order list under a "Transaction History" heading — duplicating the
-      // Orders screen while still omitting every non-trade movement.
-      // getWalletTransactions() returns [] instead of throwing, so a build that
-      // ships before the ledger migration is applied still renders this tab.
-      _txns = await SupabaseService().getWalletTransactions();
+      // The wallet's own statement, not the order list. getWalletTransactions()
+      // returns [] rather than throwing, so the tab renders even without the ledger.
+      final svc = SupabaseService();
+      final results = await Future.wait<Object>([
+        svc.getWalletTransactions(),
+        svc.getHoldings().catchError((_) => <Holding>[]),
+        svc.getFoPositions().catchError((_) => <FoPosition>[]),
+      ]);
+      _txns = results[0] as List<Map<String, dynamic>>;
+      _invested = (results[1] as List<Holding>).where((h) => h.quantity > 0 && h.isEquity).fold(0.0, (s, h) => s + h.invested);
+      _blocked = (results[2] as List<FoPosition>).fold(0.0, (s, p) => s + p.marginBlocked) +
+          (results[1] as List<Holding>).where((h) => h.quantity < 0).fold(0.0, (s, h) => s + h.invested.abs());
       await auth.refreshUser();
     } catch (e) {
-      // refreshUser can still fail on a server hiccup, and this used to be
-      // try/finally with no catch — a Supabase 504 escaped as an unhandled async
-      // error and was reported as a fatal crash. Keep what is on screen; the
-      // balance renders from AuthService's last-known user.
+      // A server hiccup keeps what is on screen; the balance comes from the last-known user.
       debugPrint('WalletScreen._load failed: $e');
     } finally {
-      // Guarded: the original could setState after the tab was disposed.
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  /// The opening credit from the ledger; ₹1,100 (the signup grant) if it is not there.
+  double get _starting {
+    final opening = _txns.where((t) => t['kind'] == 'opening').firstOrNull;
+    return (opening?['amount'] as num?)?.toDouble() ?? 1100;
+  }
+
+  Future<void> _push(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
-    final wallet = auth.user?.walletBalance ?? 0.0;
-    // The derived tier, not `profiles.subscription_active` — that column is
-    // defaulted true at signup and no payment path writes it, so it reported
-    // every free account as "Active · Trading enabled".
+    final wallet = context.watch<AuthService>().user?.walletBalance ?? 0.0;
+    // The derived tier, not profiles.subscription_active (defaulted true at signup).
     final plan = context.watch<PlanService>();
-    final active = plan.isPaid;
-    // Paid surfaces are hidden unless the backend flag says otherwise, so the
-    // app reads as completely free by default.
+    // Paid surfaces stay hidden unless the backend flag turns them on.
     final monetized = context.watch<AppFlagsService>().monetizationEnabled;
 
     return Scaffold(
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: _loading
-              ? const ListSkeleton()
-              : ListView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  children: [
-                    Text('Wallet', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
-                    const SizedBox(height: AppSpacing.md),
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      decoration: AppCard.primary,
-                      child: Column(
-                        children: [
-                          Text('DEMO CASH BALANCE', style: GoogleFonts.ibmPlexSans(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.ink4, letterSpacing: 0.5)),
-                          const SizedBox(height: AppSpacing.sm),
-                          // Follows the user's display currency. The stored
-                          // balance is always INR, hence the INR source.
-                          Text(Money.wallet(wallet), style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 40, fontWeight: FontWeight.w600, color: AppColors.ink, letterSpacing: -0.5)),
-                          const SizedBox(height: AppSpacing.md),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                            decoration: AppCard.badge(monetized && active ? AppColors.bullLight : AppColors.cream),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(monetized && active ? Icons.check_circle : Icons.info_outline,
-                                    size: 14,
-                                    color: monetized && active ? AppColors.bull : AppColors.ink4),
-                                const SizedBox(width: 4),
-                                Text(
-                                  monetized
-                                      ? (active
-                                          ? '${plan.tier.toUpperCase()} · Trading enabled'
-                                          : 'Free plan')
-                                      : 'Free for everyone',
-                                  style: GoogleFonts.ibmPlexSans(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: monetized && active ? AppColors.bull : AppColors.ink4),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (monetized) ...[
-                            const SizedBox(height: AppSpacing.lg),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () async {
-                                  await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const SubscribeScreen(initialTabIndex: 1),
-                                    ),
-                                  );
-                                  _load();
-                                },
-                                icon: const Icon(Icons.bolt_rounded, size: 20, color: Colors.white),
-                                label: Text(
-                                  'Top Up Demo Capital',
-                                  style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.imperialGold,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 13),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppRadius.md),
-                                  ),
-                                  elevation: 0,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    // Earning demo cash through challenges is the only top-up
-                    // route while monetization is off.
-                    GestureDetector(
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const ChallengesScreen()));
-                        _load();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: AppCard.darkCta,
-                        child: Row(
-                          children: [
-                            const Icon(Icons.emoji_events_rounded, size: 26, color: Colors.white),
-                            const SizedBox(width: AppSpacing.md),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Earn more demo cash',
-                                      style: GoogleFonts.ibmPlexSans(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white)),
-                                  const SizedBox(height: 2),
-                                  Text('Complete challenges for rewards',
-                                      style: GoogleFonts.ibmPlexSans(
-                                          fontSize: 13, color: Palette.dark.ink3)),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.arrow_circle_right, size: 28, color: Colors.white),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (monetized) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      GestureDetector(
-                        onTap: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SubscribeScreen(initialTabIndex: 0),
-                            ),
-                          );
-                          _load();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          // Premium card: theme-independent dark surface with a crown border.
-                          decoration: AppCard.darkCta.copyWith(border: Border.all(color: AppColors.crown), boxShadow: const []),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.workspace_premium_rounded, size: 22, color: AppColors.crown),
-                              ),
-                              const SizedBox(width: AppSpacing.md),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          'VIP Mentorship & Plans',
-                                          style: GoogleFonts.ibmPlexSans(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.crown.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            '₹1L+/MO',
-                                            style: GoogleFonts.ibmPlexSans(
-                                              fontSize: 8.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.crown,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Twice-weekly live 1-on-1 sessions & options unlock',
-                                      style: GoogleFonts.ibmPlexSans(
-                                        fontSize: 12,
-                                        color: Palette.dark.ink3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.arrow_circle_right, size: 28, color: Colors.white),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    Row(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              Expanded(child: Text('Wallet', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink))),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const ListSkeleton()
+                  : ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
                       children: [
-                        Expanded(
-                          child: Text('Transaction History', style: GoogleFonts.ibmPlexSans(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.ink)),
+                        _balanceCard(wallet, plan, monetized),
+                        _heading('Earn more demo cash'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                          child: Row(children: [
+                            _earnCard(Icons.track_changes_rounded, AppColors.titanGold, AppColors.titanGoldSoft, 'Challenges',
+                                'Demo cash for every win', const ChallengesScreen()),
+                            const SizedBox(width: 8),
+                            _earnCard(Icons.person_add_alt_1_outlined, AppColors.goldMid, AppColors.goldPale, 'Refer a friend',
+                                '${Money.wallet(kReferralReward, decimals: 0)} per signup', const ReferEarnScreen()),
+                          ]),
                         ),
-                        // Trades appear below as their cash impact only. The full
-                        // order detail lives on its own screen — which this tab
-                        // used to duplicate wholesale — so keep it one tap away.
-                        TextButton(
-                          onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const OrdersScreen())),
-                          style: TextButton.styleFrom(
-                            foregroundColor: AppColors.imperialGold,
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                            minimumSize: const Size(0, 36),
-                          ),
-                          child: Text('Order history', style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w700)),
-                        ),
+                        if (monetized) _vipCard(),
+                        _heading('Transaction history'),
+                        Divider(color: AppColors.birch),
+                        if (_txns.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.xl),
+                            child: Column(children: [
+                              Icon(Icons.receipt_long_rounded, size: 36, color: AppColors.ink4),
+                              const SizedBox(height: AppSpacing.md),
+                              Text('No wallet activity yet', style: AppText.bodyBold),
+                              const SizedBox(height: 4),
+                              Text('Rewards, referral bonuses and the cash impact of your trades will appear here.',
+                                  textAlign: TextAlign.center, style: AppText.bodySmall),
+                            ]),
+                          )
+                        else
+                          ..._txns.map(_buildLedgerRow),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    if (_txns.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 72,
-                                height: 72,
-                                decoration: BoxDecoration(
-                                  color: AppColors.goldPale,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(Icons.receipt_long_rounded, size: 34, color: AppColors.imperialGold),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              Text('No wallet activity yet', style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Rewards, referral bonuses and the cash impact of your trades will appear here.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      ..._txns.map(_buildLedgerRow),
-                  ],
-                ),
-        ),
+            ),
+          ),
+        ]),
       ),
     );
   }
 
-  /// One line of the wallet statement.
-  ///
-  /// Every figure here is a real rupee movement read back from the ledger, so
-  /// unlike the old order-derived row there is no margin percentage to re-derive
-  /// and no pending-order currency special case — the database already recorded
-  /// exactly what left or entered the wallet.
+  Widget _heading(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 22, AppSpacing.lg, 8),
+        child: Text(text.toUpperCase(), style: AppText.sectionLabel),
+      );
+
+  Widget _balanceCard(double wallet, PlanService plan, bool monetized) {
+    Widget stat(String label, String value, {bool end = false}) => Expanded(
+          child: Column(crossAxisAlignment: end ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
+            Text(label, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+            Text(value, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+          ]),
+        );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 0),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text('DEMO CASH BALANCE', style: AppText.sectionLabel)),
+          if (monetized)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: AppCard.badge(plan.isPaid ? AppColors.titanGoldSoft : AppColors.cream),
+              child: Text(plan.isPaid ? plan.tier.toUpperCase() : 'FREE',
+                  style: AppText.badge.copyWith(color: plan.isPaid ? AppColors.titanGold : AppColors.ink3)),
+            ),
+        ]),
+        const SizedBox(height: 4),
+        // Follows the display currency; the stored balance is always INR.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(Money.wallet(wallet), style: AppFonts.mono(size: 34, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.5)),
+        ),
+        Text('Virtual money for practice. Not withdrawable.', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+        Container(
+          margin: const EdgeInsets.only(top: 14),
+          padding: const EdgeInsets.only(top: 14),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.birch))),
+          child: Row(children: [
+            stat('Invested', Money.wallet(_invested, decimals: 2)),
+            stat('Blocked', Money.wallet(_blocked, decimals: 2)),
+            stat('Starting', Money.wallet(_starting, decimals: 0), end: true),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Row(children: [
+          if (monetized) ...[
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => _push(const SubscribeScreen(initialTabIndex: 1)),
+                child: const Text('Top up'),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(backgroundColor: AppColors.cream),
+              onPressed: () => _push(const OrdersScreen()),
+              child: const Text('Order history'),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _earnCard(IconData icon, Color fg, Color bg, String title, String sub, Widget screen) => Expanded(
+        child: Material(
+          color: AppColors.pureWhite,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () => _push(screen),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                  child: Icon(icon, size: 20, color: fg),
+                ),
+                const SizedBox(height: 8),
+                Text(title, style: AppText.bodyBold),
+                Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+  /// Plans and mentorship, only while paid plans are switched on.
+  Widget _vipCard() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 0),
+        child: Material(
+          color: AppColors.titanGoldSoft,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.titanGold)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () => _push(const SubscribeScreen(initialTabIndex: 0)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Icon(Icons.workspace_premium_rounded, size: 26, color: AppColors.titanGold),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('VIP mentorship & plans', style: AppText.bodyBold),
+                    Text('Twice-weekly live 1-on-1 sessions & options unlock', style: AppFonts.sans(size: 12, color: AppColors.ink3)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+        ),
+      );
+
+  /// One statement line: icon, label, date, signed amount and running balance.
   Widget _buildLedgerRow(Map<String, dynamic> tx) {
     final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
     final balanceAfter = (tx['balance_after'] as num?)?.toDouble();
     final created = DateTime.tryParse(tx['created_at'] as String? ?? '')?.toLocal();
-
-    final display = walletTxDisplay(
-      kind: tx['kind'] as String? ?? '',
-      amount: amount,
-      description: tx['description'] as String?,
-    );
-    final color = display.isCredit ? AppColors.bull : AppColors.bear;
+    final display = walletTxDisplay(kind: tx['kind'] as String? ?? '', amount: amount, description: tx['description'] as String?);
+    final now = DateTime.now();
+    String when() {
+      if (created == null) return '';
+      final days = DateTime(now.year, now.month, now.day).difference(DateTime(created.year, created.month, created.day)).inDays;
+      final d = days == 0 ? 'Today' : days == 1 ? 'Yesterday' : DateFormat('d MMM').format(created);
+      return tx['kind'] == 'trade' ? '$d · order' : d;
+    }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppCard.secondary,
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(display.icon, size: 18, color: color),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(display.label, style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.ink)),
-                const SizedBox(height: 2),
-                Text(
-                  created != null ? '${created.day}/${created.month}/${created.year}' : '-',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Ledger amounts are stored in INR, so the wallet source is right.
-              Text(
-                Money.signedWallet(amount, decimals: 2),
-                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 14, fontWeight: FontWeight.w700, color: color),
-              ),
-              if (balanceAfter != null) ...[
-                const SizedBox(height: 2),
-                // The running balance is what lets a user reconcile the list
-                // against the figure at the top of the screen.
-                Text('Bal ${Money.wallet(balanceAfter)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 11, color: AppColors.ink4)),
-              ],
-            ],
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.sm)),
+          child: Icon(display.icon, size: 18, color: AppColors.ink3),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(display.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+            Text(when(), style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+          ]),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          // Ledger amounts are INR. Credits are green; debits stay neutral, as in the design.
+          Text(Money.signedWallet(amount, decimals: 2),
+              style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: display.isCredit ? AppColors.bull : AppColors.ink)),
+          if (balanceAfter != null)
+            Text('Bal ${Money.wallet(balanceAfter)}', style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+        ]),
+      ]),
     );
   }
 }
