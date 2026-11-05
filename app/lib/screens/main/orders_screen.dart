@@ -12,6 +12,8 @@ import '../../widgets/skeleton.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../services/nav_tab_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -20,6 +22,13 @@ class OrdersScreen extends StatefulWidget {
   final bool embedded;
 
   const OrdersScreen({super.key, this.embedded = false});
+
+  /// Status tab for an order: 0 open (resting), 1 executed, 2 did not fill.
+  static int tabOf(String status) => switch (status) {
+        'pending' => 0,
+        'executed' || 'filled' => 1,
+        _ => 2, // cancelled, rejected, failed, expired
+      };
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -199,260 +208,251 @@ class _OrdersScreenState extends State<OrdersScreen> {
     }
   }
 
+  /// Status tabs: resting orders, fills, and everything that did not fill.
+  static const _tabs = ['Open', 'Executed', 'Cancelled'];
+  int _tab = 0;
+
+
   @override
   Widget build(BuildContext context) {
-    if (widget.embedded) {
-      return _buildOrdersBody();
-    }
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Order History', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.parchment,
-        centerTitle: false,
-      ),
-      body: _buildOrdersBody(),
-    );
+    final body = Column(children: [
+      if (!widget.embedded)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+          child: Row(children: [
+            AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Orders', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+            AuthIconButton(icon: Icons.filter_alt_outlined, label: 'Filter by date', onTap: _pickDate),
+            const SizedBox(width: 8),
+            ListenableBuilder(
+              listenable: ThemeService(),
+              builder: (_, _) => AuthIconButton(
+                icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                label: 'Toggle light or dark theme',
+                onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+              ),
+            ),
+          ]),
+        ),
+      Expanded(child: _buildOrdersList()),
+    ]);
+    return widget.embedded ? body : Scaffold(body: SafeArea(child: body));
   }
 
-  Widget _buildOrdersBody() {
-    return Column(
-      children: [
-        _buildDateBar(),
-        Expanded(child: _buildOrdersList()),
-      ],
-    );
-  }
-
-  /// Day selector: arrows for stepping, the label itself opens a picker for
-  /// jumping. Deliberately sits outside the [FutureBuilder] so an empty or
-  /// failed day can still be navigated away from.
+  /// Day selector: arrows step, the label opens a picker. Outside the list so an
+  /// empty or failed day can still be navigated away from.
   Widget _buildDateBar() {
     final canGoBack = _selectedIstDate.isAfter(_firstSelectableDate);
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        border: Border(bottom: BorderSide(color: AppColors.birch)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: 2),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: canGoBack ? () => _shiftDay(-1) : null,
-            icon: const Icon(Icons.chevron_left_rounded),
-            color: AppColors.ink3,
-            tooltip: 'Previous day',
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      child: Row(children: [
+        IconButton(
+          onPressed: canGoBack ? () => _shiftDay(-1) : null,
+          icon: const Icon(Icons.chevron_left_rounded),
+          color: AppColors.ink3,
+          tooltip: 'Previous day',
+        ),
+        Expanded(
+          child: Semantics(
+            button: true,
+            label: 'Showing orders for $_dateLabel. Tap to change date.',
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(AppRadius.tag),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.calendar_today_rounded, size: 14, color: AppColors.ink4),
+                  const SizedBox(width: 6),
+                  Text(_dateLabel, style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+                ]),
+              ),
+            ),
           ),
-          Expanded(
-            child: Semantics(
-              button: true,
-              label: 'Showing orders for $_dateLabel. Tap to change date.',
-              child: InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(AppRadius.tag),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.calendar_today_rounded,
-                          size: 14, color: AppColors.ink4),
-                      const SizedBox(width: 6),
-                      Text(
-                        _dateLabel,
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.ink,
-                        ),
-                      ),
-                    ],
+        ),
+        IconButton(
+          onPressed: _isToday ? null : () => _shiftDay(1),
+          icon: const Icon(Icons.chevron_right_rounded),
+          color: AppColors.ink3,
+          tooltip: 'Next day',
+        ),
+      ]),
+    );
+  }
+
+  Widget _statusTabs(List<Order> orders) => Container(
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          for (final (i, label) in _tabs.indexed)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: _tab == i,
+                label: '$label · ${orders.where((o) => OrdersScreen.tabOf(o.status) == i).length}',
+                excludeSemantics: true,
+                child: InkWell(
+                  onTap: () => setState(() => _tab = i),
+                  child: Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: _tab == i ? AppColors.goldMid : Colors.transparent, width: 2)),
+                    ),
+                    child: Text('$label · ${orders.where((o) => OrdersScreen.tabOf(o.status) == i).length}',
+                        style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _tab == i ? AppColors.ink : AppColors.ink3)),
                   ),
                 ),
               ),
             ),
-          ),
-          IconButton(
-            onPressed: _isToday ? null : () => _shiftDay(1),
-            icon: const Icon(Icons.chevron_right_rounded),
-            color: AppColors.ink3,
-            tooltip: 'Next day',
-          ),
-        ],
+        ]),
+      );
+
+  Widget _tag(String text, Color fg, Color bg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(bg),
+        child: Text(text, style: AppText.badge.copyWith(color: fg)),
+      );
+
+  String _when(Order o) {
+    final t = (o.executedAt ?? o.createdAt)?.toLocal();
+    if (t == null) return '';
+    final now = DateTime.now();
+    return t.year == now.year && t.month == now.month && t.day == now.day ? DateFormat('HH:mm').format(t) : DateFormat('d MMM, HH:mm').format(t);
+  }
+
+  Widget _orderRow(Order order) {
+    final buy = order.isBuy;
+    final status = order.status.toUpperCase() == 'EXECUTED' ? 'FILLED' : order.status.toUpperCase();
+    final statusColors = switch (OrdersScreen.tabOf(order.status)) {
+      0 => (AppColors.titanGold, AppColors.titanGoldSoft),
+      1 => (AppColors.ink3, AppColors.cream),
+      _ => (AppColors.bear, AppColors.bearLight),
+    };
+    final type = (order.orderType ?? 'market').toUpperCase();
+    return InkWell(
+      onTap: () => _showOrderDetails(context, order),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 14),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            _tag(order.side.toUpperCase(), buy ? AppColors.bull : AppColors.bear, buy ? AppColors.bullLight : AppColors.bearLight),
+            const SizedBox(width: 8),
+            Expanded(child: Text(order.symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold)),
+            _tag(status, statusColors.$1, statusColors.$2),
+          ]),
+          const SizedBox(height: 6),
+          Row(children: [
+            Expanded(
+              child: Text(
+                '$type · ${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppFonts.mono(size: 12, color: AppColors.ink3),
+              ),
+            ),
+            Text(_when(order), style: AppFonts.mono(size: 12, color: AppColors.ink3)),
+          ]),
+          const SizedBox(height: 2),
+          Row(children: [
+            Expanded(child: _buildLtpWidget(order)),
+            Text('Total ${Money.instrument(order.displayTotal, market: order.market)}', style: AppFonts.mono(size: 12, color: AppColors.ink4)),
+          ]),
+          if (order.isPending) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
+                  onPressed: () => _showModifyOrderSheet(context, order),
+                  child: const Text('Modify'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), foregroundColor: AppColors.bear),
+                  onPressed: () => _cancel(order.id),
+                  child: const Text('Cancel order'),
+                ),
+              ),
+            ]),
+          ],
+        ]),
       ),
     );
   }
 
   Widget _buildOrdersList() {
     return FutureBuilder<List<Order>>(
-        future: _ordersFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const ListSkeleton();
-          }
-          if (snapshot.hasError) {
-            return ErrorState(
-              message: "We couldn't load your orders. Check your connection and try again.",
-              onRetry: () => setState(_reload),
-            );
-          }
-          final orders = snapshot.data ?? [];
-          if (orders.isEmpty) {
-            // A past day with no trades is normal, not an onboarding moment, so
-            // it offers a way back to today instead of a "start trading" CTA.
-            return EmptyState(
-              icon: Icons.receipt_long_rounded,
-              title: _isToday ? 'No orders today' : 'No orders on $_dateLabel',
-              message: _isToday
-                  ? 'Your placed, pending, and executed orders will appear here.'
-                  : 'Nothing was traded on this day. Use the arrows above to look at another day.',
-              actionLabel: _isToday ? 'Start trading' : 'Back to today',
-              onAction: _isToday
-                  ? () {
-                      Navigator.of(context).popUntil((r) => r.isFirst);
-                      NavTabService.goToTab(NavTabService.trade);
-                    }
-                  : () => _goToDate(MarketHours.istDate()),
-            );
-          }
-          // Batch-fetch all visible orders' LTPs once (kills the per-row N+1).
-          WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchLtps(orders));
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(_reload);
-              await _ordersFuture;
-            },
-            child: ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            itemBuilder: (context, index) {
-              final order = orders[index];
-              final isBuy = order.isBuy;
-              return InkWell(
-                onTap: () => _showOrderDetails(context, order),
-                borderRadius: BorderRadius.circular(AppRadius.xl),
-                child: Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: AppCard.secondary,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: AppCard.badge(isBuy ? AppColors.bullLight : AppColors.bearLight),
-                                  child: Text(
-                                    order.side.toUpperCase(),
-                                    style: GoogleFonts.ibmPlexSans(fontSize: 10, fontWeight: FontWeight.bold, color: isBuy ? AppColors.bull : AppColors.bear, letterSpacing: 0.5),
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.sm),
-                                Expanded(
-                                  child: Text(
-                                    order.symbol,
-                                    style: GoogleFonts.ibmPlexSans(
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.ink,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: AppCard.badge(_statusColor(order.status).withValues(alpha: 0.15)),
-                            child: Text(
-                              order.status.toUpperCase(),
-                              style: GoogleFonts.ibmPlexSans(fontSize: 10, fontWeight: FontWeight.bold, color: _statusColor(order.status), letterSpacing: 0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('${Money.quantity(order.quantity, market: order.market)} @ ${Money.instrument(order.displayPrice, market: order.market)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], color: AppColors.ink3)),
-                              const SizedBox(height: 2),
-                              _buildLtpWidget(order),
-                            ],
-                          ),
-                          Text('Total: ${Money.instrument(order.displayTotal, market: order.market)}', style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontWeight: FontWeight.w600, color: AppColors.ink)),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(order.createdAt?.toLocal().toString().split('.').first ?? '', style: GoogleFonts.ibmPlexSans(color: AppColors.ink4, fontSize: 12)),
-                          if (order.isPending)
-                            Row(
-                              children: [
-                                OutlinedButton(
-                                  onPressed: () => _showModifyOrderSheet(context, order),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.imperialGold,
-                                    side: BorderSide(color: AppColors.imperialGold, width: 1),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    minimumSize: const Size(64, 32),
-                                    tapTargetSize: MaterialTapTargetSize.padded,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppRadius.tag),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Edit',
-                                    style: GoogleFonts.ibmPlexSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton(
-                                  onPressed: () => _cancel(order.id),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.bear,
-                                    side: BorderSide(color: AppColors.bear, width: 1),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    minimumSize: const Size(64, 32),
-                                    tapTargetSize: MaterialTapTargetSize.padded,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(AppRadius.tag),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Cancel',
-                                    style: GoogleFonts.ibmPlexSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-            itemCount: orders.length,
+      future: _ordersFuture,
+      builder: (context, snapshot) {
+        final orders = snapshot.data ?? const <Order>[];
+        final head = Column(children: [_statusTabs(orders), _buildDateBar()]);
+        if (snapshot.connectionState != ConnectionState.done) return Column(children: [head, const Expanded(child: ListSkeleton())]);
+        if (snapshot.hasError) {
+          return Column(children: [
+            head,
+            Expanded(
+              child: ErrorState(
+                message: "We couldn't load your orders. Check your connection and try again.",
+                onRetry: () => setState(_reload),
+              ),
             ),
-          );
-        },
-      );
+          ]);
+        }
+        if (orders.isNotEmpty) {
+          // Batch-fetch the visible orders' LTPs once (no per-row requests).
+          WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchLtps(orders));
+        }
+        final shown = orders.where((o) => OrdersScreen.tabOf(o.status) == _tab).toList();
+        return Column(children: [
+          head,
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                setState(_reload);
+                await _ordersFuture;
+              },
+              child: shown.isEmpty
+                  ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+                      SizedBox(
+                        height: 320,
+                        child: orders.isEmpty
+                            ? EmptyState(
+                                icon: Icons.receipt_long_rounded,
+                                title: _isToday ? 'No orders today' : 'No orders on $_dateLabel',
+                                message: _isToday
+                                    ? 'Your placed, pending, and executed orders will appear here.'
+                                    : 'Nothing was traded on this day. Use the arrows above to look at another day.',
+                                actionLabel: _isToday ? 'Start trading' : 'Back to today',
+                                onAction: _isToday
+                                    ? () {
+                                        Navigator.of(context).popUntil((r) => r.isFirst);
+                                        NavTabService.goToTab(NavTabService.trade);
+                                      }
+                                    : () => _goToDate(MarketHours.istDate()),
+                              )
+                            : EmptyState(
+                                icon: Icons.format_list_bulleted_rounded,
+                                title: 'Nothing here yet',
+                                message: _tab == 2
+                                    ? 'Cancelled and rejected orders show up here.'
+                                    : _tab == 0
+                                        ? 'Limit and stop orders waiting to fill show up here.'
+                                        : 'Filled orders show up here.',
+                              ),
+                      ),
+                    ])
+                  : ListView(physics: const AlwaysScrollableScrollPhysics(), children: [for (final o in shown) _orderRow(o)]),
+            ),
+          ),
+        ]);
+      },
+    );
   }
 
   void _showOrderDetails(BuildContext context, Order order) {
