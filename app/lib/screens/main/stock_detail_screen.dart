@@ -37,7 +37,10 @@ class StockDetailScreen extends StatefulWidget {
   /// A price the caller already has, painted at once while the live quote loads.
   final Quote? initialQuote;
 
-  const StockDetailScreen({super.key, required this.symbol, required this.market, required this.name, this.initialQuote});
+  /// Whether F&O exists for this symbol; looked up when null (tests pass it).
+  final bool? hasFo;
+
+  const StockDetailScreen({super.key, required this.symbol, required this.market, required this.name, this.initialQuote, this.hasFo});
 
   @override
   State<StockDetailScreen> createState() => _StockDetailScreenState();
@@ -54,6 +57,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   final Map<String, List<double>> _history = {}; // closes per range, fetched once each
   ({double low, double high})? _yearRange;
   int? _lotSize;
+  late bool _hasFo = widget.hasFo ?? false;
 
   @override
   void initState() {
@@ -128,6 +132,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     } catch (_) {}
     if (widget.market != 'stock') return;
     try {
+      // Option chain and lot size only for names with real F&O contracts.
+      final fo = widget.hasFo ?? await FoInstrumentsService().hasFo(widget.symbol);
+      if (mounted) setState(() => _hasFo = fo);
+      if (!fo) return;
       final lot = await FoInstrumentsService().getLotSize(widget.symbol);
       if (mounted && lot > 1) setState(() => _lotSize = lot);
     } catch (_) {}
@@ -379,7 +387,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 0),
         child: Row(children: [
           Expanded(child: _toolButton('Pro chart', _openProChart)),
-          if (widget.market == 'stock') ...[
+          if (widget.market == 'stock' && _hasFo) ...[
             const SizedBox(width: 8),
             Expanded(
               child: _toolButton(

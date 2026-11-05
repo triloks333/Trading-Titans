@@ -39,7 +39,7 @@ Quote _q({String market = 'stock'}) => Quote(
       open: 2918.40, dayHigh: 2956.00, dayLow: 2911.10, volume: 6420000,
     );
 
-Future<void> _pump(WidgetTester tester, {String market = 'stock'}) async {
+Future<void> _pump(WidgetTester tester, {String market = 'stock', bool hasFo = true}) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -54,7 +54,7 @@ Future<void> _pump(WidgetTester tester, {String market = 'stock'}) async {
     ],
     child: MaterialApp(
       theme: AppTheme.darkTheme,
-      home: StockDetailScreen(symbol: 'RELIANCE', market: market, name: 'Reliance Industries', initialQuote: _q(market: market)),
+      home: StockDetailScreen(symbol: 'RELIANCE', market: market, name: 'Reliance Industries', initialQuote: _q(market: market), hasFo: hasFo),
     ),
   ));
   await tester.pump(const Duration(milliseconds: 300));
@@ -131,5 +131,11 @@ void main() {
     await _pump(tester, market: 'crypto');
     expect(find.text('Option chain'), findsNothing);
     expect(find.text('Crypto · Reliance Industries'), findsOneWidget);
+  });
+
+  testWidgets('NSE name without F&O (e.g. an ETF) has no option chain', (tester) async {
+    await _pump(tester, market: 'stock', hasFo: false);
+    expect(find.text('Option chain'), findsNothing);
+    expect(find.text('Pro chart'), findsOneWidget);
   });
 }

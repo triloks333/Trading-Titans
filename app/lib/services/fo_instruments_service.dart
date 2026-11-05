@@ -172,6 +172,19 @@ class FoInstrumentsService {
     }
   }
 
+  final Map<String, bool> _hasFoCache = {};
+
+  /// Whether [symbol] really has F&O contracts listed. Every NSE F&O underlying
+  /// has futures named "`UNDERLYING expiry FUT`", so an exact first-word match
+  /// keeps ETFs like HDFCSILVER (and prefix lookalikes) out.
+  Future<bool> hasFo(String symbol) async {
+    final u = extractUnderlying(symbol);
+    final cached = _hasFoCache[u];
+    if (cached != null) return cached;
+    final rows = await _client.from('instruments').select('symbol').eq('instrument_type', 'FUTURE').like('name', '$u %').limit(1);
+    return _hasFoCache[u] = (rows as List).isNotEmpty;
+  }
+
   /// Standard exchange lot sizes for major index derivatives
   static int defaultLotSizeForUnderlying(String underlying) {
     final u = underlying.toUpperCase().trim();

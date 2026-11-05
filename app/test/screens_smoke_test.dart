@@ -62,7 +62,7 @@ Quote _reliance() => Quote(
     );
 
 final screens = <String, Widget Function()>{
-  'Stock detail': () => StockDetailScreen(symbol: 'RELIANCE', market: 'stock', name: 'Reliance Industries', initialQuote: _reliance()),
+  'Stock detail': () => StockDetailScreen(symbol: 'RELIANCE', market: 'stock', name: 'Reliance Industries', initialQuote: _reliance(), hasFo: true),
   'Order entry · buy': () => OrderEntryScreen(quote: _reliance(), isBuy: true),
   'Order entry · sell': () => OrderEntryScreen(quote: _reliance(), isBuy: false),
   'Option chain': () => const OptionChainScreen(underlyingSymbol: 'NIFTY', spotPrice: 24318.45),
