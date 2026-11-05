@@ -11,6 +11,25 @@ entry here, at the top, before arming.
 
 ---
 
+## 2.0.1 (versionCode 61)
+
+Titans v2: the whole app rebuilt to the new design, Weekly League, per-type push switches, Kite-style holding rows with LTP, option chain priced like fills and opening at the money, Option chain only for real F&O names. Replaced 2.0.0 (60) before its review finished.
+
+### Play Store "What's new" (paste this)
+
+```
+All-new Trading Titans 2.0
+• Fresh design across every screen
+• Top gainers & losers, live index strip, portfolio chart that follows your holdings
+• Holdings show Qty, Avg, Invested and live LTP
+• Weekly League: top 10 win demo cash every Monday
+• Choose which notifications reach your phone
+• Option chain: prices match your fills, opens at the current price
+• Option chain only for stocks that really have F&O
+```
+
+---
+
 ## 1.2.14 (versionCode 59)
 
 Diwali sale banner (50% off every pack, struck-through old prices, ends 10 Nov), multiple watchlists with names, colours and sections, a full news page with date and market filters, feedback buttons on home, and admin news removal that keeps posts on the website. Includes 1.2.13's live charts.
