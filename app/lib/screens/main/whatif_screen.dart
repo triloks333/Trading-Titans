@@ -1,285 +1,320 @@
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme.dart';
+
 import '../../core/money.dart';
+import '../../core/theme.dart';
 import '../../services/market_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
-import 'package:intl/intl.dart';
+import 'stock_detail_screen.dart';
+
+/// Compound annual growth rate in percent.
+double whatIfCagr(double invested, double value, int years) =>
+    invested <= 0 || value <= 0 || years <= 0 ? 0 : (math.pow(value / invested, 1 / years) - 1) * 100;
+
+/// The same money in a fixed deposit compounding yearly at [ratePct].
+double fixedDepositValue(double amount, int years, {double ratePct = 7}) => amount * math.pow(1 + ratePct / 100, years);
+
+typedef WhatIfSimulator = Future<Map<String, dynamic>?> Function(String symbol, String market, double amount, int years);
 
 class WhatIfScreen extends StatefulWidget {
-  const WhatIfScreen({super.key});
+  const WhatIfScreen({super.key, this.simulate});
+
+  /// Replaces the `whatif` function call (tests).
+  final WhatIfSimulator? simulate;
 
   @override
   State<WhatIfScreen> createState() => _WhatIfScreenState();
 }
 
 class _WhatIfScreenState extends State<WhatIfScreen> {
+  static const _years = [1, 3, 5, 7, 10];
+  static const _picks = {'stock': ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY'], 'crypto': ['BTC', 'ETH', 'SOL', 'XRP']};
+
   String _symbol = 'RELIANCE';
   String _market = 'stock';
+  int _yearsAgo = 5;
   bool _busy = false;
   Map<String, dynamic>? _result;
+  List<double> _growth = const [];
+  Timer? _debounce;
+  final _amountController = TextEditingController(text: '10000');
 
-  late final TextEditingController _amountController;
-  late final TextEditingController _yearsController;
+  double get _amount => double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0;
 
   @override
   void initState() {
     super.initState();
-    _amountController = TextEditingController(text: '10000');
-    _yearsController = TextEditingController(text: '3');
+    _run();
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _yearsController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
-  Future<void> _runSimulation() async {
-    setState(() {
-      _busy = true;
-      _result = null;
-    });
-    final amount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
-    final years = int.tryParse(_yearsController.text) ?? 1;
-
+  /// Re-runs on every change; a stale answer for a previous input is dropped.
+  Future<void> _run() async {
+    final amount = _amount, years = _yearsAgo, symbol = _symbol, market = _market;
     if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid investment amount')),
-      );
-      setState(() => _busy = false);
+      setState(() => _result = null);
       return;
     }
-
-    if (years <= 0 || years > 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter years between 1 and 10')),
-      );
-      setState(() => _busy = false);
-      return;
-    }
-
-    final result = await MarketService.simulateWhatIf(_symbol, _market, amount, years);
-    if (mounted) {
-      setState(() {
-        _result = result;
-        _busy = false;
-      });
-      if (result == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load simulation. Please verify the symbol and try again.')),
-        );
-      }
+    setState(() => _busy = true);
+    final sim = widget.simulate ?? MarketService.simulateWhatIf;
+    final result = await sim(symbol, market, amount, years);
+    if (!mounted || symbol != _symbol || years != _yearsAgo || amount != _amount) return;
+    setState(() {
+      _result = result;
+      _busy = false;
+      _growth = const [];
+    });
+    if (result == null) return;
+    // The history service reaches back five years; longer windows skip the chart.
+    if (years <= 5 && widget.simulate == null) {
+      final pts = await SupabaseService().getHistory(symbol, market, years == 1 ? '1y' : '5y').catchError((_) => <Map<String, dynamic>>[]);
+      final from = DateTime.now().subtract(Duration(days: 365 * years)).millisecondsSinceEpoch;
+      final closes = [for (final p in pts) if (p['v'] is num && (p['t'] as num? ?? 0) >= from) (p['v'] as num).toDouble()];
+      if (mounted && symbol == _symbol && years == _yearsAgo && closes.length > 1) setState(() => _growth = closes);
     }
   }
 
-  void _showAssetSearchSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _AssetSearchBottomSheet(
-        market: _market,
-        onSelected: (symbol, name) {
-          setState(() {
-            _symbol = symbol;
-          });
-        },
+  void _pick({String? symbol, String? market, int? years}) {
+    setState(() {
+      if (market != null && market != _market) {
+        _market = market;
+        _symbol = _picks[market]!.first;
+      }
+      if (symbol != null) _symbol = symbol;
+      if (years != null) _yearsAgo = years;
+    });
+    _run();
+  }
+
+  void _showAssetSearchSheet() => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AssetSearchBottomSheet(market: _market, onSelected: (symbol, name) => _pick(symbol: symbol)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final r = _result;
+    final value = (r?['current_value'] as num?)?.toDouble() ?? 0;
+    final invested = (r?['amount_invested'] as num?)?.toDouble() ?? _amount;
+    final gain = value - invested;
+    final up = gain >= 0;
+    final cagr = whatIfCagr(invested, value, _yearsAgo);
+    final picks = {..._picks[_market]!, _symbol};
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+              const SizedBox(width: 10),
+              Expanded(child: Text('What-If simulator', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, AppSpacing.lg), children: [
+              Text('See what a past investment would be worth today.', style: AppFonts.sans(size: 13, color: AppColors.ink3)),
+              const SizedBox(height: 14),
+              Row(children: [
+                for (final (m, label) in const [('stock', 'Stocks'), ('crypto', 'Crypto')]) ...[
+                  if (m == 'crypto') const SizedBox(width: 6),
+                  Expanded(child: _chip(label, _market == m, () => _pick(market: m), mono: false)),
+                ],
+              ]),
+              const SizedBox(height: 14),
+              _label('Symbol'),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final s in picks) _chip(s, s == _symbol, () => _pick(symbol: s)),
+                _chip('More…', false, _showAssetSearchSheet, mono: false),
+              ]),
+              const SizedBox(height: 14),
+              _label('Investment amount (${Money.symbol})'),
+              TextField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9,]'))],
+                style: AppFonts.mono(size: 16, weight: FontWeight.w500, color: AppColors.ink),
+                onChanged: (_) {
+                  _debounce?.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 500), _run);
+                },
+              ),
+              const SizedBox(height: 14),
+              _label('Years ago'),
+              Row(children: [
+                for (final y in _years) ...[
+                  if (y != 1) const SizedBox(width: 6),
+                  Expanded(child: _chip('${y}Y', y == _yearsAgo, () => _pick(years: y))),
+                ],
+              ]),
+              const SizedBox(height: 14),
+              _resultCard(r, value, invested, gain, up, cagr),
+              if (r != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: _card,
+                  child: Row(children: [
+                    Text('vs. fixed deposit at 7%:', style: AppFonts.sans(size: 13, color: AppColors.ink3)),
+                    const Spacer(),
+                    Text(Money.wallet(fixedDepositValue(invested, _yearsAgo), decimals: 0), style: AppFonts.mono(size: 13, color: AppColors.ink)),
+                  ]),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Text(
+                'Illustrative figures based on historical prices${_market == 'crypto' ? ' (the coin\'s INR pair)' : ''}. Past returns don\'t guarantee future returns.',
+                style: AppFonts.sans(size: 11, color: AppColors.ink4),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: _symbol, market: _market, name: _symbol))),
+                child: Text('Practise trading $_symbol'),
+              ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('What-If Simulator', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
-        backgroundColor: AppColors.parchment,
-        centerTitle: false,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.pureWhite,
-                borderRadius: BorderRadius.circular(AppRadius.xl),
-                border: Border.all(color: AppColors.birch),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'If I had invested in… how much would I have today?',
-                    style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.ink),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(children: [
-                    _segmentButton('stock'),
-                    const SizedBox(width: AppSpacing.sm),
-                    _segmentButton('crypto'),
-                  ]),
-                  const SizedBox(height: AppSpacing.lg),
-                  
-                  // Symbol Selector Field
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Symbol', style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink3, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: AppSpacing.xs),
-                      InkWell(
-                        onTap: _showAssetSearchSheet,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: AppColors.cream,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppColors.birch),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                _symbol,
-                                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.ink),
-                              ),
-                                    Icon(Icons.arrow_drop_down, color: AppColors.ink3),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: AppSpacing.md),
-                  _inputField('Amount (${Money.symbol})', _amountController, TextInputType.number),
-                  const SizedBox(height: AppSpacing.md),
-                  _inputField('Years Ago', _yearsController, TextInputType.number),
-                  const SizedBox(height: AppSpacing.lg),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _busy ? null : _runSimulation,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.imperialGold,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: _busy
-                          ?       SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: AppColors.pureWhite, strokeWidth: 2))
-                          : Text('Calculate', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.pureWhite)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            if (_result != null) () {
-              DateTime? purchaseDate;
-              try {
-                purchaseDate = DateTime.parse(_result!['purchase_date'] as String).toLocal();
-              } catch (_) {}
+  BoxDecoration get _card => BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.birch),
+      );
 
-              return Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: AppColors.warmWhite,
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
-                  border: Border.all(color: AppColors.birch),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Result for ${_result!['symbol']}',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Invested ${Money.wallet((_result!['amount_invested'] as num), decimals: 0)}',
-                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Current value ${Money.wallet((_result!['current_value'] as num), decimals: 0)}',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.ink),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'P&L ${(_result!['pnl'] as num) >= 0 ? '+' : ''}${Money.wallet((_result!['pnl'] as num), decimals: 0)}',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: (_result!['pnl'] as num) >= 0 ? AppColors.bull : AppColors.bear,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Units held ${(_result!['units'] as num).toStringAsFixed(4)}',
-                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      purchaseDate != null
-                          ? 'Simulated purchase price on ${DateFormat('dd MMM yyyy').format(purchaseDate)}: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}'
-                          : 'Simulated purchase price: ${Money.wallet((_result!['purchase_price'] as num), decimals: 2)}',
-                      style: GoogleFonts.ibmPlexSans(color: AppColors.ink4),
-                    ),
-                    if (_market == 'crypto') ...[
-                      const SizedBox(height: AppSpacing.md),
-                      Text(
-                        '*Calculated using the ${_result!['symbol']}-INR pair on Yahoo Finance.',
-                        style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4, fontStyle: FontStyle.italic),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            }(),
-          ],
+  Widget _label(String text) =>
+      Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(text, style: AppFonts.sans(size: 12, weight: FontWeight.w500, color: AppColors.ink3)));
+
+  Widget _chip(String label, bool on, VoidCallback onTap, {bool mono = true}) {
+    final style = mono
+        ? AppFonts.mono(size: 13, weight: FontWeight.w600, color: on ? AppColors.goldMid : AppColors.ink3)
+        : AppFonts.sans(size: 13, weight: FontWeight.w600, color: on ? AppColors.goldMid : AppColors.ink3);
+    return Material(
+      color: on ? AppColors.goldPale : Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm), side: BorderSide(color: on ? AppColors.goldMid : AppColors.birch)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          child: Text(label, style: style),
         ),
       ),
     );
   }
 
-  Widget _segmentButton(String value) {
-    final selected = _market == value;
-    return Expanded(
-      child: ChoiceChip(
-        label: SizedBox(width: double.infinity, child: Text(value == 'stock' ? 'Stocks' : 'Crypto', textAlign: TextAlign.center)),
-        selected: selected,
-        showCheckmark: false,
-        labelStyle: AppFonts.sans(size: 14, weight: FontWeight.w600, color: selected ? AppColors.goldMid : AppColors.ink3),
-        side: BorderSide(color: selected ? AppColors.goldMid : AppColors.birch),
-        onSelected: (_) => setState(() {
-          _market = value;
-          _symbol = value == 'stock' ? 'RELIANCE' : 'BTC';
-          _result = null;
-        }),
-      ),
+  Widget _resultCard(Map<String, dynamic>? r, double value, double invested, double gain, bool up, double cagr) {
+    if (r == null) {
+      return Container(
+        height: 160,
+        alignment: Alignment.center,
+        decoration: _card,
+        child: _busy
+            ? const CircularProgressIndicator()
+            : Text(_amount <= 0 ? 'Enter an amount to see the result.' : 'No price history for $_symbol. Try another symbol.',
+                textAlign: TextAlign.center, style: AppText.body),
+      );
+    }
+    final tone = up ? AppColors.bull : AppColors.bear;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _card,
+      child: Column(children: [
+        Text.rich(
+          TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink3), children: [
+            TextSpan(text: '${Money.wallet(invested, decimals: 0)} in '),
+            TextSpan(text: _symbol, style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+            TextSpan(text: ' $_yearsAgo year${_yearsAgo == 1 ? '' : 's'} ago is now'),
+          ]),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 6),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(Money.wallet(value, decimals: 0), style: AppFonts.mono(size: 38, weight: FontWeight.w600, color: tone)),
+        ),
+        const SizedBox(height: 6),
+        Text.rich(TextSpan(style: AppFonts.mono(size: 13), children: [
+          TextSpan(
+            text: '${up ? '+' : '−'}${Money.wallet(gain.abs(), decimals: 0)} (${up ? '+' : '−'}${invested > 0 ? (gain.abs() / invested * 100).round() : 0}%)',
+            style: TextStyle(color: tone),
+          ),
+          TextSpan(text: ' · CAGR ${cagr.toStringAsFixed(1)}%', style: TextStyle(color: AppColors.ink4)),
+        ])),
+        if (_growth.length > 1) ...[
+          const SizedBox(height: 12),
+          Semantics(
+            label: 'Growth of the investment over $_yearsAgo years',
+            child: SizedBox(height: 90, child: CustomPaint(size: Size.infinite, painter: _GrowthPainter(_growth, tone))),
+          ),
+          Row(children: [
+            Text('${DateTime.now().year - _yearsAgo}', style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+            const Spacer(),
+            Text('${DateTime.now().year}', style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+          ]),
+        ],
+      ]),
     );
   }
+}
 
-  /// Labelled input; border, fill and focus ring come from the theme.
-  Widget _inputField(String label, TextEditingController controller, TextInputType keyboardType) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink3)),
-          const SizedBox(height: AppSpacing.xs),
-          TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            style: AppFonts.mono(size: 16, weight: FontWeight.w500, color: AppColors.ink),
-            decoration: InputDecoration(hintText: label),
-          ),
-        ],
-      );
+/// Line with a soft fill, scaled to the series.
+class _GrowthPainter extends CustomPainter {
+  _GrowthPainter(this.values, this.color);
+  final List<double> values;
+  final Color color;
 
+  @override
+  void paint(Canvas canvas, Size size) {
+    final lo = values.reduce((a, b) => a < b ? a : b), hi = values.reduce((a, b) => a > b ? a : b);
+    final span = hi == lo ? 1.0 : hi - lo;
+    Offset at(int i) => Offset(size.width * i / (values.length - 1), 4 + (size.height - 8) * (1 - (values[i] - lo) / span));
+    final line = Path()..moveTo(at(0).dx, at(0).dy);
+    for (var i = 1; i < values.length; i++) {
+      line.lineTo(at(i).dx, at(i).dy);
+    }
+    final fill = Path.from(line)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(fill, Paint()..color = color.withValues(alpha: 0.14));
+    canvas.drawPath(line, Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2);
+  }
+
+  @override
+  bool shouldRepaint(_GrowthPainter old) => old.values != values || old.color != color;
 }
 
 class _AssetSearchBottomSheet extends StatefulWidget {
