@@ -33,6 +33,13 @@ class AppFlagsService extends ChangeNotifier {
   /// showing the "Coming soon" state.
   bool get usStocksEnabled => isEnabled('us_stocks_enabled');
 
+  /// Sets one flag in memory only, for widget tests.
+  @visibleForTesting
+  void debugSetFlag(String key, bool value) {
+    _flags = {..._flags, key: value};
+    notifyListeners();
+  }
+
   Future<void> refresh() async {
     try {
       final rows = await Supabase.instance.client

@@ -1,5 +1,8 @@
 import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,9 +17,10 @@ import '../../services/app_flags_service.dart';
 import '../../services/currency_service.dart';
 import '../../services/plan_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
-import '../../widgets/plan_badge.dart';
 
 /// Plans and top-ups, presented with a clean segmented view.
 ///
@@ -25,9 +29,13 @@ import '../../widgets/plan_badge.dart';
 class SubscribeScreen extends StatefulWidget {
   final int initialTabIndex;
 
+  /// The catalogue to show instead of fetching it (tests).
+  final List<PlanOption>? catalogue;
+
   const SubscribeScreen({
     super.key,
     this.initialTabIndex = 0,
+    this.catalogue,
   });
 
   @override
@@ -40,6 +48,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   late Future<List<PlanOption>> _plans;
   late int _selectedTab;
   String _billingInterval = 'monthly';
+
+  /// The plan the footer will buy; null picks a sensible default per tab.
+  String? _selectedSku;
 
   /// The SKU whose checkout is being opened, so its button can show a spinner and
   /// every other one can be disabled.
@@ -54,13 +65,13 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTabIndex.clamp(0, 1);
-    _plans = SupabaseService().getPlanCatalogue()..ignore();
+    _plans = widget.catalogue != null ? Future.value(widget.catalogue!) : (SupabaseService().getPlanCatalogue()..ignore());
     _initRazorpay();
     _loadSavedPhone();
   }
 
   void _initRazorpay() {
-    if (Platform.isIOS) return;
+    if (kIsWeb || Platform.isIOS) return;
     try {
       final rzp = Razorpay();
       rzp.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
@@ -97,1049 +108,355 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthService>();
     final plan = context.watch<PlanService>();
     final billing = context.watch<CurrencyService>().billingCurrency;
-    final wallet = auth.user?.walletBalance ?? 0.0;
 
-    // Defence in depth: hidden when monetization is off, or on iOS where Apple
-    // strictly mandates StoreKit In-App Purchases for digital goods (Guideline 3.1.1).
-    if (!context.watch<AppFlagsService>().monetizationEnabled || Platform.isIOS) {
+    // Defence in depth: hidden when monetisation is off, and on iOS, where Apple
+    // requires StoreKit for digital goods (Guideline 3.1.1).
+    if (!context.watch<AppFlagsService>().monetizationEnabled || (!kIsWeb && Platform.isIOS)) {
       return Scaffold(
-        appBar: _bar(),
-        body: EmptyState(
-          icon: Icons.school_rounded,
-          title: 'Educational Mode',
-          message:
-              'Trading Titans on iOS is completely free. '
-              'All simulation markets, real-time charts, options, and futures are unlocked. '
-              'Earn additional demo capital by completing daily challenges!',
+        body: SafeArea(
+          child: Column(children: [
+            _header(),
+            Expanded(
+              child: EmptyState(
+                icon: Icons.school_rounded,
+                title: 'Educational Mode',
+                message: 'Trading Titans is completely free here. All simulation markets, real-time charts, options and '
+                    'futures are unlocked. Earn more demo capital by completing challenges!',
+              ),
+            ),
+          ]),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.parchment,
-      appBar: _bar(),
-      body: FutureBuilder<List<PlanOption>>(
-        future: _plans,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return ErrorState(
-              message: "We couldn't load the plans. Check your connection and try again.",
-              onRetry: () => setState(() {
-                _plans = SupabaseService().getPlanCatalogue()..ignore();
-              }),
-            );
-          }
-
-          final all = snapshot.data ?? const <PlanOption>[];
-          final topups = all.where((p) => !p.isSubscription).toList()
-            ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)); // Lower price packages on top (29 -> 199 -> 599 -> 999)
-          final hasAnnual = all.any((p) => p.isSubscription && p.billingInterval == 'annual');
-          final effectiveInterval = (hasAnnual && _billingInterval == 'annual') ? 'annual' : 'monthly';
-          final subscriptions = all
-              .where((p) => p.isSubscription && p.billingInterval == effectiveInterval)
-              .toList()
-            ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)); // Lower price packages on top (149 -> 799)
-
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-            children: [
-              // --- Current Balance Strip ---
-              _balanceStrip(wallet, plan),
-              const SizedBox(height: AppSpacing.md),
-
-              // --- Segmented Tab Switcher ---
-              _segmentedBar(),
-              const SizedBox(height: AppSpacing.md),
-
-              // Currency equivalence notice if applicable
-              if (billing != Money.display) ...[
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.pureWhite,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: Border.all(color: AppColors.birch),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded, size: 16, color: AppColors.ink4),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Charges are in ${billing.label}s.'
-                          '${Money.rate == null ? '' : ' Amounts marked \u2248 are today\u2019s equivalent in ${Money.display.label}s.'}',
-                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 11, color: AppColors.ink4),
+      body: SafeArea(
+        child: Column(children: [
+          _header(),
+          Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12), child: _segmented()),
+          Expanded(
+            child: FutureBuilder<List<PlanOption>>(
+              future: _plans,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+                if (snapshot.hasError) {
+                  return ErrorState(
+                    message: "We couldn't load the plans. Check your connection and try again.",
+                    onRetry: () => setState(() {
+                      _plans = SupabaseService().getPlanCatalogue()..ignore();
+                    }),
+                  );
+                }
+                final all = snapshot.data ?? const <PlanOption>[];
+                final hasAnnual = all.any((p) => p.isSubscription && p.billingInterval == 'annual');
+                final interval = hasAnnual && _billingInterval == 'annual' ? 'annual' : 'monthly';
+                final options = _selectedTab == 0
+                    ? (all.where((p) => p.isSubscription && p.billingInterval == interval).toList()
+                      ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)))
+                    : (all.where((p) => !p.isSubscription).toList()..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)));
+                // Default pick: the cheapest paid subscription the user does not have, or the first top-up.
+                final selected = options.where((p) => p.sku == _selectedSku).firstOrNull ??
+                    (_selectedTab == 0 ? options.where((p) => p.tier != plan.tier).firstOrNull : options.firstOrNull);
+                return Column(children: [
+                  Expanded(
+                    child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12), children: [
+                      if (plan.saleActive) _saleBanner(plan),
+                      if (billing != Money.display) _currencyNote(billing),
+                      if (_selectedTab == 0 && hasAnnual) _intervalToggle(),
+                      if (_selectedTab == 0) _starterCard(plan),
+                      if (options.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: Text('Nothing on sale here right now.', textAlign: TextAlign.center, style: AppText.body),
                         ),
+                      for (final p in options) _planCard(p, billing, selected: p.sku == selected?.sku, current: p.isSubscription && plan.tier == p.tier),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Demo cash is virtual and cannot be withdrawn. Subscriptions renew monthly; cancel anytime. '
+                        'Operated by Kashivwealth Management LLP.',
+                        style: AppFonts.sans(size: 11, color: AppColors.ink4, height: 1.45),
                       ),
-                    ],
+                      const SizedBox(height: 12),
+                      _selectedTab == 0 ? _mentorshipFaqSection() : _topUpFaqSection(),
+                    ]),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-
-              // --- Content based on Selected Tab ---
-              if (_selectedTab == 0) ...[
-                _buildMentorshipTab(subscriptions, billing, plan, hasAnnual),
-              ] else ...[
-                _buildTopUpTab(topups, billing),
-              ],
-
-              const SizedBox(height: AppSpacing.xl),
-
-              // --- Regulatory Disclaimer ---
-              Center(
-                child: Text(
-                  'Demo cash is educational virtual capital with zero monetary value and cannot be withdrawn. '
-                  'Transactions use secure 256-bit encrypted Razorpay checkout.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink5, height: 1.45),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-            ],
-          );
-        },
+                  _footer(selected, billing, plan),
+                ]);
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
 
-  AppBar _bar() => AppBar(
-        title: Text(
-          'Plans & Top-Ups',
-          style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.ink),
-        ),
-        backgroundColor: AppColors.parchment,
-        elevation: 0,
-        centerTitle: false,
+  Widget _header() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+        child: Row(children: [
+          AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Plans & top-ups', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+          ListenableBuilder(
+            listenable: ThemeService(),
+            builder: (_, _) => AuthIconButton(
+              icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+              label: 'Toggle light or dark theme',
+              onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+            ),
+          ),
+        ]),
       );
 
-  // ---------------------------------------------------------------------------
-  // Top Balance Strip
-  // ---------------------------------------------------------------------------
-  Widget _balanceStrip(double wallet, PlanService plan) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.birch),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.goldPale,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.goldBorder),
-            ),
-            child: Icon(Icons.account_balance_wallet_rounded, size: 20, color: AppColors.goldDeep),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'CURRENT DEMO BALANCE',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink4,
-                    letterSpacing: 0.5,
+  Widget _segmented() => Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+        child: Row(children: [
+          for (final (i, label) in const ['Subscriptions', 'Top-ups'].indexed) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: _selectedTab == i,
+                label: label,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () {
+                    if (_selectedTab == i) return;
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _selectedTab = i;
+                      _selectedSku = null;
+                    });
+                  },
+                  child: Container(
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _selectedTab == i ? AppColors.pureWhite : Colors.transparent,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Text(label, style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _selectedTab == i ? AppColors.ink : AppColors.ink3)),
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  Money.wallet(wallet),
-                  style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (plan.isPaid)
-            PlanBadge(tier: plan.tier)
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.cream,
-                borderRadius: BorderRadius.circular(AppRadius.tag),
-                border: Border.all(color: AppColors.birch),
-              ),
-              child: Text(
-                'FREE TIER',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink4,
-                  letterSpacing: 0.5,
                 ),
               ),
             ),
-        ],
-      ),
-    );
-  }
+          ],
+        ]),
+      );
 
-  // ---------------------------------------------------------------------------
-  // Segmented Pill Control
-  // ---------------------------------------------------------------------------
-  Widget _segmentedBar() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.birch.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-      ),
-      child: Row(
-        children: [
+  Widget _saleBanner(PlanService plan) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: AppColors.titanGoldSoft, borderRadius: BorderRadius.circular(AppRadius.md)),
+        child: Row(children: [
+          Icon(Icons.local_fire_department_outlined, size: 20, color: AppColors.titanGold),
+          const SizedBox(width: 10),
           Expanded(
-            child: _segmentTab(
-              index: 0,
-              icon: Icons.workspace_premium_rounded,
-              title: 'VIP Mentorship',
-              badge: '₹1L+/mo',
+            child: Text(
+              'Diwali sale: 50% off every pack${plan.saleEndsAt == null ? '' : ' · ends ${DateFormat('d MMM, h:mm a').format(plan.saleEndsAt!.toLocal())}'}',
+              style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.titanGold),
             ),
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: _segmentTab(
-              index: 1,
-              icon: Icons.bolt_rounded,
-              title: 'Top-Up Capital',
-              badge: 'INSTANT',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ]),
+      );
 
-  Widget _segmentTab({
-    required int index,
-    required IconData icon,
-    required String title,
-    required String badge,
-  }) {
-    final isSelected = _selectedTab == index;
-    final activeColor = index == 0 ? AppColors.violet : AppColors.goldDeep;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (_selectedTab != index) {
-          HapticFeedback.selectionClick();
-          setState(() => _selectedTab = index);
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+  Widget _currencyNote(Currency billing) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.pureWhite : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
+          color: AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.birch),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 17,
-              color: isSelected ? activeColor : AppColors.ink4,
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                title,
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                  color: isSelected ? AppColors.ink : AppColors.ink3,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-              decoration: BoxDecoration(
-                color: isSelected ? activeColor.withValues(alpha: 0.12) : AppColors.birch,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                badge,
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 8.5,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? activeColor : AppColors.ink4,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ),
-          ],
+        child: Text(
+          'Charges are in ${billing.label}s.'
+          '${Money.rate == null ? '' : ' Amounts marked ≈ are today’s equivalent in ${Money.display.label}s.'}',
+          style: AppFonts.mono(size: 11, color: AppColors.ink4),
         ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // TAB 0: VIP Mentorship Plans
-  // ---------------------------------------------------------------------------
-  Widget _buildMentorshipTab(
-    List<PlanOption> subscriptions,
-    Currency billing,
-    PlanService plan,
-    bool hasAnnual,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Hero Mentorship Card
-        _heroMentorshipBanner(),
-        const SizedBox(height: AppSpacing.md),
-
-        if (hasAnnual) ...[
-          _billingCycleToggle(),
-          const SizedBox(height: AppSpacing.md),
-        ],
-
-        if (subscriptions.isNotEmpty) ...[
-          for (final p in subscriptions) ...[
-            _subscriptionCard(p, billing, isCurrent: plan.tier == p.tier),
-            const SizedBox(height: AppSpacing.md),
-          ],
-        ],
-
-        const SizedBox(height: AppSpacing.lg),
-        _trustStrip(isMentorship: true),
-        const SizedBox(height: AppSpacing.lg),
-        _mentorshipFaqSection(),
-      ],
-    );
-  }
-
-  Widget _billingCycleToggle() {
-    final isAnnual = _billingInterval == 'annual';
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (_billingInterval != 'monthly') {
-                  HapticFeedback.selectionClick();
-                  setState(() => _billingInterval = 'monthly');
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: !isAnnual ? AppColors.violet.withValues(alpha: 0.1) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Center(
-                  child: Text(
-                    'Monthly Pass',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12.5,
-                      fontWeight: !isAnnual ? FontWeight.w700 : FontWeight.w600,
-                      color: !isAnnual ? AppColors.violet : AppColors.ink3,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (_billingInterval != 'annual') {
-                  HapticFeedback.selectionClick();
-                  setState(() => _billingInterval = 'annual');
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: isAnnual ? AppColors.violet.withValues(alpha: 0.1) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Annual Pass',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 12.5,
-                        fontWeight: isAnnual ? FontWeight.w700 : FontWeight.w600,
-                        color: isAnnual ? AppColors.violet : AppColors.ink3,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: AppColors.bullLight,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'SAVE 37%',
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.bull,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _heroMentorshipBanner() {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      // Flagship card: theme-independent dark surface with a crown border.
-      decoration: AppCard.darkCta.copyWith(border: Border.all(color: AppColors.crown), boxShadow: const []),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.crown.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(AppRadius.tag),
-                  border: Border.all(color: AppColors.crown.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  '★ FLAGSHIP PROGRAM · ₹1L+/MO VALUE',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.crown,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              const Icon(Icons.verified_rounded, size: 16, color: AppColors.crown),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Live Founder Mentorship & Pro Setups',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Twice-weekly interactive live sessions (Wed & Sat) with founders, institutional strategy reviews, and ₹10L monthly virtual stipend.',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 12,
-              color: Colors.white.withValues(alpha: 0.85),
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(child: _badgePill(Icons.school_outlined, 'Twice-Weekly Live')),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(child: _badgePill(Icons.trending_up_rounded, 'Institutional Setups')),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(child: _badgePill(Icons.all_inclusive_rounded, 'F&O Unlocked')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _badgePill(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 12, color: AppColors.crown),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              text,
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _subscriptionCard(
-    PlanOption product,
-    Currency billing, {
-    required bool isCurrent,
-  }) {
-    final isTitan = product.tier == 'titan' || product.pricePaise >= 79900;
-    final accent = isTitan ? AppColors.violet : AppColors.imperialGold;
-    final busy = _busySku == product.sku;
-    final blocked = isCurrent || (_busySku != null && !busy);
-    final approx = _approx(product, billing);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(
-          color: isTitan ? AppColors.violet : AppColors.birch,
-          width: isTitan ? 1.8 : 1.0,
-        ),
-        boxShadow: isTitan
-            ? [
-                BoxShadow(
-                  color: AppColors.violet.withValues(alpha: 0.12),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (isTitan) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.violet.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.tag),
-              ),
-              child: Text(
-                '★ MOST POPULAR · INCLUDES LIVE FOUNDER SESSIONS',
-                style: GoogleFonts.ibmPlexSans(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.violet,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          product.title,
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.ink,
-                          ),
-                        ),
-                        if (isCurrent) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: AppCard.badge(AppColors.bullLight),
-                            child: Text(
-                              'ACTIVE',
-                              style: GoogleFonts.ibmPlexSans(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.bull,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    Text(
-                      isTitan ? 'Ultimate mentorship & pro trading pass' : 'Starter simulation plan',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (product.onSale) _wasPrice(product, billing),
-                  Text(
-                    product.priceLabel(billing),
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  Text(
-                    product.billingInterval == 'annual'
-                        ? (approx == null ? 'per year' : 'per year · $approx')
-                        : (approx == null ? 'per month' : 'per month · $approx'),
-                    style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // High impact value points
-          if (isTitan) ...[
-            _perkItem('Twice-weekly live 1-on-1 mentorship with founders (Wed & Sat)', accent, isBold: true),
-            const SizedBox(height: 6),
-            _perkItem('₹1 Lakh+/month worth of institutional option setups', accent, isBold: true),
-            const SizedBox(height: 6),
-          ],
-          _perkItem('${Money.wallet(product.monthlyStipend)} virtual capital added every month', accent),
-          const SizedBox(height: 6),
-          _perkItem('Unrestricted Futures & Options (F&O) trading', accent),
-          const SizedBox(height: 6),
-          _perkItem('${product.tier.toUpperCase()} VIP badge across chat & leaderboards', accent),
-          if (isTitan) ...[
-            const SizedBox(height: 6),
-            _perkItem('Unlimited trade autopsies with tailored risk diagnosis', accent),
-          ],
-
-          const SizedBox(height: AppSpacing.lg),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: blocked || busy ? null : () => _openCheckout(product),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accent,
-                disabledBackgroundColor: AppColors.cream,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-              ),
-              child: busy
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(
-                      isCurrent ? 'Current Plan' : 'Unlock ${product.title}',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14,
-                        color: blocked ? AppColors.ink4 : AppColors.pureWhite,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _perkItem(String text, Color accent, {bool isBold = false}) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.check_circle_rounded, size: 15, color: accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.ibmPlexSans(
-                fontSize: 12.5,
-                fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
-                color: isBold ? AppColors.ink : AppColors.ink3,
-              ),
-            ),
-          ),
-        ],
       );
 
-  // ---------------------------------------------------------------------------
-  // TAB 1: One-time Top-Up Capital
-  // ---------------------------------------------------------------------------
-  Widget _buildTopUpTab(
-    List<PlanOption> topups,
-    Currency billing,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Intro Banner
-        _topUpIntroBanner(),
-        const SizedBox(height: AppSpacing.lg),
-
-        // Package Cards
-        if (topups.isEmpty)
-          const Center(child: Text('No top-up packages available currently.'))
-        else
-          for (final p in topups) ...[
-            _topUpCard(p, billing),
-            const SizedBox(height: AppSpacing.md),
+  Widget _intervalToggle() => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(children: [
+          for (final (i, (key, label)) in const [('monthly', 'Monthly'), ('annual', 'Annual')].indexed) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: ChoiceChip(
+                label: SizedBox(width: double.infinity, child: Text(label, textAlign: TextAlign.center)),
+                selected: _billingInterval == key,
+                showCheckmark: false,
+                onSelected: (_) => setState(() {
+                  _billingInterval = key;
+                  _selectedSku = null;
+                }),
+              ),
+            ),
           ],
+        ]),
+      );
 
-        const SizedBox(height: AppSpacing.lg),
-        _trustStrip(isMentorship: false),
-        const SizedBox(height: AppSpacing.lg),
-        _topUpFaqSection(),
-      ],
+  Widget _tag(String text, {bool gold = false}) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(gold ? AppColors.titanGoldSoft : AppColors.cream),
+        child: Text(text, style: AppText.badge.copyWith(color: gold ? AppColors.titanGold : AppColors.ink3)),
+      );
+
+  /// A selectable plan card: name and tag, radio, price (struck-through while on
+  /// sale), and its features.
+  Widget _card({
+    required String name,
+    required String tag,
+    bool goldTag = false,
+    required bool selected,
+    required String price,
+    required String per,
+    Widget? was,
+    String? approx,
+    required List<String> features,
+    VoidCallback? onTap,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: '$name, $price $per',
+          child: Material(
+            color: selected ? AppColors.goldPale : AppColors.pureWhite,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              side: BorderSide(color: selected ? AppColors.goldMid : AppColors.birch),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Text(name, style: AppFonts.sans(size: 17, weight: FontWeight.w700, color: AppColors.ink)),
+                    const SizedBox(width: 8),
+                    _tag(tag, gold: goldTag),
+                    const Spacer(),
+                    Container(
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: selected ? AppColors.goldMid : AppColors.birch, width: 2)),
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: selected ? AppColors.goldMid : Colors.transparent),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
+                    Text(price, style: AppFonts.mono(size: 24, weight: FontWeight.w600, color: AppColors.ink)),
+                    Text(per, style: AppFonts.sans(size: 13, color: AppColors.ink4)),
+                    ?was,
+                    if (approx != null) Text(approx, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+                  ]),
+                  for (final f in features)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('✓', style: AppFonts.sans(size: 13, color: AppColors.bull)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(f, style: AppFonts.sans(size: 13, color: AppColors.ink3))),
+                      ]),
+                    ),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
+
+  /// The free tier, so the current plan is always visible beside the paid ones.
+  Widget _starterCard(PlanService plan) => _card(
+        name: 'Starter',
+        tag: plan.isPaid ? 'FREE' : 'CURRENT',
+        selected: false,
+        price: Money.wallet(0, decimals: 0),
+        per: 'free',
+        features: const ['Starter simulation plan', 'Stocks, US and crypto paper trading'],
+      );
+
+  Widget _planCard(PlanOption p, Currency billing, {required bool selected, required bool current}) {
+    final titan = p.tier == 'titan' || p.pricePaise >= 79900;
+    final features = p.isSubscription
+        ? [
+            if (titan) 'Twice-weekly live 1-on-1 mentorship with founders (Wed & Sat)',
+            '${Money.wallet(p.monthlyStipend)} virtual capital added every month',
+            'Unrestricted Futures & Options (F&O) trading',
+            '${p.tier.toUpperCase()} VIP badge across chat & leaderboards',
+            if (titan) 'Unlimited trade autopsies with tailored risk diagnosis',
+          ]
+        : ['${Money.wallet(p.cashGrant)} demo cash added instantly', 'Never expires · usable for F&O trading'];
+    final tag = current
+        ? 'CURRENT'
+        : p.isSubscription
+            ? (titan ? 'FLAGSHIP' : 'POPULAR')
+            : p.pricePaise >= 99900
+                ? 'BEST VALUE'
+                : p.pricePaise >= 49900
+                    ? 'PRO PACK'
+                    : p.sku == 'topup_mini' || p.pricePaise <= 3000
+                        ? 'TOP-UP'
+                        : 'STARTER PACK';
+    return _card(
+      name: p.title,
+      tag: tag,
+      goldTag: !current && (titan || tag == 'POPULAR' || tag == 'BEST VALUE'),
+      selected: selected,
+      price: p.priceLabel(billing),
+      per: p.isSubscription ? (p.billingInterval == 'annual' ? 'per year' : 'per month') : 'one-time',
+      was: p.onSale ? _wasPrice(p, billing) : null,
+      approx: _approx(p, billing),
+      features: features,
+      onTap: current || _busySku != null ? null : () => setState(() => _selectedSku = p.sku),
     );
   }
 
-  Widget _topUpIntroBanner() {
+  /// Selected plan and its price, then the pay button.
+  Widget _footer(PlanOption? p, Currency billing, PlanService plan) {
+    final busy = p != null && _busySku == p.sku;
+    final current = p != null && p.isSubscription && plan.tier == p.tier;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.goldPale.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.goldBorder),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppColors.goldDeep,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.bolt_rounded, size: 22, color: Colors.white),
-          ),
-          const SizedBox(width: AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 16),
+      decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'INSTANT CAPITAL BOOST',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.goldDeep,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'One-time demo cash · Never expires · Stocks & F&O simulation with zero personal capital risk.',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 11.5,
-                    color: AppColors.ink2,
-                    height: 1.35,
-                  ),
-                ),
-              ],
+            child: Text(
+              p == null ? 'Pick a plan' : '${p.title} · ${p.isSubscription ? (p.billingInterval == 'annual' ? 'per year' : 'per month') : 'one-time'}',
+              style: AppFonts.sans(size: 13, color: AppColors.ink3),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _topUpCard(PlanOption product, Currency billing) {
-    final busy = _busySku == product.sku;
-    final approx = _approx(product, billing);
-    final isMax = product.pricePaise >= 99900;
-    final isMid = product.pricePaise >= 49900 && !isMax;
-    final isMini = product.sku == 'topup_mini' || product.pricePaise <= 3000;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(
-          color: isMax ? AppColors.imperialGold : (isMini ? AppColors.goldMid : AppColors.birch),
-          width: isMax || isMini ? 1.8 : 1.0,
+          if (p != null) Text(p.priceLabel(billing), style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: p == null || current || _busySku != null ? null : () => _openCheckout(p),
+            icon: busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.phone_android_rounded),
+            label: Text(current ? 'Current plan' : 'Pay with UPI'),
+          ),
         ),
-        boxShadow: isMax
-            ? [
-                BoxShadow(
-                  color: AppColors.imperialGold.withValues(alpha: 0.15),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-      ),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (isMax)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.goldPale,
-                    borderRadius: BorderRadius.circular(AppRadius.tag),
-                    border: Border.all(color: AppColors.goldBorder),
-                  ),
-                  child: Text(
-                    '⚡ BEST VALUE · 10X CAPITAL',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.goldDeep,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                )
-              else if (isMini)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.goldPale,
-                    borderRadius: BorderRadius.circular(AppRadius.tag),
-                    border: Border.all(color: AppColors.goldBorder),
-                  ),
-                  child: Text(
-                    '⚡ MINI BOOST · ${product.priceLabel(billing)} ONLY',
-                    style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.goldMid,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                )
-              else if (isMid)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.cream,
-                    borderRadius: BorderRadius.circular(AppRadius.tag),
-                    border: Border.all(color: AppColors.birch),
-                  ),
-                  child: Text(
-                    'PRO PACK',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink3,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.cream,
-                    borderRadius: BorderRadius.circular(AppRadius.tag),
-                    border: Border.all(color: AppColors.birch),
-                  ),
-                  child: Text(
-                    'STARTER PACK',
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink4,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              Text(
-                'One-Time Purchase',
-                style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '+${Money.wallet(product.cashGrant)}',
-                      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                        color: isMax ? AppColors.goldDeep : AppColors.ink,
-                      ),
-                    ),
-                    Text(
-                      'Credited instantly · Never expires',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (product.onSale) _wasPrice(product, billing),
-                  Text(
-                    product.priceLabel(billing),
-                    style: GoogleFonts.ibmPlexSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                  if (approx != null)
-                    Text(
-                      approx,
-                      style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: busy || _busySku != null ? null : () => _openCheckout(product),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isMax ? AppColors.imperialGold : AppColors.ink,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-              ),
-              child: busy
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(
-                      'Get ${Money.wallet(product.cashGrant)} for ${product.priceLabel(billing)}',
-                      style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-            ),
-          ),
-        ],
-      ),
+        const SizedBox(height: 8),
+        Text('GPay · PhonePe · Paytm · any UPI app or card · secured by Razorpay',
+            textAlign: TextAlign.center, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+      ]),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Minimalist Trust Strip
-  // ---------------------------------------------------------------------------
-  Widget _trustStrip({required bool isMentorship}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.birch),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _trustPill(Icons.bolt_rounded, 'Instant Credit'),
-          Container(width: 1, height: 20, color: AppColors.birch),
-          _trustPill(Icons.shield_outlined, 'Zero Real Risk'),
-          Container(width: 1, height: 20, color: AppColors.birch),
-          _trustPill(Icons.lock_outline_rounded, 'Encrypted Pay'),
-        ],
-      ),
-    );
-  }
-
-  Widget _trustPill(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: AppColors.goldDeep),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: GoogleFonts.ibmPlexSans(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // FAQs
-  // ---------------------------------------------------------------------------
   Widget _mentorshipFaqSection() {
     return Container(
       decoration: BoxDecoration(
