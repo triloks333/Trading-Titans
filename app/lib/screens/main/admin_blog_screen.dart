@@ -16,7 +16,10 @@ import '../../services/supabase_service.dart';
 /// Supabase session. The post is rendered server-side by `website/api/post.js`, so
 /// nothing here needs to know how it will look.
 class AdminBlogScreen extends StatefulWidget {
-  const AdminBlogScreen({super.key});
+  const AdminBlogScreen({super.key, this.embedded = false});
+
+  /// Body only, for the Admin panel tab.
+  final bool embedded;
 
   @override
   State<AdminBlogScreen> createState() => _AdminBlogScreenState();
@@ -231,24 +234,7 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.parchment,
-      appBar: AppBar(
-        backgroundColor: AppColors.parchment,
-        centerTitle: false,
-        title: Text(_editingId == null ? 'New Blog Post' : 'Edit Blog Post',
-            style: GoogleFonts.ibmPlexSans(
-                fontWeight: FontWeight.bold, color: AppColors.ink)),
-        actions: [
-          if (_editingId != null)
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: 'Start a new post',
-              onPressed: _reset,
-            ),
-        ],
-      ),
-      body: Form(
+    final form = Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -367,7 +353,37 @@ class _AdminBlogScreenState extends State<AdminBlogScreen> {
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
+      );
+    if (widget.embedded) {
+      return Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.sm, 0),
+          child: Row(children: [
+            Expanded(child: Text(_editingId == null ? 'NEW POST' : 'EDIT POST', style: AppText.sectionLabel)),
+            if (_editingId != null) TextButton(onPressed: _reset, child: const Text('+ New post')),
+          ]),
+        ),
+        Expanded(child: form),
+      ]);
+    }
+    return Scaffold(
+      backgroundColor: AppColors.parchment,
+      appBar: AppBar(
+        backgroundColor: AppColors.parchment,
+        centerTitle: false,
+        title: Text(_editingId == null ? 'New Blog Post' : 'Edit Blog Post',
+            style: GoogleFonts.ibmPlexSans(
+                fontWeight: FontWeight.bold, color: AppColors.ink)),
+        actions: [
+          if (_editingId != null)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: 'Start a new post',
+              onPressed: _reset,
+            ),
+        ],
       ),
+      body: form,
     );
   }
 

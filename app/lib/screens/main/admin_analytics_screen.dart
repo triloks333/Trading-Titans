@@ -16,7 +16,10 @@ import '../../services/supabase_service.dart';
 /// Admin-only, but the gate that matters is inside the RPC: it raises for a
 /// non-admin caller. Hiding the menu entry is presentation, not access control.
 class AdminAnalyticsScreen extends StatefulWidget {
-  const AdminAnalyticsScreen({super.key});
+  const AdminAnalyticsScreen({super.key, this.embedded = false});
+
+  /// Body only, for the Admin panel tab.
+  final bool embedded;
 
   @override
   State<AdminAnalyticsScreen> createState() => _AdminAnalyticsScreenState();
@@ -95,6 +98,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
         return ai.compareTo(bi);
       });
 
+    final body = _body(dimensions, grouped);
+    if (widget.embedded) return body;
     return Scaffold(
       appBar: AppBar(
         title: Text('User Analytics',
@@ -106,7 +111,12 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
         ],
       ),
-      body: _loading
+      body: body,
+    );
+  }
+
+  Widget _body(List<String> dimensions, dynamic grouped) =>
+      _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
@@ -132,9 +142,7 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
                       itemBuilder: (_, i) =>
                           _card(dimensions[i], grouped[dimensions[i]]!),
                     ),
-            ),
-    );
-  }
+            );
 
   Widget _card(String dimension, List<Map<String, dynamic>> rows) {
     final total = rows.fold<int>(0, (sum, r) => sum + _count(r));

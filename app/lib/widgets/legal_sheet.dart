@@ -243,3 +243,150 @@ class _SupportLink extends StatelessWidget {
     );
   }
 }
+
+
+/// Terms and Privacy as a full page: tabs, a table of contents that jumps to
+/// each section, the documents from [LegalDocs], and the virtual-trading note.
+class LegalScreen extends StatefulWidget {
+  const LegalScreen({super.key, this.privacy = false});
+
+  /// Opens on the Privacy policy tab instead of Terms.
+  final bool privacy;
+
+  @override
+  State<LegalScreen> createState() => _LegalScreenState();
+}
+
+class _LegalScreenState extends State<LegalScreen> {
+  late bool _privacy = widget.privacy;
+  final _scroll = ScrollController();
+  final Map<int, GlobalKey> _keys = {};
+
+  LegalDoc get _doc => _privacy ? LegalDocs.privacy : LegalDocs.terms;
+
+  GlobalKey _keyFor(int i) => _keys.putIfAbsent(i, GlobalKey.new);
+
+  void _jump(int i) {
+    final ctx = _keys[i]?.currentContext;
+    if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+  }
+
+  void _switch(bool privacy) {
+    if (privacy == _privacy) return;
+    setState(() {
+      _privacy = privacy;
+      _keys.clear();
+    });
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final doc = _doc;
+    return Scaffold(
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              Semantics(
+                button: true,
+                label: 'Back',
+                excludeSemantics: true,
+                child: Material(
+                  color: AppColors.pureWhite,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: SizedBox(width: 44, height: 44, child: Icon(Icons.arrow_back_rounded, color: AppColors.ink)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Legal', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+            ]),
+          ),
+          Container(
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+            child: Row(children: [
+              for (final (privacy, label) in const [(false, 'Terms & conditions'), (true, 'Privacy policy')])
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: _privacy == privacy,
+                    label: label,
+                    excludeSemantics: true,
+                    child: InkWell(
+                      onTap: () => _switch(privacy),
+                      child: Container(
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: _privacy == privacy ? AppColors.goldMid : Colors.transparent, width: 2)),
+                        ),
+                        child: Text(label,
+                            style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _privacy == privacy ? AppColors.ink : AppColors.ink3)),
+                      ),
+                    ),
+                  ),
+                ),
+            ]),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scroll,
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Last updated ${doc.lastUpdated} · Kashivwealth Management LLP', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                const SizedBox(height: 14),
+                Wrap(spacing: 6, runSpacing: 6, children: [
+                  for (final (i, s) in doc.sections.indexed)
+                    ActionChip(
+                      label: Text(s.heading, style: AppFonts.sans(size: 12, color: AppColors.ink3)),
+                      backgroundColor: AppColors.cream,
+                      side: BorderSide.none,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => _jump(i),
+                    ),
+                ]),
+                const SizedBox(height: 14),
+                if (doc.notice != null) _Notice(doc: doc),
+                _LegalBody._paragraph(doc.intro),
+                for (final (i, s) in doc.sections.indexed)
+                  Column(key: _keyFor(i), crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const SizedBox(height: 22),
+                    Text('${i + 1}. ${s.heading}', style: AppFonts.sans(size: 15, weight: FontWeight.w700, color: AppColors.ink)),
+                    const SizedBox(height: 6),
+                    for (final p in s.paragraphs) _LegalBody._paragraph(p),
+                    for (final b in s.bullets) _Bullet(text: b),
+                  ]),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.pureWhite,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.birch),
+                  ),
+                  child: Text.rich(TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink3), children: [
+                    TextSpan(text: 'Virtual trading only. ', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    const TextSpan(text: 'Trading Titans is a simulator. Demo cash has no monetary value and cannot be withdrawn. Nothing here is investment advice.'),
+                  ])),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _SupportLink(email: doc.supportEmail),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}

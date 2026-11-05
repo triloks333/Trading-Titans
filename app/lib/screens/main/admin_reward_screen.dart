@@ -31,7 +31,10 @@ const Map<String, String> kAdminCtaDestinations = {
 };
 
 class AdminRewardScreen extends StatefulWidget {
-  const AdminRewardScreen({super.key});
+  const AdminRewardScreen({super.key, this.only});
+
+  /// 0 shows only the reward form, 1 only the notification form, null both as tabs.
+  final int? only;
 
   @override
   State<AdminRewardScreen> createState() => _AdminRewardScreenState();
@@ -183,6 +186,8 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Inside the Admin panel: just the one form, no app bar of its own.
+    if (widget.only != null) return _forms()[widget.only!];
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -203,9 +208,13 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
             ],
           ),
         ),
-        body: SafeArea(
-          child: TabBarView(
-            children: [
+        body: SafeArea(child: TabBarView(children: _forms())),
+      ),
+    );
+  }
+
+  /// Reward form, then notification form. The Admin panel shows one at a time.
+  List<Widget> _forms() => [
               // Tab 1: Reward Form
               SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -552,10 +561,5 @@ class _AdminRewardScreenState extends State<AdminRewardScreen> {
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+      ];
 }
