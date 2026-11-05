@@ -1,351 +1,417 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme.dart';
-import '../../core/money.dart';
-import '../../services/supabase_service.dart';
-import '../../widgets/error_state.dart';
 
-class AnalyticsScreen extends StatelessWidget {
-  const AnalyticsScreen({super.key});
+import '../../core/market_hours.dart';
+import '../../core/money.dart';
+import '../../core/theme.dart';
+import '../../models/order.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/error_state.dart';
+import 'autopsy_screen.dart';
+
+/// Period chips and how far back each looks.
+const Map<String, Duration?> kAnalyticsPeriods = {'1W': Duration(days: 7), '1M': Duration(days: 30), '3M': Duration(days: 90), 'All': null};
+
+/// Performance over closed trades. Only orders that realised P&L count: an
+/// opening buy is not a win or a loss, so counting it (as the old screen did)
+/// dragged every win rate down.
+class TradeStats {
+  TradeStats._(this.closes);
+
+  factory TradeStats.from(List<Order> orders, {Duration? period, DateTime? now}) {
+    final since = period == null ? null : (now ?? DateTime.now()).subtract(period);
+    final closes = orders
+        .where((o) => o.realizedPnl != 0 && _at(o) != null && (since == null || _at(o)!.isAfter(since)))
+        .toList()
+      ..sort((a, b) => _at(a)!.compareTo(_at(b)!));
+    return TradeStats._(closes);
+  }
+
+  static DateTime? _at(Order o) => o.executedAt ?? o.createdAt;
+
+  final List<Order> closes;
+
+  Iterable<double> get _wins => closes.map((o) => o.realizedPnl).where((p) => p > 0);
+  Iterable<double> get _losses => closes.map((o) => o.realizedPnl).where((p) => p < 0);
+
+  int get trades => closes.length;
+  double get total => closes.fold(0.0, (s, o) => s + o.realizedPnl);
+  double get winRate => trades == 0 ? 0 : _wins.length / trades * 100;
+  double get avgWin => _wins.isEmpty ? 0 : _wins.reduce((a, b) => a + b) / _wins.length;
+  double get avgLoss => _losses.isEmpty ? 0 : _losses.reduce((a, b) => a + b) / _losses.length;
+
+  /// Gross profit over gross loss; infinite with wins and no losses.
+  double get profitFactor {
+    final gain = _wins.fold(0.0, (a, b) => a + b), loss = _losses.fold(0.0, (a, b) => a + b).abs();
+    return loss == 0 ? (gain > 0 ? double.infinity : 0) : gain / loss;
+  }
+
+  /// Running realised P&L, starting at 0.
+  List<double> get curve {
+    var sum = 0.0;
+    return [0, for (final o in closes) sum += o.realizedPnl];
+  }
+
+  /// Largest fall from a running peak of the curve, as a negative amount.
+  double get maxDrawdown {
+    var peak = 0.0, worst = 0.0;
+    for (final v in curve) {
+      if (v > peak) peak = v;
+      if (v - peak < worst) worst = v - peak;
+    }
+    return worst;
+  }
+
+  /// Realised P&L per IST trading day, oldest first, last [days] active days.
+  List<(DateTime, double)> daily({int days = 14}) {
+    final byDay = <DateTime, double>{};
+    for (final o in closes) {
+      final d = MarketHours.istDate(_at(o)!);
+      byDay[d] = (byDay[d] ?? 0) + o.realizedPnl;
+    }
+    final keys = byDay.keys.toList()..sort();
+    return [for (final k in keys.skip(keys.length > days ? keys.length - days : 0)) (k, byDay[k]!)];
+  }
+
+  /// Realised P&L per market, F&O split out from cash equity.
+  Map<String, double> get byMarket {
+    final out = <String, double>{};
+    for (final o in closes) {
+      final fo = o.instrumentType == 'OPTION' || o.instrumentType == 'FUTURE';
+      final k = fo
+          ? 'F&O'
+          : switch (o.market) {
+              'us_stock' => 'US',
+              'crypto' => 'Crypto',
+              'pakistan_stock' => 'Pakistan',
+              'italy_stock' => 'Italy',
+              _ => 'India',
+            };
+      out[k] = (out[k] ?? 0) + o.realizedPnl;
+    }
+    return out;
+  }
+
+  /// One plain-English lesson from the numbers, for the Autopsy card.
+  ({String title, String detail})? get insight {
+    if (trades < 3) return null;
+    if (avgLoss.abs() > avgWin && avgWin > 0) {
+      return (
+        title: 'Your biggest leak: losses bigger than wins',
+        detail: 'Average loss is ${(avgLoss.abs() / avgWin).toStringAsFixed(1)}× your average win',
+      );
+    }
+    if (winRate < 50) return (title: 'Fewer than half your trades win', detail: 'Win rate ${winRate.round()}% — see what the losers share');
+    return (title: 'Your edge is working', detail: 'Win rate ${winRate.round()}% with profit factor ${profitFactor.isInfinite ? '∞' : profitFactor.toStringAsFixed(2)}');
+  }
+}
+
+class AnalyticsScreen extends StatefulWidget {
+  const AnalyticsScreen({super.key, this.orders});
+
+  /// Orders to analyse instead of fetching them (tests).
+  final List<Order>? orders;
+
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  late Future<List<Order>> _orders = _fetch();
+  String _period = '1M';
+
+  Future<List<Order>> _fetch() async => widget.orders ?? SupabaseService().getOrders(limit: 1000);
+
+  String _signed(double v) => '${v >= 0 ? '+' : '−'}${Money.wallet(v.abs(), decimals: 2)}';
+  Color _tone(double v) => v >= 0 ? AppColors.bull : AppColors.bear;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Analytics', style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink)),
-        backgroundColor: AppColors.parchment,
-        centerTitle: false,
-      ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: SupabaseService().getAnalytics(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return ErrorState(
-              message: "We couldn't load your analytics. Check your connection and try again.",
-              onRetry: () => Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const AnalyticsScreen()),
-              ),
-            );
-          }
-          final data = snapshot.data ?? {};
-          final pnl = (data['realized_pnl'] as num?)?.toDouble() ?? 0.0;
-          final isProfit = pnl >= 0;
-          
-          final seriesList = (data['pnl_series'] as List<dynamic>?) ?? [];
-          final dataPoints = seriesList.map((e) => (e['pnl'] as num).toDouble()).toList();
-
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              // Hero P&L Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.xl),
-                decoration: BoxDecoration(
-                  color: AppColors.pureWhite,
-                  borderRadius: BorderRadius.circular(AppRadius.xl),
-                  border: Border.all(color: AppColors.birch),
-                  boxShadow: AppShadows.md,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TOTAL REALIZED P&L',
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink4,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          isProfit ? '+${Money.wallet(pnl, decimals: 2)}' : '-${Money.wallet(pnl.abs(), decimals: 2)}',
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w700,
-                            color: isProfit ? AppColors.bull : AppColors.bear,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          isProfit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                          color: isProfit ? AppColors.bull : AppColors.bear,
-                          size: 28,
-                        ),
-                      ],
-                    ),
-                  ],
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Analytics', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // Equity Curve Graph Section
-              if (dataPoints.isNotEmpty) ...[
-                Text(
-                  'Equity Curve',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Container(
-                  height: 180,
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AppColors.pureWhite,
-                    borderRadius: BorderRadius.circular(AppRadius.xl),
-                    border: Border.all(color: AppColors.birch),
-                  ),
-                  child: CustomPaint(
-                    painter: PnlChartPainter(dataPoints),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+            child: Row(children: [
+              for (final p in kAnalyticsPeriods.keys) ...[
+                if (p != '1W') const SizedBox(width: 6),
+                Expanded(child: _chip(p)),
               ],
-
-              // Advanced Metrics Section Header
-              Text(
-                'Performance Metrics',
-                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-
-              // Metrics Grid
-              Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                children: [
-                  _metricTile(
-                    'Win Rate', 
-                    '${data['win_rate'] ?? 0}%',
-                    subtitle: '${data['winning_trades'] ?? 0}W - ${data['losing_trades'] ?? 0}L',
-                    progress: ((data['win_rate'] as num?)?.toDouble() ?? 0.0) / 100.0,
+            ]),
+          ),
+          Expanded(
+            child: FutureBuilder<List<Order>>(
+              future: _orders,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+                if (snap.hasError) {
+                  return ErrorState(
+                    message: "We couldn't load your analytics. Check your connection and try again.",
+                    onRetry: () => setState(() => _orders = _fetch()),
+                  );
+                }
+                final s = TradeStats.from(snap.data ?? const [], period: kAnalyticsPeriods[_period]);
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(() => _orders = _fetch());
+                    await _orders;
+                  },
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 20),
+                    children: [
+                      _kpis(s),
+                      if (s.trades == 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: Text('No closed trades in this period yet. Close a position to see your stats.',
+                              textAlign: TextAlign.center, style: AppText.body),
+                        )
+                      else ...[
+                        _equity(s),
+                        _dailyBars(s),
+                        _markets(s),
+                      ],
+                      _autopsyCard(s),
+                    ],
                   ),
-                  _metricTile(
-                    'Profit Factor', 
-                    (data['profit_factor'] is double && (data['profit_factor'] as double).isInfinite)
-                        ? '∞'
-                        : (data['profit_factor'] as num?)?.toStringAsFixed(2) ?? '0.00',
-                    subtitle: 'Gross profits / losses',
-                  ),
-                  _metricTile(
-                    'Win/Loss Ratio', 
-                    (data['win_loss_ratio'] as num?)?.toStringAsFixed(2) ?? '0.00',
-                    subtitle: 'Avg Win / Avg Loss',
-                  ),
-                  _metricTile(
-                    'Avg. Win', 
-                    Money.wallet((data['avg_win'] as num?) ?? 0, decimals: 2),
-                    subtitle: 'Profit per win trade',
-                    valueColor: AppColors.bull,
-                  ),
-                  _metricTile(
-                    'Avg. Loss', 
-                    Money.wallet(((data['avg_loss'] as num?) ?? 0).abs(), decimals: 2),
-                    subtitle: 'Loss per lost trade',
-                    valueColor: AppColors.bear,
-                  ),
-                  _metricTile(
-                    'Total Trades', 
-                    '${data['total_trades'] ?? 0}',
-                    subtitle: 'Buys: ${data['buy_trades'] ?? 0} • Sells: ${data['sell_trades'] ?? 0}',
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // Best & Worst Trades
-              Text(
-                'Milestones',
-                style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  Expanded(
-                    child: _milestoneTile(
-                      'Best Trade',
-                      data['best_trade'] as Map<String, dynamic>?,
-                      isWin: true,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: _milestoneTile(
-                      'Worst Trade',
-                      data['worst_trade'] as Map<String, dynamic>?,
-                      isWin: false,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xl),
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
 
-  Widget _metricTile(String label, String value, {required String subtitle, double? progress, Color? valueColor}) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
+  Widget _chip(String p) => Material(
+        color: p == _period ? AppColors.goldPale : Colors.transparent,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.sm), side: BorderSide(color: p == _period ? AppColors.goldMid : AppColors.birch)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          onTap: () => setState(() => _period = p),
+          child: Container(
+            height: 32,
+            alignment: Alignment.center,
+            child: Text(p, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p == _period ? AppColors.goldMid : AppColors.ink3)),
+          ),
+        ),
+      );
+
+  BoxDecoration get _card => BoxDecoration(
         color: AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: AppColors.birch),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label.toUpperCase(),
-                style: AppText.sectionLabel.copyWith(fontSize: 10),
+      );
+
+  Widget _kpis(TradeStats s) {
+    Widget kpi(String label, String value, {Color? color, bool right = true, bool bottom = true, double size = 18}) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border(
+                right: right ? BorderSide(color: AppColors.birch) : BorderSide.none,
+                bottom: bottom ? BorderSide(color: AppColors.birch) : BorderSide.none,
               ),
-              if (progress != null)
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 2.5,
-                    color: AppColors.bull,
-                    backgroundColor: AppColors.bearLight,
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: AppFonts.mono(size: size, weight: FontWeight.w600, color: color ?? AppColors.ink)),
+              ),
+            ]),
+          ),
+        );
+    final pf = s.profitFactor;
+    return Container(
+      decoration: _card,
+      child: Column(children: [
+        Row(children: [
+          kpi('Win rate', '${s.winRate.round()}%'),
+          kpi('Profit factor', pf.isInfinite ? '∞' : pf.toStringAsFixed(2)),
+          kpi('Trades', '${s.trades}', right: false),
+        ]),
+        Row(children: [
+          kpi('Avg win', _signed(s.avgWin), color: AppColors.bull, bottom: false, size: 16),
+          kpi('Avg loss', _signed(s.avgLoss), color: s.avgLoss < 0 ? AppColors.bear : AppColors.ink, bottom: false, size: 16),
+          kpi('Max drawdown', _signed(s.maxDrawdown), color: s.maxDrawdown < 0 ? AppColors.bear : AppColors.ink, right: false, bottom: false, size: 16),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _section(String title, Widget child, {Widget? trailing}) => Container(
+        margin: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: _card,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [Expanded(child: Text(title.toUpperCase(), style: AppText.sectionLabel)), ?trailing]),
+          const SizedBox(height: 10),
+          child,
+        ]),
+      );
+
+  Widget _equity(TradeStats s) => _section(
+        'Equity curve · realised',
+        trailing: Text(_signed(s.total), style: AppFonts.mono(size: 13, color: _tone(s.total))),
+        Semantics(
+          label: 'Realised P&L over $_period, ${_signed(s.total)}',
+          child: SizedBox(height: 120, child: CustomPaint(painter: _CurvePainter(s.curve, AppColors.goldMid, AppColors.ink4))),
+        ),
+      );
+
+  Widget _dailyBars(TradeStats s) {
+    final days = s.daily();
+    final up = days.where((d) => d.$2 > 0).length;
+    return _section(
+      'Daily P&L · last ${days.length} sessions',
+      Semantics(
+        label: 'Daily profit and loss: $up green days, ${days.length - up} red days',
+        child: SizedBox(
+          height: 110,
+          child: CustomPaint(painter: _BarsPainter([for (final d in days) d.$2], AppColors.bull, AppColors.bear, AppColors.birch)),
+        ),
+      ),
+    );
+  }
+
+  Widget _markets(TradeStats s) {
+    final rows = s.byMarket.entries.toList()..sort((a, b) => b.value.abs().compareTo(a.value.abs()));
+    final max = rows.isEmpty ? 1.0 : rows.first.value.abs();
+    return _section(
+      'P&L by market',
+      Column(children: [
+        for (final e in rows)
+          SizedBox(
+            height: 30,
+            child: Row(children: [
+              SizedBox(width: 70, child: Text(e.key, style: AppFonts.sans(size: 13, color: AppColors.ink3))),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: max == 0 ? 0 : e.value.abs() / max,
+                    minHeight: 8,
+                    color: _tone(e.value),
+                    backgroundColor: AppColors.cream,
                   ),
                 ),
-            ],
+              ),
+              SizedBox(
+                width: 84,
+                child: Text(_signed(e.value), textAlign: TextAlign.right, style: AppFonts.mono(size: 13, color: _tone(e.value))),
+              ),
+            ]),
           ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: AppFonts.mono(size: 19, weight: FontWeight.w600, color: valueColor ?? AppColors.ink),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+      ]),
     );
   }
 
-  Widget _milestoneTile(String label, Map<String, dynamic>? trade, {required bool isWin}) {
-    final pnlVal = trade != null ? ((trade['realized_pnl'] as num?)?.toDouble() ?? 0.0) : 0.0;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: isWin ? AppColors.bullLight.withValues(alpha: 0.15) : AppColors.bearLight.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: isWin ? AppColors.bull.withValues(alpha: 0.2) : AppColors.bear.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: isWin ? AppColors.bull : AppColors.bear,
-              letterSpacing: 0.5,
-            ),
+  Widget _autopsyCard(TradeStats s) {
+    final i = s.insight;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Material(
+        color: AppColors.pureWhite,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AutopsyScreen())),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(i?.title ?? 'Trade autopsy', style: AppText.bodyBold),
+                  Text(i?.detail ?? 'See why each trade won or lost', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                ]),
+              ),
+              Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+            ]),
           ),
-          const SizedBox(height: 8),
-          Text(
-            trade?['symbol'] as String? ?? 'None',
-            style: GoogleFonts.ibmPlexSans(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.ink),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            trade != null
-                ? '${isWin ? "+" : ""}${Money.wallet(pnlVal, decimals: 2)}'
-                : '--',
-            style: GoogleFonts.ibmPlexSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: isWin ? AppColors.bull : AppColors.bear,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class PnlChartPainter extends CustomPainter {
-  final List<double> dataPoints;
-  PnlChartPainter(this.dataPoints);
+/// Line chart of the realised curve with a dashed zero line.
+class _CurvePainter extends CustomPainter {
+  _CurvePainter(this.values, this.color, this.baseColor);
+  final List<double> values;
+  final Color color, baseColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (dataPoints.isEmpty) return;
-
-    final paintLine = Paint()
-      ..color = AppColors.imperialGold
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-
-    final paintFill = Paint()
-      ..style = PaintingStyle.fill;
-
-    final pathLine = Path();
-    final pathFill = Path();
-
-    final maxVal = dataPoints.fold<double>(0.001, (max, val) => val.abs() > max ? val.abs() : max);
-    
-    final double stepX = size.width / (dataPoints.length > 1 ? dataPoints.length - 1 : 1);
-    final double centerY = size.height / 2;
-
-    pathLine.moveTo(0, centerY - (dataPoints.first / maxVal) * (size.height / 2.2));
-    pathFill.moveTo(0, size.height);
-    pathFill.lineTo(0, centerY - (dataPoints.first / maxVal) * (size.height / 2.2));
-
-    for (int i = 1; i < dataPoints.length; i++) {
-      final double x = i * stepX;
-      final double y = centerY - (dataPoints[i] / maxVal) * (size.height / 2.2);
-      pathLine.lineTo(x, y);
-      pathFill.lineTo(x, y);
+    if (values.length < 2) return;
+    final lo = values.reduce((a, b) => a < b ? a : b), hi = values.reduce((a, b) => a > b ? a : b);
+    final span = hi == lo ? 1.0 : hi - lo;
+    double y(double v) => 6 + (size.height - 12) * (1 - (v - lo) / span);
+    final zero = y(0);
+    final dash = Paint()
+      ..color = baseColor
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 7) {
+      canvas.drawLine(Offset(x, zero), Offset((x + 3).clamp(0, size.width), zero), dash);
     }
-    
-    pathFill.lineTo(size.width, size.height);
-    pathFill.close();
-
-    final gradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        AppColors.imperialGold.withValues(alpha: 0.25),
-        AppColors.imperialGold.withValues(alpha: 0.0),
-      ],
-    );
-    paintFill.shader = gradient.createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawPath(pathFill, paintFill);
-    canvas.drawPath(pathLine, paintLine);
-
-    final paintBase = Paint()
-      ..color = AppColors.birch
+    final path = Path()..moveTo(0, y(values.first));
+    for (var i = 1; i < values.length; i++) {
+      path.lineTo(size.width * i / (values.length - 1), y(values[i]));
+    }
+    canvas.drawPath(path, Paint()
+      ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawLine(Offset(0, centerY), Offset(size.width, centerY), paintBase);
+      ..strokeWidth = 2
+      ..strokeJoin = StrokeJoin.round);
   }
 
   @override
-  bool shouldRepaint(covariant PnlChartPainter oldDelegate) {
-    return oldDelegate.dataPoints != dataPoints;
+  bool shouldRepaint(_CurvePainter old) => old.values != values || old.color != color;
+}
+
+/// Up/down bars around a centre line, scaled to the largest day.
+class _BarsPainter extends CustomPainter {
+  _BarsPainter(this.values, this.up, this.down, this.axis);
+  final List<double> values;
+  final Color up, down, axis;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final mid = size.height / 2;
+    canvas.drawLine(Offset(0, mid), Offset(size.width, mid), Paint()..color = axis);
+    if (values.isEmpty) return;
+    final max = values.map((v) => v.abs()).reduce((a, b) => a > b ? a : b);
+    final slot = size.width / values.length, w = (slot * 0.7).clamp(4.0, 16.0);
+    for (var i = 0; i < values.length; i++) {
+      final h = max == 0 ? 0.0 : values[i].abs() / max * (mid - 4);
+      final x = slot * i + (slot - w) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, values[i] >= 0 ? mid - h : mid, w, h), const Radius.circular(2)),
+        Paint()..color = values[i] >= 0 ? up : down,
+      );
+    }
   }
+
+  @override
+  bool shouldRepaint(_BarsPainter old) => old.values != values;
 }
