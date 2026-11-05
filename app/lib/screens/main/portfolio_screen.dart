@@ -25,6 +25,12 @@ import '../../services/nav_tab_service.dart';
 import '../../services/theme_service.dart';
 import 'package:provider/provider.dart';
 
+/// Today's move of the last traded price against the previous close, in %.
+double ltpDayChangePct(Holding h) {
+  final prev = h.isNativeCurrency ? (h.nativePreviousClose ?? 0) : h.previousClose;
+  return prev > 0 ? (h.displayCurrentPrice - prev) / prev * 100 : 0;
+}
+
 class PortfolioScreen extends StatefulWidget {
   const PortfolioScreen({super.key});
 
@@ -541,7 +547,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                           padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 14, AppSpacing.lg, 10),
                           child: _segmented(views),
                         ),
-                        Container(
+                        // Holdings rows label their own numbers (Qty, Avg, Invested, LTP).
+                        if (_view != 0) Container(
                           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
                           decoration: BoxDecoration(border: Border.symmetric(horizontal: BorderSide(color: AppColors.birch))),
                           child: Row(children: [
@@ -730,6 +737,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   Widget _holdingRow(Holding h) {
     final closed = h.quantity == 0;
+    if (!closed) return _openHoldingRow(h);
     final base = closed ? 0.0 : h.displayInvested;
     final pct = base > 0 ? h.displayPnl / base * 100 : 0.0;
     final pnl = '${Money.signedInstrument(h.displayPnl, market: h.market, decimals: 2)}'
@@ -748,6 +756,92 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       onTap: () => _openHolding(h),
       onExit: closed ? null : () => _exitHolding(h),
       dim: closed,
+    );
+  }
+
+  /// Kite-style open holding: Qty · Avg and P&L %, symbol and P&L, then
+  /// Invested and LTP with today's change.
+  Widget _openHoldingRow(Holding h) {
+    final up = h.displayPnl >= 0, pnlColor = up ? AppColors.bull : AppColors.bear;
+    final day = ltpDayChangePct(h), dayColor = day >= 0 ? AppColors.bull : AppColors.bear;
+    final pct = h.displayInvested > 0 ? h.displayPnl / h.displayInvested * 100 : 0.0;
+    final muted = AppFonts.sans(size: 12, color: AppColors.ink4);
+    final num = AppFonts.mono(size: 12, color: AppColors.ink2);
+    String money(double v) => Money.instrument(v, market: h.market);
+    return InkWell(
+      onTap: () => _openHolding(h),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: 'Qty. ', style: muted),
+                      TextSpan(text: h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 6 : 0), style: num),
+                      TextSpan(text: '  •  Avg. ', style: muted),
+                      TextSpan(text: money(h.displayAvgPrice), style: num),
+                    ]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text('${pct >= 0 ? '+' : '−'}${pct.abs().toStringAsFixed(2)}%', style: AppFonts.mono(size: 12, color: pnlColor)),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                Flexible(child: Text(h.symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold)),
+                _tag(_exchange[h.market] ?? h.market.toUpperCase()),
+                if (h.isShort) _tag('SHORT', fg: AppColors.bear, bg: AppColors.bearLight),
+                const Spacer(),
+                Text(Money.signedInstrument(h.displayPnl, market: h.market, decimals: 2),
+                    style: AppFonts.mono(size: 15, weight: FontWeight.w600, color: pnlColor)),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(text: 'Invested ', style: muted),
+                      TextSpan(text: money(h.displayInvested), style: num),
+                    ]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text.rich(TextSpan(children: [
+                  TextSpan(text: 'LTP ', style: muted),
+                  TextSpan(text: money(h.displayCurrentPrice), style: num),
+                  TextSpan(text: ' (${day >= 0 ? '+' : '−'}${day.abs().toStringAsFixed(2)}%)', style: AppFonts.mono(size: 12, color: dayColor)),
+                ])),
+              ]),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Material(
+            color: AppColors.bearLight,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: InkWell(
+              onTap: () => _exitHolding(h),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: Semantics(
+                button: true,
+                label: 'Exit ${h.symbol}',
+                excludeSemantics: true,
+                child: Container(
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  child: Text('Exit', style: AppFonts.sans(size: 12, weight: FontWeight.w700, color: AppColors.bear)),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
     );
   }
 

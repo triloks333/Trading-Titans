@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:mobile/core/theme.dart';
+import 'package:mobile/models/portfolio.dart';
 import 'package:mobile/screens/main/analytics_screen.dart';
 import 'package:mobile/screens/main/autopsy_screen.dart';
 import 'package:mobile/screens/main/orders_screen.dart';
@@ -70,7 +71,7 @@ void main() {
 
   testWidgets('summary, column heads and segments', (tester) async {
     await _pump(tester);
-    for (final t in ['CURRENT VALUE', 'TOTAL P&L', 'Deployed capital', 'Today', 'INSTRUMENT · QTY × AVG', 'VALUE · P&L']) {
+    for (final t in ['CURRENT VALUE', 'TOTAL P&L', 'Deployed capital', 'Today']) {
       expect(find.text(t), findsOneWidget, reason: t);
     }
     expect(find.text('No holdings yet'), findsOneWidget);
@@ -99,5 +100,15 @@ void main() {
   testWidgets('Orders card opens Orders', (tester) async {
     await _pump(tester);
     await _open(tester, find.text('Orders'), OrdersScreen);
+  });
+
+  test('LTP day change is against the previous close, in the holding currency', () {
+    Holding h({double prev = 17.98, double? nativePrev, String? ccy}) => Holding(
+          symbol: 'MGEL', name: 'MGEL', market: ccy == null ? 'stock' : 'us_stock', quantity: 3300, avgPrice: 17.82,
+          currentPrice: 18.10, previousClose: prev, invested: 58806, current: 59730, pnl: 924, pnlPct: 1.57,
+          dayPnl: 396, dayPnlPct: 0.67, nativeCurrentPrice: ccy == null ? null : 10.0, nativePreviousClose: nativePrev, nativeCurrency: ccy);
+    expect(ltpDayChangePct(h()), closeTo(0.667, 0.001));
+    expect(ltpDayChangePct(h(prev: 0)), 0);
+    expect(ltpDayChangePct(h(nativePrev: 8, ccy: 'USD')), closeTo(25, 0.001), reason: 'US uses the dollar close');
   });
 }
