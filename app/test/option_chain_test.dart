@@ -39,7 +39,7 @@ Map<String, dynamic> _side(double strike, String type, double price) => {
       'implied_volatility': 14.0,
     };
 
-Map<String, dynamic> _chain() => {
+Map<String, dynamic> _chain({List<double> strikes = const [24200, 24250, 24300, 24350, 24400]}) => {
       'spot_price': 24318.45,
       'change': 149.2,
       'change_pct': 0.62,
@@ -49,7 +49,7 @@ Map<String, dynamic> _chain() => {
         {
           'expiry_date': _d(_week),
           'strikes': [
-            for (final k in [24200.0, 24250.0, 24300.0, 24350.0, 24400.0])
+            for (final k in strikes)
               {'strike_price': k, 'call': _side(k, 'CE', 120), 'put': _side(k, 'PE', 95)},
           ],
         },
@@ -58,13 +58,13 @@ Map<String, dynamic> _chain() => {
       'futures': [],
     };
 
-Future<void> _pump(WidgetTester tester) async {
+Future<void> _pump(WidgetTester tester, {Map<String, dynamic>? data}) async {
   tester.view.physicalSize = const Size(390, 844);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(
     theme: AppTheme.darkTheme,
-    home: OptionChainScreen(underlyingSymbol: 'NIFTY', spotPrice: 24318.45, data: _chain()),
+    home: OptionChainScreen(underlyingSymbol: 'NIFTY', spotPrice: 24318.45, data: data ?? _chain()),
   ));
   await tester.pump(const Duration(milliseconds: 300));
 }
@@ -123,5 +123,15 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Futures'));
     await tester.pump();
     expect(find.text('NIFTY futures'), findsOneWidget);
+  });
+
+  testWidgets('a long chain opens centred on the spot line, not the lowest strike', (tester) async {
+    await _pump(tester, data: _chain(strikes: [for (var k = 23000.0; k <= 25600; k += 50) k]));
+    await tester.pump();
+    final divider = tester.getRect(find.text('SPOT 24318.45'));
+    final screen = tester.getRect(find.byType(OptionChainScreen));
+    expect(divider.top, greaterThan(screen.top + 150), reason: 'on screen, below the header');
+    expect(divider.bottom, lessThan(screen.bottom - 60), reason: 'above the footer');
+    expect(find.text('23000'), findsNothing, reason: 'lowest strike scrolled away');
   });
 }

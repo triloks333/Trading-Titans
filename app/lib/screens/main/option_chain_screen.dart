@@ -63,6 +63,10 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
   List<dynamic> _futures = [];
   String _derivativeType = 'options';
   double _spotPrice = 0.0;
+
+  /// Strike list scroll; opens centred on the spot line (rows are 46 px).
+  final _strikesScroll = ScrollController();
+  static const _rowHeight = 46.0;
   double _change = 0.0;
   double _changePct = 0.0;
   bool _greeks = false;
@@ -78,6 +82,12 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         if (mounted && l > 1) setState(() => _lotSize = l);
       }).catchError((_) {});
     }
+  }
+
+  @override
+  void dispose() {
+    _strikesScroll.dispose();
+    super.dispose();
   }
 
   Future<void> _loadOptionChain() async {
@@ -152,6 +162,13 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       _currentStrikes = chain != null
           ? (chain['strikes'] as List<dynamic>? ?? [])
           : [];
+    });
+    // Strikes run low to high, so without this the list opened deep in the money.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_strikesScroll.hasClients) return;
+      final below = _currentStrikes.where((s) => ((s as Map)['strike_price'] as num) <= _spotPrice).length;
+      final pos = _strikesScroll.position;
+      _strikesScroll.jumpTo((below * _rowHeight - pos.viewportDimension / 2).clamp(0.0, pos.maxScrollExtent));
     });
   }
 
@@ -499,7 +516,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
     final callItm = strike < _spotPrice, putItm = strike > _spotPrice;
     String ltp(Map<String, dynamic> o) => Money.bare((o['price'] as num? ?? 0).toDouble(), from: Money.sourceFor(widget.market));
     return Container(
-      height: 46,
+      height: _rowHeight,
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(
@@ -569,7 +586,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       Expanded(
         child: strikes.isEmpty
             ? Center(child: Text('No strikes found for this expiry.', style: AppText.body))
-            : ListView(children: [
+            : ListView(controller: _strikesScroll, children: [
                 for (final (i, s) in strikes.indexed) ...[
                   // Spot divider sits between the last strike below spot and the first above.
                   if (i > 0 && (strikes[i - 1]['strike_price'] as num) <= _spotPrice && (s['strike_price'] as num) > _spotPrice)

@@ -1456,39 +1456,15 @@ class SupabaseService {
     double spot, double prevClose, double daysToExpiry,
     {num? realOi, num? realClose}
   ) {
-    final double price;
-    final double prev;
-    if (realClose != null && realClose > 0) {
-      prev = realClose.toDouble();
-      if (prevClose > 0 && spot > 0 && spot != prevClose) {
-        final dSpot = spot - prevClose;
-        final d = OptionPricing.delta(
-          optionType: optType,
-          spot: spot,
-          strike: strike,
-          daysToExpiry: daysToExpiry,
-          symbol: clean,
-        );
-        price = math.max(0.05, ((prev + d * dSpot) * 100).round() / 100.0);
-      } else {
-        price = prev;
-      }
-    } else {
-      price = OptionPricing.optionPremium(
-        optionType: optType,
-        spot: spot,
-        strike: strike,
-        daysToExpiry: daysToExpiry,
-        symbol: clean,
-      );
-      prev = OptionPricing.optionPremium(
-        optionType: optType,
-        spot: prevClose,
-        strike: strike,
-        daysToExpiry: daysToExpiry + 1.0,
-        symbol: clean,
-      );
-    }
+    // Same Black-Scholes model as the fill engine (execute-pending-orders) and
+    // Portfolio, so the chain shows the price an order actually fills at. The
+    // real NSE close is kept as `nse_close` for the strike detail; it is not
+    // used for pricing because the bhavcopy can be days old and untraded
+    // contracts carry placeholder closes (e.g. a ₹1,495 OTM put with OI 0).
+    final price = OptionPricing.optionPremium(
+      optionType: optType, spot: spot, strike: strike, daysToExpiry: daysToExpiry, symbol: clean);
+    final prev = OptionPricing.optionPremium(
+      optionType: optType, spot: prevClose, strike: strike, daysToExpiry: daysToExpiry + 1.0, symbol: clean);
     final change = price - prev;
     final changePct = prev > 0 ? (change / prev) * 100.0 : 0.0;
     // Open interest: use the REAL value from the NSE bhavcopy when available
@@ -1518,6 +1494,7 @@ class SupabaseService {
       'change': change,
       'change_pct': changePct,
       'open_interest': oi,
+      'implied_volatility': OptionPricing.sigmaFor(clean) * 100,
       'volume': (oi * 0.4).round(),
       'bid': (price * 0.98 * 100).round() / 100,
       'ask': (price * 1.02 * 100).round() / 100,
