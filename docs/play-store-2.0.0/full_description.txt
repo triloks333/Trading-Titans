@@ -1,0 +1,33 @@
+Master stock trading risk-free with India's virtual trading and F&O paper trading simulator, now with an all-new 2.0 design.
+
+Learning to trade can be expensive when your own capital is at stake. Trading Titans gives you live market prices, option chains and full order mechanics so you can practise intraday trading, build strategies and learn the markets with zero financial risk.
+
+Start with ₹1,100 in virtual demo cash and trade real NSE, BSE, US stocks and crypto.
+
+REAL MARKETS, ZERO RISK
+• Live Indian Stocks: Trade real-time NSE and BSE equity prices.
+• Top Movers: Live top gainers and losers across India, US and crypto.
+• Nifty & Bank Nifty F&O: Option chains with strikes, expiries, Greeks and real NSE open interest.
+• Realistic Execution: Market, limit, SL and SL-M orders with simulated brokerage, STT, GST and exchange fees.
+• US Equities & Crypto: Practise trading global giants like Apple and Nvidia, and 24/7 crypto.
+
+ADVANCED TRADING TOOLS
+• Portfolio, Tick by Tick: Quantity, average, invested value and live LTP on every holding.
+• Interactive Charts: Live price charts from 1 day to 5 years, plus a full-screen pro chart.
+• Trade Autopsy: Plain-English analysis of what went right or wrong on every exit.
+• What-If Simulator: Replay historical entries to see how a strategy would have played out.
+• Trading Glossary: Learn market jargon and test yourself with quizzes.
+
+COMPETE & LEVEL UP
+• Weekly League: A fresh league every week, ranked by realised return. The top 10 win demo cash every Monday.
+• 26 Skill Challenges: Milestones across performance, habits, breadth and strategy that earn demo cash and Titan levels.
+• Titans Room: Chat with other traders in the community room.
+• Notifications Your Way: Choose which pushes you get: price alerts, order updates, league and news.
+
+TRANSPARENT & ACCESSIBLE
+Trading Titans is free to download and practise with. Optional Pro and Titan plans and demo-cash top-ups are available for traders who want more virtual capital, unrestricted F&O and live mentorship.
+
+IMPORTANT DISCLAIMER
+Trading Titans is purely an educational simulator. All funds and demo balances are virtual and hold no real-world monetary value. No real trades are executed on any financial exchange, and virtual balances cannot be withdrawn, redeemed or exchanged. We are not a SEBI-registered broker and do not provide investment or financial advice. Practice results do not reflect real-world trading outcomes.
+
+Developed by Kashivwealth Management LLP.
