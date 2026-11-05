@@ -14,13 +14,15 @@ import 'stock_detail_screen.dart';
 import 'option_detail_screen.dart';
 import 'order_entry_screen.dart';
 import 'orders_screen.dart';
+import 'analytics_screen.dart';
+import 'autopsy_screen.dart';
+import '../../models/order.dart';
 import '../../models/quote.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/trend_arrow.dart';
-import '../../widgets/stat_cell.dart';
 import '../../services/nav_tab_service.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../services/theme_service.dart';
 import 'package:provider/provider.dart';
 
 class PortfolioScreen extends StatefulWidget {
@@ -37,12 +39,27 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   Map<String, Quote> _quotes = {};
   bool _loading = true;
   Timer? _pollTimer;
+  int _view = 0; // 0 holdings, 1 F&O positions, 2 closed
+  ({int open, int done})? _orderCounts;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadOrderCounts();
     _pollTimer = Timer.periodic(AppConstants.portfolioPoll, (_) => _refresh());
+  }
+
+  /// "1 open · 14 executed" on the Orders card.
+  Future<void> _loadOrderCounts() async {
+    try {
+      final List<Order> orders = await _supabase.getOrders(limit: 200);
+      if (!mounted) return;
+      setState(() => _orderCounts = (
+            open: orders.where((o) => o.status == 'pending').length,
+            done: orders.where((o) => o.status == 'executed' || o.status == 'filled').length,
+          ));
+    } catch (_) {}
   }
 
   @override
@@ -324,109 +341,6 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   /// means no call site can drop it again.
   String _fmtSigned(double v) => '${v >= 0 ? '+' : '-'}${_fmt(v.abs())}';
 
-  @override
-  Widget build(BuildContext context) {
-    final equityHoldings = _holdings.where((h) => h.isEquity && h.quantity != 0).toList();
-    final closedPositions = _holdings.where((h) => h.quantity == 0).toList();
-
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        backgroundColor: AppColors.parchment,
-        body: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: _load,
-            child: _loading
-                ? const PortfolioSkeleton()
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Portfolio', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
-                            const SizedBox(height: 2),
-                            Text('Track your holdings and P&L', style: GoogleFonts.ibmPlexSans(fontSize: 13, color: AppColors.ink4)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      
-                      // Summary: current value + total P&L, then capital / today, then allocation.
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        decoration: AppCard.primary,
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text('CURRENT VALUE', style: AppText.sectionLabel),
-                                const SizedBox(height: 4),
-                                Text(_fmt(_totalCurrent), style: AppText.valueLarge.copyWith(fontSize: 28)),
-                              ]),
-                            ),
-                            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                              Text('TOTAL P&L', style: AppText.sectionLabel),
-                              const SizedBox(height: 4),
-                              Text(_fmtSigned(_totalPnl),
-                                  style: AppFonts.mono(size: 17, weight: FontWeight.w600, color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear)),
-                              Text('${_totalPnl >= 0 ? '+' : ''}${_totalPnlPct.toStringAsFixed(2)}%',
-                                  style: AppFonts.mono(size: 12, color: _totalPnl >= 0 ? AppColors.bull : AppColors.bear)),
-                            ]),
-                          ]),
-                          Divider(height: AppSpacing.xl, color: AppColors.birch),
-                          Row(children: [
-                            _summaryCardItem('Deployed capital', _fmt(_totalInvested)),
-                            _summaryCardItem('Today', _fmtSigned(_totalDayPnl),
-                                color: _totalDayPnl >= 0 ? AppColors.bull : AppColors.bear),
-                          ]),
-                          ..._allocation(),
-                        ]),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      TabBar(
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        tabs: [
-                          Tab(text: 'Holdings (${equityHoldings.length})'),
-                          Tab(text: 'F&O Positions (${_foPositions.length})'),
-                          Tab(text: 'Closed (${closedPositions.length})'),
-                          const Tab(text: 'Orders'),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Expanded(
-                        child: TabBarView(
-                          children: [
-                            _buildHoldingsList(equityHoldings),
-                            _buildFoPositionsList(),
-                            _buildClosedList(closedPositions),
-                            const OrdersScreen(embedded: true),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryCardItem(String label, String value, {Color? color}) => StatCell(
-        label: label,
-        value: value,
-        valueColor: color,
-        labelSize: 11,
-        labelWeight: FontWeight.w500,
-        gap: 2,
-        valueSize: 15,
-        valueWeight: FontWeight.w600,
-      );
-
   static const _marketNames = {
     'stock': 'India', 'us_stock': 'US', 'crypto': 'Crypto', 'pakistan_stock': 'Pakistan', 'italy_stock': 'Italy'};
 
@@ -438,10 +352,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       final key = h.instrumentType == 'EQUITY' ? (_marketNames[h.market] ?? h.market) : 'F&O';
       byMarket[key] = (byMarket[key] ?? 0) + h.current;
     }
+    for (final p in _foPositions) {
+      final v = _foCurrentValue(p);
+      if (v > 0) byMarket['F&O'] = (byMarket['F&O'] ?? 0) + v;
+    }
     final total = byMarket.values.fold<double>(0, (a, b) => a + b);
     if (total <= 0) return const [];
     final parts = byMarket.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final colors = [AppColors.goldMid, AppColors.titanGold, AppColors.violet, AppColors.bull, AppColors.ink4];
+    final colors = [AppColors.goldMid, AppColors.titanGold, AppColors.violet, AppColors.ink4, AppColors.bull];
     Color c(int i) => colors[i % colors.length];
     return [
       const SizedBox(height: AppSpacing.md),
@@ -464,89 +382,15 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     ];
   }
 
-  Widget _buildHoldingsList(List<Holding> list) {
-    if (list.isEmpty) {
-      return _buildEmptyState(
-        Icons.inventory_2_outlined,
-        'No holdings yet',
-        'Start trading equities to build your portfolio',
-        actionLabel: 'Place a trade',
-        onAction: () => NavTabService.goToTab(NavTabService.trade),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      itemCount: list.length,
-      itemBuilder: (context, index) => _buildHoldingCard(list[index]),
-    );
-  }
+  // ── Navigation and exits (unchanged behaviour, lifted out of the old cards) ──
 
-  Widget _buildFoPositionsList() {
-    if (_foPositions.isEmpty) {
-      return _buildEmptyState(
-        Icons.trending_up_rounded,
-        'No active F&O positions',
-        'Live futures and options positions will show here',
-        actionLabel: 'Trade F&O',
-        onAction: () => NavTabService.goToTab(NavTabService.trade),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      itemCount: _foPositions.length,
-      itemBuilder: (context, index) => _buildFoPositionCard(_foPositions[index]),
-    );
-  }
-
-  Widget _buildClosedList(List<Holding> list) {
-    if (list.isEmpty) {
-      return _buildEmptyState(
-        Icons.assignment_turned_in_outlined,
-        'No closed positions',
-        'Completed trades will appear here after exit',
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-      itemCount: list.length,
-      itemBuilder: (context, index) => _buildHoldingCard(list[index]),
-    );
-  }
-
-  Widget _buildEmptyState(
-    IconData icon,
-    String title,
-    String subtitle, {
-    String? actionLabel,
-    VoidCallback? onAction,
-  }) {
-    return EmptyState(
-      icon: icon,
-      title: title,
-      message: subtitle,
-      actionLabel: actionLabel,
-      onAction: onAction,
-    );
-  }
-
-  Widget _buildHoldingCard(Holding h) {
-    final isClosed = h.quantity == 0;
-    // Signs come from the displayed (native) figures so the colour always
-    // matches the number next to it.
-    final isPositive = h.displayPnl >= 0;
-    final dayIsPositive = h.displayDayPnl >= 0;
-
-    return GestureDetector(
-      onTap: () async {
-        if (h.instrumentType == 'OPTION') {
-          final underlyingSymbol = h.symbol.contains('-') ? h.symbol.split('-')[0] : h.symbol;
-          final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, h.market);
-          final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
-          final underlyingSpotPrice = (spotQuote != null && spotQuote.price > 0)
-              ? spotQuote.price
-              : h.currentPrice;
-
-          final optionData = {
+  Future<void> _openHolding(Holding h) async {
+    if (h.instrumentType == 'OPTION') {
+      final underlyingSymbol = h.symbol.contains('-') ? h.symbol.split('-')[0] : h.symbol;
+      final spotQuote = _quotes[MarketService.normalizeSymbol(underlyingSymbol, h.market)] ?? _quotes[underlyingSymbol];
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => OptionDetailScreen(
+          optionData: {
             'symbol': h.symbol,
             'name': h.name,
             'strike_price': h.strikePrice ?? 0.0,
@@ -557,450 +401,421 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
             'previous_close': h.previousClose,
             'change': h.currentPrice - h.previousClose,
             'change_pct': h.previousClose > 0 ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 : 0.0,
-          };
+          },
+          underlyingSymbol: underlyingSymbol,
+          underlyingSpotPrice: (spotQuote != null && spotQuote.price > 0) ? spotQuote.price : h.currentPrice,
+          market: h.market,
+        ),
+      ));
+    } else {
+      await Navigator.of(context)
+          .push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: h.symbol, market: h.market, name: h.name)));
+    }
+    _load();
+  }
 
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OptionDetailScreen(
-                optionData: optionData,
-                underlyingSymbol: underlyingSymbol,
-                underlyingSpotPrice: underlyingSpotPrice,
-                market: h.market,
+  Future<void> _exitHolding(Holding h) async {
+    final quote = Quote(
+      symbol: h.symbol,
+      yfSymbol: h.symbol,
+      name: h.name,
+      price: h.currentPrice,
+      previousClose: h.previousClose,
+      change: h.currentPrice - h.previousClose,
+      changePct: h.previousClose > 0 ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 : 0.0,
+      currency: 'INR',
+      market: h.market,
+    );
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => OrderEntryScreen(
+        quote: quote,
+        isBuy: h.quantity < 0, // buy to cover a short, sell to close a long
+        instrumentType: h.instrumentType,
+        prefilledQuantity: h.quantity.abs(),
+        isExitOrder: true,
+      ),
+    ));
+    _load();
+  }
+
+  Future<void> _openFo(FoPosition pos) async {
+    if (pos.instrumentType != 'OPTION') return;
+    final estPrice = _estimateFoPrice(pos);
+    final underlyingSymbol = pos.symbol.contains('-') ? pos.symbol.split('-')[0] : pos.symbol;
+    final spotQuote = _quotes[MarketService.normalizeSymbol(underlyingSymbol, 'stock')] ?? _quotes[underlyingSymbol];
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => OptionDetailScreen(
+        optionData: {
+          'symbol': pos.symbol,
+          'strike_price': pos.strikePrice,
+          'option_type': pos.optionType,
+          'expiry_date': pos.expiry.toIso8601String(),
+          'price': estPrice,
+          'ltp': estPrice,
+          'previous_close': _estimateFoPreviousClose(pos),
+          'lot_size': pos.lotSize,
+          'open_interest': 0,
+          'volume': 0,
+        },
+        underlyingSymbol: underlyingSymbol,
+        underlyingSpotPrice: (spotQuote != null && spotQuote.price > 0) ? spotQuote.price : estPrice,
+        market: 'stock',
+      ),
+    ));
+    _load();
+  }
+
+  Future<void> _exitFo(FoPosition pos) async {
+    // The same estimated price the row shows (carry for futures, Black-Scholes for options).
+    final exitPrice = _estimateFoPrice(pos);
+    final quote = Quote(
+      symbol: pos.symbol,
+      yfSymbol: pos.symbol,
+      name: pos.instrumentType == 'OPTION'
+          ? '${pos.symbol} ${pos.optionType} ${Money.wallet(pos.strikePrice, decimals: 0)}'
+          : '${pos.symbol} FUT',
+      price: exitPrice,
+      previousClose: exitPrice,
+      change: 0,
+      changePct: 0,
+      currency: 'INR',
+      market: 'stock',
+    );
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => OrderEntryScreen(
+        quote: quote,
+        isBuy: pos.netQty < 0,
+        instrumentType: pos.instrumentType,
+        strikePrice: pos.strikePrice > 0 ? pos.strikePrice : null,
+        optionType: pos.optionType.isNotEmpty ? pos.optionType : null,
+        expiryDate: pos.expiry.toIso8601String().split('T')[0],
+        prefilledQuantity: (pos.netQty.abs() * pos.lotSize).toDouble(),
+        isExitOrder: true,
+        marginUsed: _foCapitalUsed(pos),
+      ),
+    ));
+    _load();
+  }
+
+  // ── Layout ──────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final holdings = _holdings.where((h) => h.isEquity && h.quantity != 0).toList();
+    final closed = _holdings.where((h) => h.quantity == 0).toList();
+    final views = <(String, int)>[('Holdings', holdings.length), ('Positions', _foPositions.length), ('Closed', closed.length)];
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              Expanded(child: Text('Portfolio', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink))),
+              AuthIconButton(
+                icon: Icons.show_chart_rounded,
+                label: 'Analytics',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen())),
               ),
-            ),
-          );
-        } else {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: h.symbol, market: h.market, name: h.name)),
-          );
-        }
-        _load();
-      },
-      child: Opacity(
-        opacity: isClosed ? 0.75 : 1.0,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: AppCard.secondary,
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isClosed ? AppColors.parchment : AppColors.goldPale,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: isClosed ? AppColors.birch : AppColors.goldBorder),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      h.symbol.length >= 2 ? h.symbol.substring(0, 2) : h.symbol,
-                      style: GoogleFonts.ibmPlexSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: isClosed ? AppColors.ink4 : AppColors.goldDeep,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: _loading
+                  ? const PortfolioSkeleton()
+                  : ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              h.symbol,
-                              style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            if (isClosed) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.ink5.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'CLOSED',
-                                  style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.ink3,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            if (!isClosed && h.isShort) ...[
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.bear.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  'SHORT',
-                                  style: GoogleFonts.ibmPlexSans(
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.bear,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        _summaryCard(),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 14, AppSpacing.lg, 10),
+                          child: _segmented(views),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)} ${h.isShort ? 'units short' : 'shares'}',
-                          style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], fontSize: 12, color: AppColors.ink4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 8),
+                          decoration: BoxDecoration(border: Border.symmetric(horizontal: BorderSide(color: AppColors.birch))),
+                          child: Row(children: [
+                            Expanded(child: Text('INSTRUMENT · QTY × AVG', style: AppText.sectionLabel)),
+                            Text('VALUE · P&L', style: AppText.sectionLabel),
+                          ]),
                         ),
+                        ...switch (_view) {
+                          1 => _foPositions.isEmpty
+                              ? [_empty('No open F&O positions', 'Futures and options you hold show here.', 'Trade F&O')]
+                              : [for (final p in _foPositions) _foRow(p)],
+                          2 => closed.isEmpty
+                              ? [_empty('No closed positions', 'Trades you exit today show here with their realised P&L.', null)]
+                              : [for (final h in closed) _holdingRow(h)],
+                          _ => holdings.isEmpty
+                              ? [_empty('No holdings yet', 'Start trading to build your portfolio.', 'Place a trade')]
+                              : [for (final h in holdings) _holdingRow(h)],
+                        },
+                        _toolCards(),
                       ],
                     ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'LTP ${Money.instrument(h.displayCurrentPrice, market: h.market)}',
-                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Builder(
-                        builder: (context) {
-                          // Ratio, so the currency does not matter — but taken
-                          // from the native pair to avoid mixing an FX rate in.
-                          final base = h.isNativeCurrency
-                              ? (h.nativePreviousClose ?? h.displayCurrentPrice)
-                              : h.previousClose;
-                          final priceDiff = h.displayCurrentPrice - base;
-                          final pct = base > 0 ? (priceDiff / base) * 100 : 0.0;
-                          final isPctPositive = pct >= 0;
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TrendArrow(isPositive: isPctPositive, size: 16),
-                              Text(
-                                '${isPctPositive ? "+" : ""}${pct.toStringAsFixed(2)}%',
-                                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isPctPositive ? AppColors.bull : AppColors.bear,
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Divider(height: 1, color: AppColors.cream),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  // A US position is shown entirely in dollars: cost basis, live
-                  // price and P&L are all USD, so no rate enters the card.
-                  _holdingStat('Avg', Money.instrument(h.displayAvgPrice, market: h.market)),
-                  _holdingStat(
-                    'Invested',
-                    isClosed
-                        ? Money.instrument(0, market: h.market, decimals: 0)
-                        : Money.instrument(h.displayInvested, market: h.market, decimals: 0),
-                  ),
-                  _holdingStat(
-                    // A closed position's realized figure is already net of the
-                    // charges on the trades that closed it, so say so. The open
-                    // case is a mark-to-market number with no charges in it yet.
-                    isClosed ? 'Realized (net)' : 'P&L',
-                    Money.signedInstrument(h.displayPnl, market: h.market, decimals: 0),
-                    valueColor: isPositive ? AppColors.bull : AppColors.bear,
-                  ),
-                  // "Day P&L" is only meaningful while a position is still open.
-                  // For a closed one the service sets dayPnl to the very same
-                  // realized figure as P&L above, so the card printed the identical
-                  // number twice under two different labels -- the single biggest
-                  // source of "the portfolio shows different numbers" reports.
-                  if (!isClosed)
-                    _holdingStat(
-                      'Day P&L',
-                      Money.signedInstrument(h.displayDayPnl, market: h.market, decimals: 0),
-                      valueColor: dayIsPositive ? AppColors.bull : AppColors.bear,
-                    )
-                  else
-                    _holdingStat('Qty', '0'),
-                ],
-              ),
-              if (!isClosed) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        backgroundColor: AppColors.bearLight,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tag)),
-                      ),
-                      onPressed: () async {
-                        final quote = Quote(
-                          symbol: h.symbol,
-                          yfSymbol: h.symbol,
-                          name: h.name,
-                          price: h.currentPrice,
-                          previousClose: h.previousClose,
-                          change: h.currentPrice - h.previousClose,
-                          changePct: h.previousClose > 0 ? ((h.currentPrice - h.previousClose) / h.previousClose) * 100 : 0.0,
-                          currency: 'INR',
-                          market: h.market,
-                        );
-                        
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => OrderEntryScreen(
-                              quote: quote,
-                              isBuy: h.quantity < 0, // buy to cover if quantity is negative (short), sell to close if positive (long)
-                              instrumentType: h.instrumentType,
-                              prefilledQuantity: h.quantity.abs(),
-                              isExitOrder: true,
-                            ),
-                          ),
-                        );
-                        _load();
-                      },
-                      child: Text(
-                        'EXIT',
-                        style: GoogleFonts.ibmPlexSans(
-                          color: AppColors.bear,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
+        ]),
       ),
     );
   }
 
-  Widget _buildFoPositionCard(FoPosition pos) {
-    final estPrice = _estimateFoPrice(pos);
-    final pnl = pos.unrealizedPnl(estPrice);
-    final pnlPct = pos.unrealizedPnlPct(estPrice);
-    final isPositive = pnl >= 0;
-    final dayPnl = _foDayPnl(pos);
-    final dayPnlIsPositive = dayPnl >= 0;
-    
-    final formattedQty = '${pos.netQty > 0 ? "+" : ""}${pos.netQty} Lot${pos.netQty.abs() > 1 ? "s" : ""}';
-    final totalUnits = pos.netQty.abs() * pos.lotSize;
+  Widget _summaryCard() {
+    final up = _totalPnl >= 0, dayUp = _totalDayPnl >= 0;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 0),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('CURRENT VALUE', style: AppText.sectionLabel),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(Money.wallet(_totalCurrent, decimals: 2),
+                    style: AppFonts.mono(size: 26, weight: FontWeight.w600, color: AppColors.ink)),
+              ),
+            ]),
+          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('TOTAL P&L', style: AppText.sectionLabel),
+            Text(_fmtSigned(_totalPnl), style: AppFonts.mono(size: 18, weight: FontWeight.w600, color: up ? AppColors.bull : AppColors.bear)),
+            Text('${up ? '+' : ''}${_totalPnlPct.toStringAsFixed(2)}%',
+                style: AppFonts.mono(size: 12, color: up ? AppColors.bull : AppColors.bear)),
+          ]),
+        ]),
+        Container(
+          margin: const EdgeInsets.only(top: 14),
+          padding: const EdgeInsets.only(top: 14),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.birch))),
+          child: Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Deployed capital', style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+                Text(Money.wallet(_totalInvested, decimals: 2), style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('Today', style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+              Text(
+                '${_fmtSigned(_totalDayPnl)}${_totalCurrent - _totalDayPnl > 0 ? ' (${(_totalDayPnl.abs() / (_totalCurrent - _totalDayPnl) * 100).toStringAsFixed(2)}%)' : ''}',
+                style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: dayUp ? AppColors.bull : AppColors.bear),
+              ),
+            ]),
+          ]),
+        ),
+        ..._allocation(),
+      ]),
+    );
+  }
 
-    return GestureDetector(
-      onTap: () async {
-        if (pos.instrumentType == 'OPTION') {
-          final estPrevClose = _estimateFoPreviousClose(pos);
-          final underlyingSymbol = (pos.symbol.contains('-')) ? pos.symbol.split('-')[0] : pos.symbol;
-          final normUnderlying = MarketService.normalizeSymbol(underlyingSymbol, 'stock');
-          final spotQuote = _quotes[normUnderlying] ?? _quotes[underlyingSymbol];
-          final underlyingSpotPrice = (spotQuote != null && spotQuote.price > 0) ? spotQuote.price : estPrice;
-
-          final optionData = {
-            'symbol': pos.symbol,
-            'strike_price': pos.strikePrice,
-            'option_type': pos.optionType,
-            'expiry_date': pos.expiry.toIso8601String(),
-            'price': estPrice,
-            'ltp': estPrice,
-            'previous_close': estPrevClose,
-            'lot_size': pos.lotSize,
-            'open_interest': 0,
-            'volume': 0,
-          };
-
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OptionDetailScreen(
-                optionData: optionData,
-                underlyingSymbol: underlyingSymbol,
-                underlyingSpotPrice: underlyingSpotPrice,
-                market: 'stock',
+  Widget _segmented(List<(String, int)> views) => Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+        child: Row(children: [
+          for (final (i, (label, n)) in views.indexed) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: _view == i,
+                label: '$label ($n)',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => setState(() => _view = i),
+                  child: Container(
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _view == i ? AppColors.pureWhite : Colors.transparent,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Text('$label ($n)',
+                        style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _view == i ? AppColors.ink : AppColors.ink3)),
+                  ),
+                ),
               ),
             ),
-          );
-          _load();
-        }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: AppCard.secondary,
-        child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: pos.netQty > 0 ? AppColors.bull.withValues(alpha: 0.1) : AppColors.bear.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: pos.netQty > 0 ? AppColors.bull.withValues(alpha: 0.3) : AppColors.bear.withValues(alpha: 0.3)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  pos.instrumentType == 'OPTION' ? pos.optionType : 'FUT',
-                  style: GoogleFonts.ibmPlexSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: pos.netQty > 0 ? AppColors.bull : AppColors.bear,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pos.instrumentType == 'OPTION' 
-                          ? '${pos.symbol} ${pos.expiry.month}/${pos.expiry.day} ${pos.strikePrice.toStringAsFixed(0)} ${pos.optionType}'
-                          : '${pos.symbol} FUT',
-                      style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold, color: AppColors.ink, fontSize: 13),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '$formattedQty ($totalUnits units)',
-                      style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'LTP ${Money.wallet(estPrice, decimals: 2)}',
-                    style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.ink,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TrendArrow(isPositive: isPositive, size: 16),
-                      Text(
-                        '${isPositive ? "+" : ""}${pnlPct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isPositive ? AppColors.bull : AppColors.bear,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Divider(height: 1, color: AppColors.cream),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              _holdingStat('Avg', Money.wallet(pos.avgEntryPrice, decimals: 2)),
-              _holdingStat('Invested', Money.wallet(_foCapitalUsed(pos), decimals: 0)),
-              _holdingStat(
-                'P&L',
-                _fmtSigned(pnl),
-                valueColor: isPositive ? AppColors.bull : AppColors.bear,
-              ),
-              _holdingStat(
-                'Day P&L',
-                _fmtSigned(dayPnl),
-                valueColor: dayPnlIsPositive ? AppColors.bull : AppColors.bear,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: AppColors.bearLight,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.tag)),
-                ),
-                onPressed: () async {
-                  // Use the same estimated price shown on the card (futures carry / Black-Scholes for options)
-                  final exitPrice = _estimateFoPrice(pos);
-                  final capitalUsed = _foCapitalUsed(pos);
-                  final quote = Quote(
-                    symbol: pos.symbol,
-                    yfSymbol: pos.symbol,
-                    name: pos.instrumentType == 'OPTION'
-                        ? '${pos.symbol} ${pos.optionType} ${Money.wallet(pos.strikePrice, decimals: 0)}'
-                        : '${pos.symbol} FUT',
-                    price: exitPrice,
-                    previousClose: exitPrice,
-                    change: 0,
-                    changePct: 0,
-                    currency: 'INR',
-                    market: 'stock',
-                  );
-                  
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => OrderEntryScreen(
-                        quote: quote,
-                        isBuy: pos.netQty < 0, // Buy to cover if negative, Sell to close if positive
-                        instrumentType: pos.instrumentType,
-                        strikePrice: pos.strikePrice > 0 ? pos.strikePrice : null,
-                        optionType: pos.optionType.isNotEmpty ? pos.optionType : null,
-                        expiryDate: pos.expiry.toIso8601String().split('T')[0],
-                        prefilledQuantity: (pos.netQty.abs() * pos.lotSize).toDouble(),
-                        isExitOrder: true,
-                        marginUsed: capitalUsed,
-                      ),
-                    ),
-                  );
-                  _load();
-                },
-                child: Text(
-                  'EXIT',
-                  style: GoogleFonts.ibmPlexSans(
-                    color: AppColors.bear,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
+          ],
+        ]),
+      );
 
-  Widget _holdingStat(String label, String value, {Color? valueColor}) {
-    return StatCell(label: label, value: value, valueColor: valueColor);
+  Widget _tag(String text, {Color? fg, Color? bg}) => Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(bg ?? AppColors.cream),
+        child: Text(text, style: AppText.badge.copyWith(color: fg ?? AppColors.ink3)),
+      );
+
+  static const _exchange = {'stock': 'NSE', 'us_stock': 'US', 'crypto': 'CRYPTO', 'pakistan_stock': 'PSX', 'italy_stock': 'MIL'};
+
+  /// One row: symbol + tags, "qty × avg", value, signed P&L, and an Exit chip
+  /// while the position is open.
+  Widget _row({
+    required String symbol,
+    required List<Widget> tags,
+    required String qtyAvg,
+    required String value,
+    required String pnl,
+    required bool up,
+    required VoidCallback onTap,
+    VoidCallback? onExit,
+    bool dim = false,
+  }) =>
+      InkWell(
+        onTap: onTap,
+        child: Opacity(
+          opacity: dim ? 0.75 : 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
+            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Flexible(child: Text(symbol, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold)),
+                    ...tags,
+                  ]),
+                  const SizedBox(height: 2),
+                  Text(qtyAvg, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.mono(size: 12, color: AppColors.ink4)),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(value, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+                Text('${up ? '▲' : '▼'} $pnl', style: AppFonts.mono(size: 12, color: up ? AppColors.bull : AppColors.bear)),
+              ]),
+              if (onExit != null) ...[
+                const SizedBox(width: 8),
+                Material(
+                  color: AppColors.bearLight,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: InkWell(
+                    onTap: onExit,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Semantics(
+                      button: true,
+                      label: 'Exit $symbol',
+                      excludeSemantics: true,
+                      child: Container(
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
+                        child: Text('Exit', style: AppFonts.sans(size: 12, weight: FontWeight.w700, color: AppColors.bear)),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ]),
+          ),
+        ),
+      );
+
+  Widget _holdingRow(Holding h) {
+    final closed = h.quantity == 0;
+    final base = closed ? 0.0 : h.displayInvested;
+    final pct = base > 0 ? h.displayPnl / base * 100 : 0.0;
+    final pnl = '${Money.signedInstrument(h.displayPnl, market: h.market, decimals: 2)}'
+        '${closed ? ' realised' : ' (${pct >= 0 ? '+' : '−'}${pct.abs().toStringAsFixed(2)}%)'}';
+    return _row(
+      symbol: h.symbol,
+      tags: [
+        _tag(_exchange[h.market] ?? h.market.toUpperCase()),
+        if (closed) _tag('CLOSED'),
+        if (!closed && h.isShort) _tag('SHORT', fg: AppColors.bear, bg: AppColors.bearLight),
+      ],
+      qtyAvg: '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 6 : 0)} × ${Money.instrument(h.displayAvgPrice, market: h.market)}',
+      value: closed ? '—' : Money.instrument(h.displayCurrentPrice * h.quantity.abs(), market: h.market),
+      pnl: pnl,
+      up: h.displayPnl >= 0,
+      onTap: () => _openHolding(h),
+      onExit: closed ? null : () => _exitHolding(h),
+      dim: closed,
+    );
+  }
+
+  Widget _foRow(FoPosition pos) {
+    final est = _estimateFoPrice(pos);
+    final pnl = pos.unrealizedPnl(est), pct = pos.unrealizedPnlPct(est);
+    final name = pos.instrumentType == 'OPTION'
+        ? '${pos.symbol.split('-').first} ${pos.strikePrice.toStringAsFixed(0)} ${pos.optionType}'
+        : '${pos.symbol.split(' ').first} FUT';
+    return _row(
+      symbol: name,
+      tags: [
+        _tag('NFO'),
+        _tag(pos.netQty > 0 ? 'LONG' : 'SHORT',
+            fg: pos.netQty > 0 ? AppColors.bull : AppColors.bear, bg: pos.netQty > 0 ? AppColors.bullLight : AppColors.bearLight),
+      ],
+      qtyAvg: '${pos.netQty.abs()} lot × ${pos.lotSize} @ ${Money.wallet(pos.avgEntryPrice, decimals: 2)}',
+      value: Money.wallet(_foCurrentValue(pos), decimals: 2),
+      pnl: '${_fmtSigned(pnl)} (${pct >= 0 ? '+' : '−'}${pct.abs().toStringAsFixed(2)}%)',
+      up: pnl >= 0,
+      onTap: () => _openFo(pos),
+      onExit: () => _exitFo(pos),
+    );
+  }
+
+  Widget _empty(String title, String message, String? action) => SizedBox(
+        height: 240,
+        child: EmptyState(
+          icon: Icons.inventory_2_outlined,
+          title: title,
+          message: message,
+          actionLabel: action,
+          onAction: action == null ? null : () => NavTabService.goToTab(NavTabService.trade),
+        ),
+      );
+
+  Widget _toolCards() {
+    Widget card(IconData icon, String title, String sub, Widget screen) => Expanded(
+          child: Material(
+            color: AppColors.pureWhite,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              onTap: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+                _load();
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(icon, size: 20, color: AppColors.goldMid),
+                  const SizedBox(height: 6),
+                  Text(title, style: AppText.bodyBold),
+                  Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                ]),
+              ),
+            ),
+          ),
+        );
+    final o = _orderCounts;
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(children: [
+        card(Icons.manage_search_rounded, 'Trade autopsy', 'Why trades won or lost', const AutopsyScreen()),
+        const SizedBox(width: 8),
+        card(Icons.format_list_bulleted_rounded, 'Orders', o == null ? 'Open and executed' : '${o.open} open · ${o.done} executed',
+            const OrdersScreen()),
+      ]),
+    );
   }
 }
