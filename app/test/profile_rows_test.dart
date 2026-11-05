@@ -104,6 +104,7 @@ void main() {
     await tester.tap(row);
     await tester.pumpAndSettle();
     expect(find.text('APPEARANCE'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Delete account'), 150, scrollable: find.byType(Scrollable).last);
     expect(find.text('Delete account'), findsOneWidget);
   });
 

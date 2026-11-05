@@ -170,6 +170,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _version = '';
   int? _watchlists;
   bool? _chatMuted;
+  Map<String, bool>? _prefs;
+
+  /// The four push switches: key, label, description, icon.
+  static const _switches = [
+    ('price', 'Price alerts', 'When a stock crosses your target', Icons.show_chart_rounded),
+    ('orders', 'Order updates', 'Fills, rejections and cancellations', Icons.check_rounded),
+    ('league', 'League & rewards', 'Rank changes and challenge payouts', Icons.emoji_events_outlined),
+    ('news', 'News', 'Daily market headlines', Icons.article_outlined),
+  ];
+
+  /// Optimistic: flips at once, reverts with a message if the save fails.
+  Future<void> _setPref(String key, bool on) async {
+    final before = _prefs?[key];
+    setState(() => _prefs = {...?_prefs, key: on});
+    try {
+      await SupabaseService().setNotificationPref(key, on);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _prefs = {...?_prefs, key: before ?? true});
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't save that. Check your connection.")));
+    }
+  }
 
   @override
   void initState() {
@@ -180,6 +202,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SupabaseService().getWatchlists().then((l) {
       if (mounted) setState(() => _watchlists = l.length);
     }).catchError((_) {});
+    SupabaseService().getNotificationPrefs().then((p) {
+      if (mounted) setState(() => _prefs = p);
+    }).catchError((_) {
+      if (mounted) setState(() => _prefs = const {'price': true, 'orders': true, 'league': true, 'news': true});
+    });
     ChatService.isChatMuted().then((m) {
       if (mounted) setState(() => _chatMuted = m);
     }).catchError((_) {});
@@ -248,8 +275,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ]),
               _caption('Notifications'),
               _group([
+                for (final (key, label, desc, icon) in _switches)
+                  MergeSemantics(
+                    child: _item(icon, label,
+                        sub: desc,
+                        chevron: false,
+                        onTap: _prefs == null ? null : () => _setPref(key, !(_prefs![key] ?? true)),
+                        trailing: Switch(
+                          value: _prefs?[key] ?? true,
+                          onChanged: _prefs == null ? null : (v) => _setPref(key, v),
+                        )),
+                  ),
                 _item(Icons.notifications_none_rounded, 'Notification inbox',
-                    sub: 'Price alerts, order fills, league and rewards', onTap: () => _push(const NotificationsScreen())),
+                    sub: 'Switched-off types still land here', onTap: () => _push(const NotificationsScreen())),
                 _item(Icons.chat_bubble_outline_rounded, 'Titans Room chat',
                     sub: '@everyone and @mentions always notify',
                     value: _chatMuted == null ? null : (_chatMuted! ? 'Muted' : 'Active'),

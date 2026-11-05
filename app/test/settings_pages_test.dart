@@ -64,6 +64,8 @@ Future<void> _settle(WidgetTester tester) async {
 Future<void> _tapRow(WidgetTester tester, String text) async {
   final f = find.text(text);
   await tester.scrollUntilVisible(f, 120, scrollable: find.byType(Scrollable).first);
+  await tester.ensureVisible(f);
+  await tester.pump();
   await tester.tap(f);
   await _settle(tester);
 }
@@ -104,6 +106,22 @@ void main() {
       await _tapRow(tester, 'Privacy policy');
       expect(find.byType(LegalScreen), findsOneWidget);
       expect(tester.widget<LegalScreen>(find.byType(LegalScreen)).privacy, isTrue);
+    });
+
+    testWidgets('four push switches, all on by default, and they toggle', (tester) async {
+      await _pump(tester, const SettingsScreen());
+      for (final l in ['Price alerts', 'Order updates', 'League & rewards', 'News']) {
+        await tester.scrollUntilVisible(find.text(l), 120, scrollable: find.byType(Scrollable).first);
+        expect(find.text(l), findsOneWidget, reason: l);
+      }
+      final switches = find.byType(Switch);
+      expect(tester.widgetList<Switch>(switches).where((s) => s.value).length, greaterThanOrEqualTo(4));
+      await tester.scrollUntilVisible(find.text('News'), 120, scrollable: find.byType(Scrollable).first);
+      final news = find.descendant(of: find.ancestor(of: find.text('News'), matching: find.byType(MergeSemantics)), matching: find.byType(Switch));
+      expect(tester.widget<Switch>(news).value, isTrue);
+      await tester.tap(news);
+      await tester.pump();
+      expect(tester.widget<Switch>(news).value, isFalse);
     });
 
     testWidgets('Delete account needs DELETE typed before it enables', (tester) async {

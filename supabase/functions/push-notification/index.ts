@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { prefKeyFor } from "../_shared/notification_prefs.ts";
 
 // Generic FCM push sender. Called by the `notifications` AFTER INSERT trigger
 // (via pg_net) so EVERY in-app notification, from any source (edge functions,
@@ -71,6 +72,16 @@ serve(async (req) => {
   const msg = String(body.body ?? "").trim();
   const actionType = (body.action_type ?? null) as string | null;
   if (!userId) return new Response(JSON.stringify({ skipped: "no user_id" }), { headers: { "Content-Type": "application/json" } });
+
+  // The user switched this type off in Settings: the inbox row already exists,
+  // only the phone push is skipped. No preferences row means everything is on.
+  const prefKey = prefKeyFor(actionType);
+  if (prefKey) {
+    const { data: prefs } = await supabase.from("notification_preferences").select(prefKey).eq("user_id", userId).maybeSingle();
+    if (prefs && (prefs as Record<string, unknown>)[prefKey] === false) {
+      return new Response(JSON.stringify({ skipped: `${prefKey} off` }), { headers: { "Content-Type": "application/json" } });
+    }
+  }
 
   if (!FCM_SA) return new Response(JSON.stringify({ pushed: 0, fcm: false }), { headers: { "Content-Type": "application/json" } });
   let sa: { project_id: string; private_key: string; client_email: string }; let accessToken: string;

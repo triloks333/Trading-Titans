@@ -4340,6 +4340,28 @@ class SupabaseService {
   }
 
   /// Streak and XP counters for the Challenges header.
+  /// Settings → Notifications push switches (price, orders, league, news).
+  /// No row yet means all on. Only phone pushes are affected; the inbox keeps
+  /// every message (see 20261105020000_notification_preferences.sql).
+  Future<Map<String, bool>> getNotificationPrefs() async {
+    const all = {'price': true, 'orders': true, 'league': true, 'news': true};
+    final user = currentUser;
+    if (user == null) return all;
+    final row = await client.from('notification_preferences').select('price, orders, league, news').eq('user_id', user.id).maybeSingle();
+    if (row == null) return all;
+    return {for (final k in all.keys) k: (row as Map)[k] != false};
+  }
+
+  /// Saves one switch; creates the row on first save.
+  Future<void> setNotificationPref(String key, bool on) async {
+    final user = currentUser;
+    if (user == null) return;
+    await client.from('notification_preferences').upsert(
+      {'user_id': user.id, key: on, 'updated_at': DateTime.now().toUtc().toIso8601String()},
+      onConflict: 'user_id',
+    );
+  }
+
   Future<Map<String, int>> getGamificationStats() async {
     final user = currentUser;
     if (user == null) return const {'total_xp': 0, 'login_streak': 0, 'longest_login_streak': 0};
