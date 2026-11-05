@@ -1,19 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme.dart';
+
 import '../../core/money.dart';
+import '../../core/theme.dart';
 import '../../models/challenge.dart';
 import '../../services/supabase_service.dart';
-import '../../widgets/empty_state.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/skeleton.dart';
 import 'glossary_quiz_screen.dart';
 
-/// Challenges: earn demo cash and XP for trading milestones, habits and
-/// learning. Conditions are evaluated server-side; this screen only displays
-/// progress and asks for a re-evaluation on open and on pull-to-refresh.
+/// "2 of 3", "₹1,240 of ₹2,200", or what is left when there is no measure.
+String challengeProgressLabel(Challenge c) {
+  if (c.isComplete) return 'Earned ${Money.wallet(c.totalEarned, decimals: 0)}';
+  final p = c.progress, t = c.target;
+  if (p != null && t != null) {
+    return c.isMoneyMeasure
+        ? '${Money.wallet(p, decimals: 0)} of ${Money.wallet(t, decimals: 0)}'
+        : '${p.round()} of ${t.round()}';
+  }
+  if (c.repeatLimit == null) return c.isEarned ? 'Won ${c.timesEarned}×' : 'Repeatable';
+  if (c.repeatLimit! > 1) return '${c.timesEarned} of ${c.repeatLimit} claimed';
+  return 'Not started';
+}
+
+typedef ChallengesLoader = Future<(List<Challenge>, Map<String, int>)> Function();
+
+/// Challenges: demo cash and XP for milestones, habits and learning. Conditions
+/// are evaluated server-side; this screen asks for a re-check on open and on
+/// pull-to-refresh, then shows progress.
 class ChallengesScreen extends StatefulWidget {
-  const ChallengesScreen({super.key});
+  const ChallengesScreen({super.key, this.loader});
+
+  /// Replaces the evaluate + fetch round trip (tests).
+  final ChallengesLoader? loader;
 
   @override
   State<ChallengesScreen> createState() => _ChallengesScreenState();
@@ -21,16 +41,24 @@ class ChallengesScreen extends StatefulWidget {
 
 class _ChallengesScreenState extends State<ChallengesScreen> {
   final SupabaseService _supabase = SupabaseService();
-
   bool _loading = true;
   Object? _error;
   List<Challenge> _challenges = [];
   Map<String, int> _stats = const {};
+  bool _completedTab = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  Future<(List<Challenge>, Map<String, int>)> _fetch() async {
+    // Re-check conditions first so anything earned since the last visit is
+    // granted before the list is read.
+    await _supabase.evaluateChallenges();
+    final r = await Future.wait([_supabase.getMyChallenges(), _supabase.getGamificationStats()]);
+    return (r[0] as List<Challenge>, r[1] as Map<String, int>);
   }
 
   Future<void> _load() async {
@@ -39,17 +67,11 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
       _error = null;
     });
     try {
-      // Ask the server to re-check conditions first, so anything earned since
-      // the last visit is already granted by the time we read the list.
-      await _supabase.evaluateChallenges();
-      final results = await Future.wait([
-        _supabase.getMyChallenges(),
-        _supabase.getGamificationStats(),
-      ]);
+      final (list, stats) = await (widget.loader ?? _fetch)();
       if (!mounted) return;
       setState(() {
-        _challenges = results[0] as List<Challenge>;
-        _stats = results[1] as Map<String, int>;
+        _challenges = list;
+        _stats = stats;
         _loading = false;
       });
     } catch (e) {
@@ -61,235 +83,223 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     }
   }
 
+  Future<void> _openQuiz() async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GlossaryQuizScreen()));
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Challenges',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
-        backgroundColor: AppColors.pureWhite,
-        foregroundColor: AppColors.ink,
-        elevation: 0,
+      body: SafeArea(
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Challenges', style: AppFonts.sans(size: 20, weight: FontWeight.w700, color: AppColors.ink))),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(child: _body()),
+        ]),
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  Widget _body() {
     if (_loading) return const ListSkeleton();
     if (_error != null) {
-      return ErrorState(
-        message: "We couldn't load your challenges. Check your connection and try again.",
-        onRetry: _load,
-      );
+      return ErrorState(message: "We couldn't load your challenges. Check your connection and try again.", onRetry: _load);
     }
-    if (_challenges.isEmpty) {
-      return EmptyState(
-        icon: Icons.emoji_events_outlined,
-        title: 'No challenges yet',
-        message: 'Challenges will appear here once they go live.',
-      );
-    }
-
-    final grouped = <String, List<Challenge>>{};
-    for (final c in _challenges) {
-      grouped.putIfAbsent(c.category, () => []).add(c);
-    }
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          _buildProgressHeader(),
-          const SizedBox(height: AppSpacing.lg),
-          for (final category in ChallengeCategory.all)
-            if (grouped[category.key] != null) ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm, top: AppSpacing.xs),
-                child: Text(
-                  category.label.toUpperCase(),
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink4,
-                      letterSpacing: 0.6),
+    final done = _challenges.where((c) => c.isComplete).toList();
+    final open = _challenges.where((c) => !c.isComplete).toList()
+      // Closest to finishing first, so the next win is at the top.
+      ..sort((a, b) => (b.fraction ?? -1).compareTo(a.fraction ?? -1));
+    final quiz = _challenges.where((c) => c.key == 'glossary_graduate').firstOrNull;
+    return Column(children: [
+      _levelCard(),
+      _tabs(open.length, done.length),
+      Expanded(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, AppSpacing.lg),
+            children: [
+              if (!_completedTab) ...[_quizCard(quiz), const SizedBox(height: 10)],
+              if ((_completedTab ? done : open).isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Text(_completedTab ? 'Nothing completed yet. Your first trade earns First Blood.' : 'Every challenge is done. New ones arrive soon.',
+                      textAlign: TextAlign.center, style: AppText.body),
                 ),
-              ),
-              ...grouped[category.key]!.map(_buildChallengeCard),
-              const SizedBox(height: AppSpacing.md),
+              for (final c in _completedTab ? done : open) ...[_card(c), const SizedBox(height: 10)],
             ],
-        ],
+          ),
+        ),
       ),
-    );
+    ]);
   }
 
-  Widget _buildProgressHeader() {
+  Widget _levelCard() {
     final xp = _stats['total_xp'] ?? 0;
-    final streak = _stats['login_streak'] ?? 0;
     final level = TitanLevel.forXp(xp);
     final next = TitanLevel.nextAfter(xp);
-    final progress = TitanLevel.progressToNext(xp);
-    final earned = _challenges.fold<double>(0, (sum, c) => sum + c.totalEarned);
-
+    final number = TitanLevel.ladder.indexOf(level) + 1;
+    final streak = _stats['login_streak'] ?? 0;
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      // Titan gold: levels and rewards are the League family of colours.
-      decoration: AppCard.primary.copyWith(border: Border.all(color: AppColors.titanGold)),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('TITAN LEVEL',
-                      style: AppText.sectionLabel.copyWith(color: AppColors.titanGold)),
-                  const SizedBox(height: 2),
-                  Text(level.name,
-                      style: AppFonts.sans(size: 24, weight: FontWeight.w700, color: AppColors.ink)),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
-                decoration: AppCard.badge(AppColors.goldPale),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.local_fire_department_rounded,
-                        size: 14, color: AppColors.titanGold),
-                    const SizedBox(width: 4),
-                    Text('$streak day${streak == 1 ? '' : 's'}',
-                        style: GoogleFonts.ibmPlexSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.titanGold)),
-                  ],
+      margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.titanGold),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('TITAN LEVEL', style: AppText.sectionLabel.copyWith(color: AppColors.titanGold)),
+              Text.rich(TextSpan(children: [
+                TextSpan(text: 'Level $number', style: AppFonts.sans(size: 26, weight: FontWeight.w700, color: AppColors.ink)),
+                TextSpan(text: ' · ${level.name}', style: AppFonts.sans(size: 15, weight: FontWeight.w500, color: AppColors.ink3)),
+              ])),
+            ]),
+          ),
+          Column(children: [
+            const TitanCrown(size: 40),
+            if (streak > 0) Text('🔥 $streak day${streak == 1 ? '' : 's'}', style: AppFonts.mono(size: 11, color: AppColors.titanGold)),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: TitanLevel.progressToNext(xp),
+            minHeight: 8,
+            color: AppColors.titanGold,
+            backgroundColor: AppColors.cream,
+            semanticsLabel: 'Progress to next Titan level',
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(children: [
+          Expanded(child: Text(next == null ? '$xp XP' : '$xp / ${next.minXp} XP', style: AppFonts.mono(size: 12, color: AppColors.ink4))),
+          Text(next == null ? 'Max level' : 'Next: ${next.name}', style: AppFonts.mono(size: 12, color: AppColors.ink4)),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _tabs(int open, int done) => Container(
+        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+        child: Row(children: [
+          for (final (i, label) in ['In progress · $open', 'Completed · $done'].indexed)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: _completedTab == (i == 1),
+                label: label,
+                excludeSemantics: true,
+                child: InkWell(
+                  onTap: () => setState(() => _completedTab = i == 1),
+                  child: Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: _completedTab == (i == 1) ? AppColors.goldMid : Colors.transparent, width: 2)),
+                    ),
+                    child: Text(label,
+                        style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _completedTab == (i == 1) ? AppColors.ink : AppColors.ink3)),
+                  ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: AppColors.cream,
-              valueColor: AlwaysStoppedAnimation(AppColors.titanGold),
-              semanticsLabel: 'Progress to next Titan level',
             ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('$xp XP',
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink3)),
-              Text(
-                next == null ? 'Max level' : '${next.minXp - xp} XP to ${next.name}',
-                style: GoogleFonts.ibmPlexSans(fontSize: 12, color: AppColors.ink4),
-              ),
-            ],
-          ),
-          if (earned > 0) ...[
-            const SizedBox(height: AppSpacing.md),
-            Divider(color: AppColors.birch, height: 1),
-            const SizedBox(height: AppSpacing.md),
-            Text('${Money.wallet(earned, decimals: 0)} earned from challenges',
-                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                    fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bull)),
-          ],
-        ],
+        ]),
+      );
+
+  Widget _tag(String text, Color fg, Color bg) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: AppCard.badge(bg),
+        child: Text(text, style: AppText.badge.copyWith(color: fg)),
+      );
+
+  /// The quiz is the one challenge started by hand; it stays as practice once won.
+  Widget _quizCard(Challenge? c) {
+    final won = c?.isComplete ?? false;
+    return Material(
+      color: AppColors.goldPale,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.goldMid)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: _openQuiz,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Icon(Icons.menu_book_rounded, size: 28, color: AppColors.goldMid),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Glossary quiz', style: AppText.bodyBold),
+                Text(
+                  won || c == null
+                      ? 'Practice round · sharpen your trading words'
+                      : 'Pass it once · +${c.xp} XP · +${Money.wallet(c.rewardAmount, decimals: 0)}',
+                  style: AppFonts.sans(size: 12, color: AppColors.ink3),
+                ),
+              ]),
+            ),
+            _tag('TAKE QUIZ', Colors.white, AppColors.imperialGold),
+          ]),
+        ),
       ),
     );
   }
 
-  Widget _buildChallengeCard(Challenge c) {
-    final done = c.isComplete;
-    final partial = c.isEarned && !done;
-
+  Widget _card(Challenge c) {
+    final f = c.fraction;
+    final reward = c.rewardAmount > 0 ? '+${Money.wallet(c.rewardAmount, decimals: 0)}' : '+${c.xp} XP';
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: AppCard.secondary,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: done ? AppColors.bullLight : AppColors.goldPale,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              done ? Icons.check_rounded : Icons.emoji_events_outlined,
-              size: 20,
-              color: done ? AppColors.bull : AppColors.imperialGold,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(c.title,
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                const SizedBox(height: 2),
-                Text(c.description,
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 12, color: AppColors.ink4, height: 1.35)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(Money.wallet(c.rewardAmount, decimals: 0),
-                        style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                            fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.bull)),
-                    Text('${c.xp} XP',
-                        style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
-                    if (c.repeatLimit != null && c.repeatLimit! > 1)
-                      Text('${c.timesEarned}/${c.repeatLimit} claimed',
-                          style: GoogleFonts.ibmPlexSans(fontSize: 11, color: AppColors.ink4)),
-                    if (partial)
-                      Text('In progress',
-                          style: GoogleFonts.ibmPlexSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.imperialGold)),
-                    // The quiz is the one challenge the user starts by hand.
-                    if (c.key == 'glossary_graduate' && !done)
-                      TextButton(
-                        onPressed: () async {
-                          await Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => const GlossaryQuizScreen()));
-                          _load();
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          minimumSize: const Size(0, 32),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text('Take the quiz',
-                            style: GoogleFonts.ibmPlexSans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.imperialGold)),
-                      ),
-                  ],
-                ),
-              ],
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.pureWhite,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.birch),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(c.title, style: AppText.bodyBold)),
+          _tag(reward, AppColors.titanGold, AppColors.titanGoldSoft),
+        ]),
+        const SizedBox(height: 2),
+        Text(c.description, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+        if (f != null) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: f,
+              minHeight: 6,
+              color: c.isComplete ? AppColors.bull : AppColors.goldMid,
+              backgroundColor: AppColors.cream,
             ),
           ),
         ],
-      ),
+        const SizedBox(height: 4),
+        Row(children: [
+          Expanded(child: Text(challengeProgressLabel(c), style: AppFonts.mono(size: 12, color: AppColors.ink3))),
+          Text('${ChallengeCategory.labelFor(c.category)} · ${c.xp} XP', style: AppFonts.sans(size: 11, color: AppColors.ink4)),
+        ]),
+      ]),
     );
   }
 }

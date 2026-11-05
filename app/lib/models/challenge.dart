@@ -16,6 +16,11 @@ class Challenge {
   final double totalEarned;
   final DateTime? lastEarnedAt;
 
+  /// Running measure toward the next payout and its threshold, from
+  /// get_my_challenges(); null for challenges with no single measure.
+  final double? progress;
+  final double? target;
+
   const Challenge({
     required this.key,
     required this.title,
@@ -28,7 +33,20 @@ class Challenge {
     required this.timesEarned,
     required this.totalEarned,
     this.lastEarnedAt,
+    this.progress,
+    this.target,
   });
+
+  /// 0..1 toward [target]; 1 once complete; null when there is no measure.
+  double? get fraction {
+    if (isComplete) return 1;
+    final t = target, p = progress;
+    if (t == null || p == null || t <= 0) return null;
+    return (p / t).clamp(0.0, 1.0);
+  }
+
+  /// Money milestones count rupees; everything else counts things.
+  bool get isMoneyMeasure => key == 'titan_20' || key.startsWith('century_club');
 
   /// Earned at least once.
   bool get isEarned => timesEarned > 0;
@@ -61,6 +79,8 @@ class Challenge {
         lastEarnedAt: json['last_earned_at'] == null
             ? null
             : DateTime.tryParse('${json['last_earned_at']}'),
+        progress: json['progress'] == null ? null : _toDouble(json['progress']),
+        target: json['target'] == null ? null : _toDouble(json['target']),
       );
 }
 
