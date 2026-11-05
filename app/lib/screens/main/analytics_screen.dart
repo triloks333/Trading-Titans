@@ -164,13 +164,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 if (snap.hasError) {
                   return ErrorState(
                     message: "We couldn't load your analytics. Check your connection and try again.",
-                    onRetry: () => setState(() => _orders = _fetch()),
+                    onRetry: () => setState(() {
+      _orders = _fetch();
+    }),
                   );
                 }
                 final s = TradeStats.from(snap.data ?? const [], period: kAnalyticsPeriods[_period]);
                 return RefreshIndicator(
                   onRefresh: () async {
-                    setState(() => _orders = _fetch());
+                    setState(() {
+      _orders = _fetch();
+    });
                     await _orders;
                   },
                   child: ListView(

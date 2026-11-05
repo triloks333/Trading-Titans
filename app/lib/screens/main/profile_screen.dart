@@ -66,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Future<T?> safe<T>(Future<T> f) => f.then<T?>((v) => v).catchError((_) => null);
     final results = await Future.wait([
       safe(api.getGamificationStats()),
-      safe(api.getLeaderboard()),
+      safe(api.getLeagueBoard('week')),
       safe(api.getMyChallenges()),
       safe(api.getWatchlists()),
       me == null
@@ -81,8 +81,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final unread = results[4] as List?;
     setState(() {
       if (stats != null) _level = TitanLevel.ladder.indexOf(TitanLevel.forXp(stats['total_xp'] ?? 0)) + 1;
-      final mine = board?.indexWhere((r) => r['is_self'] == true) ?? -1;
-      _rank = mine >= 0 ? mine + 1 : null;
+      // This week's rank; null until the user has qualified.
+      _rank = board?.where((r) => r['is_me'] == true).firstOrNull?['rank'] as int?;
       _activeChallenges = challenges?.where((c) => !c.isComplete).length;
       _watchlists = lists?.length;
       _unread = unread?.length;

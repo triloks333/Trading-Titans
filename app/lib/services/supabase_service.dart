@@ -1565,39 +1565,19 @@ class SupabaseService {
     return futures;
   }
 
-  Future<List<Map<String, dynamic>>> getLeaderboard() async {
-    // Reads from the `leaderboard` view (safe columns only — no email),
-    // since profiles is now restricted to owner/admin reads.
-    // wallet_balance is deliberately not selected: the League screen ranks on
-    // realised P&L and shows only that. The column still exists on the view for
-    // builds already in the wild that ask for it by name.
-    final data = await client
-        .from('leaderboard')
-        .select('id, name, total_realized_pnl')
-        .order('total_realized_pnl', ascending: false)
-        .limit(20);
-    final rows = (data as List<dynamic>)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-
-    // Plan badges come from `user_tiers`, in one follow-up query for the whole
-    // page. The view's `plan` column is not used: it is `profiles.plan`, which
-    // nothing has ever written, so it labelled every account "free_starter".
-    final tiers = await _tiersFor(
-      rows.map((r) => r['id'] as String?).whereType<String>().toList(),
-    );
-
-    return rows
-        .map((row) {
-          return {
-            'user_id': row['id'],
-            'name': row['name'],
-            'tier': tiers[row['id']] ?? 'free',
-            'realized_pnl':
-                (row['total_realized_pnl'] as num?)?.toDouble() ?? 0.0,
-          };
-        })
-        .toList();
+  /// The Weekly League from `league_board()` (20261105000000_weekly_league.sql):
+  /// ranked by realised return %, at least 2 closing trades to rank. [scope] is
+  /// 'week', 'all' or 'friends'. Rows are rank order with the caller's own row
+  /// always present (rank null when not yet qualified), each with its plan tier.
+  Future<List<Map<String, dynamic>>> getLeagueBoard(String scope, {int limit = 50}) async {
+    final data = await client.rpc('league_board', params: {'p_scope': scope, 'p_limit': limit});
+    final rows = [for (final e in data as List<dynamic>) Map<String, dynamic>.from(e as Map)];
+    // Plan badges from user_tiers in one follow-up query; profiles.plan is never written.
+    final tiers = await _tiersFor(rows.map((r) => r['user_id'] as String?).whereType<String>().toList());
+    for (final r in rows) {
+      r['tier'] = tiers[r['user_id']] ?? 'free';
+    }
+    return rows;
   }
 
   /// Tier per user id, for a set of users.
@@ -1622,7 +1602,7 @@ class SupabaseService {
       }
       return map;
     } catch (e) {
-      debugPrint('getLeaderboard: tier lookup failed, showing no badges: $e');
+      debugPrint('getLeagueBoard: tier lookup failed, showing no badges: $e');
       return {};
     }
   }

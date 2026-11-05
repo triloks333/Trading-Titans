@@ -96,7 +96,9 @@ class _AutopsyScreenState extends State<AutopsyScreen> {
                 if (snap.hasError) {
                   return ErrorState(
                     message: "We couldn't load your autopsy. Check your connection and try again.",
-                    onRetry: () => setState(() => _load = _fetch()),
+                    onRetry: () => setState(() {
+      _load = _fetch();
+    }),
                   );
                 }
                 final data = snap.data![0] as Map<String, dynamic>;

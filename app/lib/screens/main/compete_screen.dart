@@ -1,21 +1,18 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../core/theme.dart';
-import '../../core/money.dart';
-import '../../services/supabase_service.dart';
-import '../../services/nav_tab_service.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/error_state.dart';
-import '../../widgets/plan_badge.dart';
-import '../../widgets/skeleton.dart';
-import '../../widgets/trend_arrow.dart';
+import 'dart:async';
 
-/// The letter shown in a row's avatar circle.
-///
-/// Top-level and pure so it can be tested: names arrive from user input via the
-/// `leaderboard` view, so blank, whitespace-only and non-Latin names all reach
-/// this, and `name[0]` on an empty string throws — which would take the whole
-/// league down rather than one row.
+import 'package:flutter/material.dart';
+
+import '../../core/theme.dart';
+import '../../services/nav_tab_service.dart';
+import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
+import '../../widgets/error_state.dart';
+import '../../widgets/skeleton.dart';
+import 'challenges_screen.dart';
+
+/// The letter in a row's avatar. Names are user input, so blank, whitespace-only
+/// and multi-code-unit names must not throw (that would blank the whole tab).
 String avatarInitial(String? name) {
   final trimmed = (name ?? '').trim();
   if (trimmed.isEmpty) return '?';
@@ -28,418 +25,317 @@ String standingLabel(int index) {
   return '$index trader${index == 1 ? '' : 's'} ahead of you';
 }
 
-/// The weekly league table.
-///
-/// Built to the same rules as the other primary tabs: no AppBar (Wallet and
-/// Profile put their title in the body, and a tab has nothing to navigate back
-/// to), `AppCard`/`AppText`/`AppColors` for every surface, `ListSkeleton` while
-/// loading, and `EmptyState` when there is nothing to show. Before this it used a
-/// bare CircularProgressIndicator, a centred Text for empty, emoji medals and
-/// raw TextStyles, which is why it read as a different app.
+/// Time left until the league resets: Monday 00:00 IST.
+Duration leagueTimeLeft([DateTime? now]) {
+  final ist = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 5, minutes: 30));
+  final monday = DateTime.utc(ist.year, ist.month, ist.day).add(Duration(days: 8 - ist.weekday));
+  return monday.difference(ist);
+}
+
+/// "2d 14h 08m".
+String leagueCountdown(Duration d) =>
+    '${d.inDays}d ${(d.inHours % 24).toString().padLeft(2, '0')}h ${(d.inMinutes % 60).toString().padLeft(2, '0')}m';
+
+/// What the caller needs to climb into the next tier of the board.
+String leagueGapLabel(List<Map<String, dynamic>> rows, Map<String, dynamic>? me) {
+  if (me == null) return 'Close 2 trades this week to get ranked';
+  final rank = me['rank'] as int?;
+  final trades = (me['trades'] as num?)?.toInt() ?? 0;
+  if (rank == null) {
+    final need = 2 - trades;
+    return need <= 0 ? 'Ranked after your next close' : 'Close $need more trade${need == 1 ? '' : 's'} to get ranked';
+  }
+  if (rank == 1) return 'Top of the board';
+  final target = rank <= 3 ? rank - 1 : rank <= 10 ? 3 : rank <= 25 ? 10 : 25;
+  final above = rows.where((r) => r['rank'] == target).firstOrNull;
+  if (above == null) return standingLabel(rank - 1);
+  final gap = ((above['pnl_pct'] as num?)?.toDouble() ?? 0) - ((me['pnl_pct'] as num?)?.toDouble() ?? 0);
+  final where = target <= 3 ? '#$target' : 'top $target';
+  return '+${gap.abs().toStringAsFixed(2)}% more to reach $where';
+}
+
+typedef LeagueLoader = Future<List<Map<String, dynamic>>> Function(String scope);
+
+/// The Weekly League: realised return %, resets Monday 00:00 IST, top 10 paid.
 class CompeteScreen extends StatefulWidget {
-  const CompeteScreen({super.key});
+  const CompeteScreen({super.key, this.loader});
+
+  /// Replaces the `league_board` call (tests).
+  final LeagueLoader? loader;
 
   @override
   State<CompeteScreen> createState() => _CompeteScreenState();
 }
 
 class _CompeteScreenState extends State<CompeteScreen> {
-  final SupabaseService _supabase = SupabaseService();
-  late Future<List<Map<String, dynamic>>> _future;
+  static const _scopes = {'This week': 'week', 'All-time': 'all', 'Friends': 'friends'};
+  String _scope = 'week';
+  late Future<List<Map<String, dynamic>>> _future = _load();
+  late final Timer _tick = Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}));
 
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  /// Held in a field rather than built inline in the FutureBuilder: an inline
-  /// future is recreated on every rebuild, so the list refetched whenever the
-  /// theme or a parent changed and flashed the skeleton each time.
-  Future<List<Map<String, dynamic>>> _load() async {
-    final userId = _supabase.currentUser?.id;
-    final rows = await _supabase.getLeaderboard();
-    for (final row in rows) {
-      row['is_self'] = row['user_id'] == userId;
-    }
-    return rows;
-  }
+  Future<List<Map<String, dynamic>>> _load() => (widget.loader ?? SupabaseService().getLeagueBoard)(_scope);
 
   Future<void> _refresh() async {
     final next = _load();
-    setState(() => _future = next);
+    // A block body: an arrow would return the Future, which setState rejects.
+    setState(() {
+      _future = next;
+    });
     await next;
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const _LeagueSkeleton();
-            }
-            if (snapshot.hasError) {
-              return ErrorState(
-                message:
-                    "We couldn't load the league. Check your connection and try again.",
-                onRetry: _refresh,
-              );
-            }
-
-            final rows = snapshot.data ?? const <Map<String, dynamic>>[];
-            final myIndex = rows.indexWhere((r) => r['is_self'] == true);
-
-            return RefreshIndicator(
-              onRefresh: _refresh,
-              color: AppColors.imperialGold,
-              child: rows.isEmpty
-                  ? EmptyState(
-                      icon: Icons.emoji_events_outlined,
-                      title: 'Nobody on the board yet',
-                      message:
-                          'The league ranks traders by realised profit. Close a '
-                          'trade in the green and you will be the first name here.',
-                      actionLabel: 'Place a trade',
-                      onAction: () => NavTabService.goToTab(NavTabService.trade),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
-                      children: [
-                        _header(),
-                        const SizedBox(height: AppSpacing.md),
-                        if (myIndex >= 0) ...[
-                          _myRankCard(rows[myIndex], myIndex),
-                          const SizedBox(height: AppSpacing.lg),
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Weekly League', style: AppFonts.sans(size: 22, weight: FontWeight.w700, color: AppColors.ink)),
+                  Text(
+                    _scope == 'all'
+                        ? 'All-time · ranked by realised P&L %'
+                        : 'Ends in ${leagueCountdown(leagueTimeLeft())} · ranked by realised P&L %',
+                    style: AppFonts.mono(size: 12, color: AppColors.ink4),
+                  ),
+                ]),
+              ),
+              AuthIconButton(
+                icon: Icons.track_changes_rounded,
+                label: 'Challenges',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChallengesScreen())),
+              ),
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Padding(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 10), child: _segmented()),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) return const ListSkeleton();
+                if (snap.hasError) {
+                  return ErrorState(message: "We couldn't load the league. Check your connection and try again.", onRetry: _refresh);
+                }
+                final rows = snap.data ?? const [];
+                final ranked = rows.where((r) => r['rank'] != null).toList();
+                final me = rows.where((r) => r['is_me'] == true).firstOrNull;
+                return Column(children: [
+                  Expanded(
+                    child: RefreshIndicator(
+                      onRefresh: _refresh,
+                      child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+                        if (ranked.isEmpty)
+                          _empty()
+                        else ...[
+                          _podium(ranked.take(3).toList()),
+                          if (_scope != 'all') _prizeCard(),
+                          for (final r in ranked.skip(3)) _row(r),
                         ],
-                        _sectionLabel(
-                            rows.length > 3 ? 'TOP THREE' : 'STANDINGS'),
-                        const SizedBox(height: AppSpacing.sm),
-                        for (var i = 0; i < rows.length && i < 3; i++) ...[
-                          _podiumCard(rows[i], i),
-                          const SizedBox(height: AppSpacing.sm),
-                        ],
-                        if (rows.length > 3) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          _sectionLabel('EVERYONE ELSE'),
-                          const SizedBox(height: AppSpacing.sm),
-                          for (var i = 3; i < rows.length; i++) ...[
-                            _rankRow(rows[i], i),
-                            const SizedBox(height: 6),
-                          ],
-                        ],
-                      ],
+                      ]),
                     ),
-            );
-          },
-        ),
+                  ),
+                  _myBar(rows, me),
+                ]);
+              },
+            ),
+          ),
+        ]),
       ),
     );
   }
 
-  // ── pieces ────────────────────────────────────────────────────────────────
-
-  Widget _header() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Weekly League',
-              style: GoogleFonts.ibmPlexSans(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.ink,
-                  letterSpacing: -0.5)),
-          const SizedBox(height: 2),
-          Text('Ranked by realised profit. Resets every Monday.',
-              style: AppText.bodySmall),
-        ],
+  Widget _segmented() => Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+        child: Row(children: [
+          for (final (i, MapEntry(key: label, value: scope)) in _scopes.entries.indexed) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: _scope == scope,
+                label: label,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () {
+                    if (_scope == scope) return;
+                    _scope = scope;
+                    _refresh();
+                  },
+                  child: Container(
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: _scope == scope ? AppColors.pureWhite : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+                    child: Text(label, style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: _scope == scope ? AppColors.ink : AppColors.ink3)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ]),
       );
 
-  Widget _sectionLabel(String text) =>
-      Text(text, style: AppText.sectionLabel);
-
-  /// Your own standing, given the focal card the other tabs open with.
-  Widget _myRankCard(Map<String, dynamic> row, int index) {
-    final pnl = _pnl(row);
-    final ahead = index;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: AppCard.primary.copyWith(color: AppColors.titanGoldSoft, border: Border.all(color: AppColors.titanGold)),
-      child: Row(
-        children: [
-          _rankMedal(index, large: true),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('YOUR POSITION', style: AppText.sectionLabel),
-                const SizedBox(height: 2),
-                Text(
-                  standingLabel(ahead),
-                  style: GoogleFonts.ibmPlexSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.ink),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(
-                children: [
-                  TrendArrow(isPositive: pnl >= 0, size: 18),
-                  Text(Money.wallet(pnl.abs()),
-                      style: AppFonts.mono(size: 18, weight: FontWeight.w600, color: pnl >= 0 ? AppColors.bull : AppColors.bear)),
-                ],
-              ),
-              Text('realised', style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5)),
-            ],
-          ),
-        ],
-      ),
-    );
+  String _pct(Map<String, dynamic> r) {
+    final v = (r['pnl_pct'] as num?)?.toDouble() ?? 0;
+    return '${v >= 0 ? '+' : '−'}${v.abs().toStringAsFixed(2)}%';
   }
 
-  /// Top three. Same anatomy as a normal row, just given more room and a tinted
-  /// edge — rather than a separate layout, which is how the two drifted apart
-  /// before.
-  Widget _podiumCard(Map<String, dynamic> row, int index) {
-    final isSelf = row['is_self'] == true;
-    final pnl = _pnl(row);
-    final accent = _podiumColor(index);
+  Color _tone(Map<String, dynamic> r) => ((r['pnl_pct'] as num?) ?? 0) >= 0 ? AppColors.bull : AppColors.bear;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: isSelf ? AppColors.goldPale : AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: accent.withValues(alpha: 0.55), width: 1.4),
-        boxShadow: AppShadows.sm,
-      ),
-      child: Row(
-        children: [
-          _rankMedal(index),
-          const SizedBox(width: AppSpacing.md),
-          _avatar(row['name'] as String?, accent),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: _nameBlock(row, isSelf, bold: true)),
-          _pnlBlock(pnl, row),
-        ],
-      ),
-    );
-  }
-
-  /// Rank 4 and below: shorter, quieter, still the same reading order.
-  Widget _rankRow(Map<String, dynamic> row, int index) {
-    final isSelf = row['is_self'] == true;
-    final pnl = _pnl(row);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
-      decoration: BoxDecoration(
-        color: isSelf ? AppColors.goldPale : AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-            color: isSelf ? AppColors.goldBorder : AppColors.birch),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 26,
-            child: Text('${index + 1}',
-                textAlign: TextAlign.center,
-                style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink4)),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          _avatar(row['name'] as String?, AppColors.imperialGold, size: 32),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: _nameBlock(row, isSelf)),
-          _pnlBlock(pnl, row, compact: true),
-        ],
-      ),
-    );
-  }
-
-  /// Rank 1-3 get a medal; a crown marks the leader. Deliberately Material icons
-  /// and theme colours rather than 🥇🥈🥉 — the emoji rendered differently on
-  /// every device and matched nothing else in the app.
-  Widget _rankMedal(int index, {bool large = false}) {
-    final accent = _podiumColor(index);
-    final size = large ? 46.0 : 38.0;
-    final onPodium = index < 3;
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: onPodium ? accent.withValues(alpha: 0.14) : AppColors.cream,
-        shape: BoxShape.circle,
-        border: Border.all(
-            color: onPodium ? accent.withValues(alpha: 0.5) : AppColors.birch),
-      ),
-      child: index == 0
-          ? Icon(Icons.workspace_premium_rounded,
-              size: large ? 26 : 22, color: accent)
-          : Center(
-              child: Text('${index + 1}',
-                  style: AppFonts.mono(size: large ? 18 : 15, weight: FontWeight.w600, color: onPodium ? accent : AppColors.ink4)),
-            ),
-    );
-  }
-
-  /// Initial-in-a-circle. There are no profile photos on the leaderboard — the
-  /// view deliberately exposes only safe columns — so this gives each row a
-  /// visual anchor without inventing data.
-  Widget _avatar(String? name, Color accent, {double size = 38}) {
-    final initial = avatarInitial(name);
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(initial,
-            style: GoogleFonts.ibmPlexSans(
-                fontSize: size * 0.42,
-                fontWeight: FontWeight.w700,
-                color: accent)),
-      ),
-    );
-  }
-
-  Widget _nameBlock(Map<String, dynamic> row, bool isSelf, {bool bold = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Flexible(
-              child: Text(
-                (row['name'] as String?)?.trim().isNotEmpty == true
-                    ? row['name'] as String
-                    : 'Anonymous Titan',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.ibmPlexSans(
-                    fontSize: bold ? 15 : 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink),
-              ),
-            ),
-            if (isSelf) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: AppCard.badge(AppColors.imperialGold),
-                child: Text('YOU',
-                    style: AppText.badge.copyWith(
-                        fontSize: 9, color: AppColors.pureWhite)),
-              ),
-            ],
-            if (row['tier'] != null && row['tier'] != 'free') ...[
-              const SizedBox(width: 6),
-              PlanBadge(tier: row['tier'] as String?, compact: true),
-            ],
-          ],
+  Widget _avatar(String? name, {double size = 36, Color? border, Color? fill, Color? fg, String? text}) => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: fill ?? AppColors.cream,
+          shape: BoxShape.circle,
+          border: border == null ? null : Border.all(color: border, width: 2),
         ),
-      ],
-    );
-  }
+        child: Text(text ?? avatarInitial(name), style: AppFonts.sans(size: size > 40 ? 15 : 13, weight: FontWeight.w600, color: fg ?? AppColors.ink3)),
+      );
 
-  Widget _pnlBlock(double pnl, Map<String, dynamic> row, {bool compact = false}) {
-    final positive = pnl >= 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Row(
-          children: [
-            TrendArrow(isPositive: positive, size: compact ? 14 : 16),
-            Text(Money.wallet(pnl.abs()),
-                style: GoogleFonts.ibmPlexMono(fontFeatures: const [FontFeature.tabularFigures()], 
-                    fontSize: compact ? 13 : 15,
-                    fontWeight: FontWeight.w600,
-                    color: positive ? AppColors.bull : AppColors.bear)),
-          ],
-        ),
-        if (!compact)
-          Text('realised P&L',
-              style: GoogleFonts.ibmPlexSans(fontSize: 10, color: AppColors.ink5)),
-      ],
-    );
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────────────
-
-  double _pnl(Map<String, dynamic> row) =>
-      (row['realized_pnl'] as num?)?.toDouble() ?? 0;
-
-  // No _wallet helper: the board ranks on realised P&L and now shows only that.
-  // A wallet balance beside a rank invited the comparison it is worst at — it is
-  // mostly a function of top-ups and starting cash, not of trading well.
-
-  /// Gold, silver, bronze for the podium; brand blue for everyone else. These are
-  /// the only non-theme colours on the screen, and they are here because a medal
-  /// that is not metal-coloured stops reading as a medal.
-  Color _podiumColor(int index) {
-    switch (index) {
-      case 0:
-        return AppColors.crown;
-      case 1:
-        return AppColors.isDark ? const Color(0xFFC9D3E0) : const Color(0xFF5B677A);
-      case 2:
-        return AppColors.isDark ? const Color(0xFFD99A6C) : const Color(0xFF8C4B1F);
-      default:
-        return AppColors.imperialGold;
-    }
-  }
-}
-
-/// Loading placeholder shaped like the real screen: heading, your-rank card, then
-/// rows. A generic spinner told the user nothing about what was arriving.
-class _LeagueSkeleton extends StatelessWidget {
-  const _LeagueSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Shimmer(
-      child: ListView(
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
-        children: [
-          const SkeletonBox(width: 190, height: 26),
-          const SizedBox(height: AppSpacing.sm),
-          const SkeletonBox(width: 220, height: 12),
-          const SizedBox(height: AppSpacing.lg),
+  Widget _podium(List<Map<String, dynamic>> top) {
+    Widget slot(int place) {
+      final r = top.length >= place ? top[place - 1] : null;
+      final first = place == 1;
+      final silver = AppColors.isDark ? const Color(0xFFC9D3E0) : const Color(0xFF5B677A);
+      final bronze = AppColors.isDark ? const Color(0xFFD99A6C) : const Color(0xFF8C4B1F);
+      final color = first ? AppColors.titanGold : place == 2 ? silver : bronze;
+      return Expanded(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (first) Icon(Icons.emoji_events_rounded, color: AppColors.titanGold, size: 20),
+          _avatar(r?['name'] as String?, size: first ? 48 : 36, border: first ? AppColors.titanGold : null),
+          const SizedBox(height: 6),
+          Text(r == null ? '—' : (r['name'] as String? ?? '').trim().isEmpty ? 'Titan' : r['name'] as String,
+              maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+              style: AppFonts.sans(size: first ? 13 : 12, weight: first ? FontWeight.w700 : FontWeight.w600, color: AppColors.ink)),
+          Text(r == null ? '' : _pct(r), style: AppFonts.mono(size: first ? 13 : 12, color: r == null ? AppColors.ink4 : _tone(r))),
+          const SizedBox(height: 6),
           Container(
-            height: 78,
+            height: first ? 96 : place == 2 ? 70 : 54,
+            width: double.infinity,
+            alignment: Alignment.topCenter,
+            padding: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
-              color: AppColors.sand,
-              borderRadius: BorderRadius.circular(AppRadius.xl),
+              color: first ? AppColors.titanGoldSoft : AppColors.cream,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             ),
+            child: Text('$place', style: AppFonts.mono(size: 22, weight: FontWeight.w700, color: color)),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          const SkeletonBox(width: 80, height: 10),
-          const SizedBox(height: AppSpacing.md),
-          for (var i = 0; i < 6; i++)
-            Container(
-              height: i < 3 ? 64 : 52,
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.sand,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-            ),
-        ],
-      ),
+        ]),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [slot(2), const SizedBox(width: 8), slot(1), const SizedBox(width: 8), slot(3)]),
     );
   }
+
+  /// Prize amounts as paid by award_weekly_podium() through the challenges table.
+  Widget _prizeCard() => Container(
+        margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.titanGoldSoft,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.titanGold),
+        ),
+        child: Row(children: [
+          Icon(Icons.card_giftcard_rounded, color: AppColors.titanGold),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink), children: [
+              const TextSpan(text: 'Top 10 win demo cash + a Titan badge: '),
+              TextSpan(text: '₹2,500 · ₹1,500 · ₹1,000', style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+              const TextSpan(text: ' for the podium, '),
+              TextSpan(text: '₹500', style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+              const TextSpan(text: ' for 4th–10th. Paid Monday.'),
+            ])),
+          ),
+        ]),
+      );
+
+  Widget _row(Map<String, dynamic> r) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
+        decoration: BoxDecoration(
+          color: r['is_me'] == true ? AppColors.goldPale : null,
+          border: Border(bottom: BorderSide(color: AppColors.birch)),
+        ),
+        child: Row(children: [
+          SizedBox(width: 24, child: Text('${r['rank']}', textAlign: TextAlign.right, style: AppFonts.mono(size: 13, color: AppColors.ink4))),
+          const SizedBox(width: 12),
+          _avatar(r['name'] as String?),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text((r['name'] as String? ?? '').trim().isEmpty ? 'Titan' : r['name'] as String,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyBold),
+              Text('${r['trades']} trades', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+            ]),
+          ),
+          Text(_pct(r), style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: _tone(r))),
+        ]),
+      );
+
+  Widget _empty() => Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(children: [
+          Icon(Icons.emoji_events_outlined, size: 44, color: AppColors.ink4),
+          const SizedBox(height: AppSpacing.md),
+          Text(_scope == 'friends' ? 'No friends ranked yet' : 'Nobody ranked yet', style: AppText.bodyBold),
+          const SizedBox(height: 4),
+          Text(
+            _scope == 'friends'
+                ? 'Friends are people you referred or who referred you. Invite someone from Refer & earn.'
+                : 'Close 2 trades in profit this week and you could be the first name here.',
+            textAlign: TextAlign.center,
+            style: AppText.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton(onPressed: () => NavTabService.goToTab(NavTabService.trade), child: const Text('Place a trade')),
+        ]),
+      );
+
+  /// Pinned "Your position" bar with the gap to the next tier.
+  Widget _myBar(List<Map<String, dynamic>> rows, Map<String, dynamic>? me) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
+        decoration: BoxDecoration(color: AppColors.goldPale, border: Border(top: BorderSide(color: AppColors.goldMid))),
+        child: Row(children: [
+          SizedBox(
+            width: 24,
+            child: Text(me?['rank'] == null ? '—' : '${me!['rank']}',
+                textAlign: TextAlign.right, style: AppFonts.mono(size: 13, weight: FontWeight.w700, color: AppColors.goldMid)),
+          ),
+          const SizedBox(width: 12),
+          _avatar(null, text: 'You', fill: AppColors.imperialGold, fg: Colors.white),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Your position', style: AppText.bodyBold),
+              Text(leagueGapLabel(rows, me), maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+            ]),
+          ),
+          if (me != null) Text(_pct(me), style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: _tone(me))),
+        ]),
+      );
 }
