@@ -1,10 +1,14 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import '../../core/glossary.dart';
 import '../../core/theme.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_service.dart';
+import '../../widgets/auth_kit.dart';
 import '../../widgets/reward_celebration_dialog.dart';
+import 'glossary_screen.dart';
 
 /// A single multiple-choice question: match a term to its definition.
 class QuizQuestion {
@@ -14,41 +18,41 @@ class QuizQuestion {
   final List<String> options;
   final int correctIndex;
 
+  /// Glossary category, the term's definition and its worked example, shown in
+  /// the header and the answer explanation.
+  final String category;
+  final String explanation;
+  final String example;
+
   const QuizQuestion({
     required this.term,
     required this.options,
     required this.correctIndex,
+    this.category = 'Basics',
+    this.explanation = '',
+    this.example = '',
   });
 }
 
-/// Builds [count] questions from the shared [Glossary] so the quiz content
-/// never diverges from the glossary screen and tooltips.
-///
-/// Pass a seeded [Random] to make the output deterministic in tests.
-List<QuizQuestion> buildGlossaryQuiz({
-  int count = 5,
-  int optionCount = 4,
-  Random? random,
-}) {
+/// Builds [count] questions from the shared [Glossary] so the quiz never
+/// diverges from the glossary screen and tooltips. Pass a seeded [Random] for
+/// deterministic output in tests.
+List<QuizQuestion> buildGlossaryQuiz({int count = 5, int optionCount = 4, Random? random}) {
   final rng = random ?? Random();
   final terms = List.of(Glossary.terms);
   if (terms.length < optionCount) return const [];
-
   terms.shuffle(rng);
-  final chosen = terms.take(count).toList();
-
-  return chosen.map((term) {
+  return terms.take(count).map((term) {
     // Distractors are other terms' definitions, so every option is plausible.
-    final distractors = Glossary.terms.where((t) => t.term != term.term).toList()
-      ..shuffle(rng);
-    final options = <String>[
-      term.definition,
-      ...distractors.take(optionCount - 1).map((t) => t.definition),
-    ]..shuffle(rng);
+    final distractors = Glossary.terms.where((t) => t.term != term.term).toList()..shuffle(rng);
+    final options = <String>[term.definition, ...distractors.take(optionCount - 1).map((t) => t.definition)]..shuffle(rng);
     return QuizQuestion(
       term: term.term,
       options: options,
       correctIndex: options.indexOf(term.definition),
+      category: term.category,
+      explanation: term.definition,
+      example: term.example,
     );
   }).toList();
 }
@@ -57,32 +61,39 @@ List<QuizQuestion> buildGlossaryQuiz({
 const int kGlossaryQuizPassMark = 4;
 
 class GlossaryQuizScreen extends StatefulWidget {
-  const GlossaryQuizScreen({super.key});
+  const GlossaryQuizScreen({super.key, this.questions, this.award});
+
+  /// Fixed questions and award call (tests).
+  final List<QuizQuestion>? questions;
+  final Future<bool> Function()? award;
 
   @override
   State<GlossaryQuizScreen> createState() => _GlossaryQuizScreenState();
 }
 
 class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
-  late List<QuizQuestion> _questions;
+  late List<QuizQuestion> _questions = widget.questions ?? buildGlossaryQuiz();
   int _index = 0;
   int _correct = 0;
   int? _selected;
+  final List<bool?> _results = [];
   bool _submitting = false;
   bool _finished = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _questions = buildGlossaryQuiz();
-  }
-
   void _answer(int option) {
     if (_selected != null) return;
+    final right = option == _questions[_index].correctIndex;
     setState(() {
       _selected = option;
-      if (option == _questions[_index].correctIndex) _correct++;
+      _results.add(right);
+      if (right) _correct++;
     });
+  }
+
+  /// Skipping counts as a wrong answer and moves on.
+  void _skip() {
+    if (_selected == null) _results.add(false);
+    _next();
   }
 
   Future<void> _next() async {
@@ -93,23 +104,15 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
       });
       return;
     }
-
     setState(() {
       _finished = true;
       _submitting = true;
     });
-
     final passed = _correct >= kGlossaryQuizPassMark;
-    var awarded = false;
-    if (passed) {
-      awarded = await SupabaseService().awardGlossaryQuiz();
-    }
+    final awarded = passed && await (widget.award ?? SupabaseService().awardGlossaryQuiz)();
     if (!mounted) return;
     setState(() => _submitting = false);
-
     if (awarded) {
-      // Reuses the existing reward popup so a challenge win looks like every
-      // other reward in the app.
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -123,184 +126,206 @@ class _GlossaryQuizScreenState extends State<GlossaryQuizScreen> {
     }
   }
 
+  void _restart() => setState(() {
+        _questions = widget.questions ?? buildGlossaryQuiz();
+        _index = 0;
+        _correct = 0;
+        _selected = null;
+        _results.clear();
+        _finished = false;
+      });
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Glossary quiz',
-            style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.w700, color: AppColors.ink)),
-        backgroundColor: AppColors.pureWhite,
-        foregroundColor: AppColors.ink,
-        elevation: 0,
-      ),
       body: SafeArea(
-        child: _questions.isEmpty
-            ? Center(
-                child: Text('Quiz unavailable right now.',
-                    style: GoogleFonts.ibmPlexSans(color: AppColors.ink4)))
-            : _finished
-                ? _buildResult()
-                : _buildQuestion(),
+        child: Column(children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
+            child: Row(children: [
+              AuthIconButton(icon: Icons.close_rounded, label: 'Close quiz', onTap: () => Navigator.of(context).maybePop()),
+              const SizedBox(width: 12),
+              Expanded(child: _segments()),
+              const SizedBox(width: 12),
+              Text('$_correct/${_questions.length}', style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: AppColors.titanGold)),
+              const SizedBox(width: 8),
+              ListenableBuilder(
+                listenable: ThemeService(),
+                builder: (_, _) => AuthIconButton(
+                  icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  label: 'Toggle light or dark theme',
+                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+                ),
+              ),
+            ]),
+          ),
+          Expanded(
+            child: _questions.isEmpty
+                ? Center(child: Text('Quiz unavailable right now.', style: AppText.body))
+                : _finished
+                    ? _result()
+                    : _question(),
+          ),
+        ]),
       ),
     );
   }
 
-  Widget _buildQuestion() {
+  /// One segment per question: green right, red wrong, accent current.
+  Widget _segments() => Semantics(
+        label: 'Question ${_index + 1} of ${_questions.length}',
+        child: Row(children: [
+          for (var i = 0; i < _questions.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
+            Expanded(
+              child: Container(
+                height: 6,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  color: i < _results.length
+                      ? (_results[i]! ? AppColors.bull : AppColors.bear)
+                      : i == _index && !_finished
+                          ? AppColors.goldMid
+                          : AppColors.cream,
+                ),
+              ),
+            ),
+          ],
+        ]),
+      );
+
+  Widget _question() {
     final q = _questions[_index];
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: LinearProgressIndicator(
-            value: (_index + 1) / _questions.length,
-            minHeight: 6,
-            backgroundColor: AppColors.cream,
-            valueColor: AlwaysStoppedAnimation(AppColors.imperialGold),
-            semanticsLabel: 'Question ${_index + 1} of ${_questions.length}',
+    final answered = _selected != null;
+    final right = answered && _selected == q.correctIndex;
+    return Column(children: [
+      Expanded(
+        child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 20, AppSpacing.lg, 0), children: [
+          Text('QUESTION ${_index + 1} OF ${_questions.length} · ${q.category.toUpperCase()}', style: AppText.sectionLabel),
+          const SizedBox(height: 10),
+          Text.rich(
+            TextSpan(style: AppFonts.sans(size: 24, weight: FontWeight.w700, color: AppColors.ink, height: 1.25), children: [
+              const TextSpan(text: 'What does '),
+              TextSpan(text: q.term, style: TextStyle(color: AppColors.goldMid)),
+              const TextSpan(text: ' mean?'),
+            ]),
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Text('QUESTION ${_index + 1} OF ${_questions.length}',
-            style: GoogleFonts.ibmPlexSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink4,
-                letterSpacing: 0.5)),
-        const SizedBox(height: AppSpacing.xs),
-        Text('What does "${q.term}" mean?',
-            style: GoogleFonts.ibmPlexSans(
-                fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        const SizedBox(height: AppSpacing.lg),
-        for (var i = 0; i < q.options.length; i++) _buildOption(q, i),
-        const SizedBox(height: AppSpacing.md),
-        if (_selected != null)
+          const SizedBox(height: 14),
+          for (var i = 0; i < q.options.length; i++) _option(q, i),
+          if (answered)
+            Container(
+              margin: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: right ? AppColors.bullLight : AppColors.titanGoldSoft,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(right ? 'Correct!' : 'Not quite',
+                    style: AppFonts.sans(size: 14, weight: FontWeight.w700, color: right ? AppColors.bull : AppColors.titanGold)),
+                const SizedBox(height: 4),
+                Text('${q.term}: ${q.explanation}', style: AppFonts.sans(size: 13, color: AppColors.ink, height: 1.4)),
+                if (q.example.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(q.example, style: AppFonts.sans(size: 12, color: AppColors.ink3, height: 1.4)),
+                ],
+              ]),
+            ),
+        ]),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 8),
+        child: Column(children: [
           SizedBox(
             width: double.infinity,
+            height: 52,
             child: ElevatedButton(
-              onPressed: _next,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.ink,
-                foregroundColor: AppColors.pureWhite,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md)),
-              ),
-              child: Text(
-                  _index + 1 < _questions.length ? 'Next question' : 'See result',
-                  style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
+              onPressed: answered ? _next : _skip,
+              child: Text(!answered ? 'Skip' : _index + 1 < _questions.length ? 'Next question' : 'See result'),
             ),
           ),
-      ],
-    );
+          TextButton(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GlossaryScreen())),
+            child: Text('Open full glossary', style: AppFonts.sans(size: 13, color: AppColors.ink4)),
+          ),
+        ]),
+      ),
+    ]);
   }
 
-  Widget _buildOption(QuizQuestion q, int i) {
-    final isCorrect = i == q.correctIndex;
-    final isPicked = _selected == i;
+  Widget _option(QuizQuestion q, int i) {
     final revealed = _selected != null;
-
-    Color border = AppColors.birch;
-    Color background = AppColors.pureWhite;
-    if (revealed && isCorrect) {
-      border = AppColors.bull;
-      background = AppColors.bullLight;
-    } else if (revealed && isPicked) {
-      border = AppColors.bear;
-      background = AppColors.bearLight;
-    }
-
-    return Semantics(
-      button: true,
-      selected: isPicked,
-      child: GestureDetector(
-        onTap: () => _answer(i),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: background,
+    final isCorrect = i == q.correctIndex, isPicked = _selected == i;
+    final good = revealed && isCorrect, bad = revealed && isPicked && !isCorrect;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Semantics(
+        button: true,
+        selected: isPicked,
+        child: Material(
+          color: good ? AppColors.bullLight : bad ? AppColors.bearLight : AppColors.pureWhite,
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: border, width: revealed && (isCorrect || isPicked) ? 2 : 1),
+            side: BorderSide(color: good ? AppColors.bull : bad ? AppColors.bear : AppColors.birch),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(q.options[i],
-                    style: GoogleFonts.ibmPlexSans(
-                        fontSize: 13, color: AppColors.ink2, height: 1.4)),
-              ),
-              if (revealed && isCorrect)
-                Icon(Icons.check_circle, size: 18, color: AppColors.bull)
-              else if (revealed && isPicked)
-                Icon(Icons.cancel, size: 18, color: AppColors.bear),
-            ],
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () => _answer(i),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 56),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(6)),
+                  child: Text('ABCD'[i], style: AppFonts.mono(size: 12, weight: FontWeight.w600, color: AppColors.ink3)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(q.options[i], style: AppFonts.sans(size: 14, weight: FontWeight.w500, color: AppColors.ink, height: 1.35))),
+                if (good) Text('✓', style: AppFonts.mono(size: 15, weight: FontWeight.w700, color: AppColors.bull)),
+                if (bad) Text('✕', style: AppFonts.mono(size: 15, weight: FontWeight.w700, color: AppColors.bear)),
+              ]),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildResult() {
+  Widget _result() {
     final passed = _correct >= kGlossaryQuizPassMark;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: passed ? AppColors.bullLight : AppColors.cream,
-                shape: BoxShape.circle,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(color: passed ? AppColors.bullLight : AppColors.cream, shape: BoxShape.circle),
+            child: Icon(passed ? Icons.school_rounded : Icons.replay_rounded, size: 40, color: passed ? AppColors.bull : AppColors.ink4),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text('$_correct / ${_questions.length} correct', style: AppFonts.sans(size: 24, weight: FontWeight.w700, color: AppColors.ink)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            passed ? 'Passed. Any reward you earned is waiting in your wallet.' : 'You need $kGlossaryQuizPassMark correct to pass. Read the glossary and try again.',
+            textAlign: TextAlign.center,
+            style: AppText.body,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          if (_submitting)
+            const CircularProgressIndicator()
+          else
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: passed ? () => Navigator.of(context).pop() : _restart,
+                child: Text(passed ? 'Done' : 'Try again'),
               ),
-              child: Icon(passed ? Icons.school_rounded : Icons.replay_rounded,
-                  size: 40, color: passed ? AppColors.bull : AppColors.ink4),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Text('$_correct / ${_questions.length} correct',
-                style: GoogleFonts.ibmPlexSans(
-                    fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.ink)),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              passed
-                  ? 'Passed. Your reward is waiting in the wallet.'
-                  : 'You need $kGlossaryQuizPassMark correct to pass. Read the glossary and try again.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.ibmPlexSans(fontSize: 14, color: AppColors.ink4, height: 1.4),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            if (_submitting)
-              const CircularProgressIndicator()
-            else
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: passed
-                      ? () => Navigator.of(context).pop()
-                      : () => setState(() {
-                            _questions = buildGlossaryQuiz();
-                            _index = 0;
-                            _correct = 0;
-                            _selected = null;
-                            _finished = false;
-                          }),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.imperialGold,
-                    foregroundColor: AppColors.pureWhite,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md)),
-                  ),
-                  child: Text(passed ? 'Done' : 'Try again',
-                      style: GoogleFonts.ibmPlexSans(fontWeight: FontWeight.bold)),
-                ),
-              ),
-          ],
-        ),
+        ]),
       ),
     );
   }
