@@ -145,6 +145,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Future<void> _toggleWatch() async {
+    ChurnTelemetryService.instance.recordButtonTap('stock_detail_watchlist_bookmark_btn');
     setState(() => _isWatched = !_isWatched);
     try {
       if (_isWatched) {
@@ -158,6 +159,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Future<void> _showPriceAlertSheet() async {
+    ChurnTelemetryService.instance.recordButtonTap('stock_detail_price_alert_bell_btn');
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -177,8 +179,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     _loadData();
   }
 
-  void _openProChart() =>
-      _push(FullscreenChartScreen(symbol: widget.symbol, market: widget.market, name: widget.name, quote: _quote));
+  void _openProChart() {
+    ChurnTelemetryService.instance.recordButtonTap('stock_detail_open_pro_fullscreen_chart_btn');
+    _push(FullscreenChartScreen(symbol: widget.symbol, market: widget.market, name: widget.name, quote: _quote));
+  }
 
   bool get _isUp => (_quote?.change ?? 0) >= 0;
   Color get _changeColor => _isUp ? AppColors.bull : AppColors.bear;
@@ -371,6 +375,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           for (final r in kStockRanges.keys) ...[
             Expanded(
               child: _chip(r, r == _range, () {
+                ChurnTelemetryService.instance.recordButtonTap('stock_detail_range_${r.toLowerCase()}_btn');
                 setState(() => _range = r);
                 _loadHistory(r);
               }),
@@ -391,7 +396,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             Expanded(
               child: _toolButton(
                 'Option chain',
-                () => _push(OptionChainScreen(underlyingSymbol: widget.symbol, spotPrice: _quote?.price ?? 0.0, market: widget.market)),
+                () {
+                  ChurnTelemetryService.instance.recordButtonTap('stock_detail_open_option_chain_btn', extra: {'sym': widget.symbol});
+                  _push(OptionChainScreen(underlyingSymbol: widget.symbol, spotPrice: _quote?.price ?? 0.0, market: widget.market));
+                },
               ),
             ),
           ],
@@ -568,10 +576,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       );
 
   Future<void> _openOrder(bool isBuy) async {
+    ChurnTelemetryService.instance.recordButtonTap(isBuy ? 'stock_detail_bottom_buy_cta' : 'stock_detail_bottom_sell_short_cta', extra: {'sym': widget.symbol});
     final sym = widget.symbol.toUpperCase();
     final isOption = sym.contains('-CE') || sym.contains('-PE');
     final isFuture = sym.contains('FUT') || sym.contains('FUTURE');
-    ChurnTelemetryService.instance.recordButtonTap(isBuy ? 'stock_detail_buy_btn' : 'stock_detail_sell_btn', screenId: 'StockDetailScreen', extra: {'symbol': widget.symbol});
     await _push(OrderEntryScreen(quote: _quote!, isBuy: isBuy, instrumentType: isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY')));
   }
 }
@@ -679,6 +687,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
   }
 
   Future<void> _create() async {
+    ChurnTelemetryService.instance.recordButtonTap('stock_detail_price_alert_save_btn');
     final target = double.tryParse(_targetController.text.trim());
     if (target == null || target <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -723,6 +732,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
   }
 
   Future<void> _delete(PriceAlert alert) async {
+    ChurnTelemetryService.instance.recordButtonTap('stock_detail_price_alert_delete_btn');
     setState(() => _alerts = _alerts.where((a) => a.id != alert.id).toList());
     try {
       await SupabaseService().deletePriceAlert(alert.id);

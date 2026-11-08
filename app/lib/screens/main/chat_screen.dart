@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
 import '../../widgets/app_network_image.dart';
@@ -974,7 +975,10 @@ class _ChatScreenState extends State<ChatScreen> {
             tooltip: _isChatNotificationsMuted
                 ? 'Chat notifications muted (tap to change)'
                 : 'Chat notifications active (tap to mute)',
-            onPressed: _showNotificationMuteSheet,
+            onPressed: () {
+              ChurnTelemetryService.instance.recordButtonTap('chat_mute_notifications_btn');
+              _showNotificationMuteSheet();
+            },
           ),
           const SizedBox(width: 4),
         ],
@@ -1414,7 +1418,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   IconButton(
                     icon: Icon(Icons.image_outlined, color: AppColors.ink3),
                     tooltip: 'Send a photo',
-                    onPressed: _sending ? null : _sendImage,
+                    onPressed: _sending ? null : () {
+                      ChurnTelemetryService.instance.recordButtonTap('chat_attach_screenshot_image_btn');
+                      _sendImage();
+                    },
                   ),
                   if (isAdmin) ...[
                     IconButton(
@@ -1499,7 +1506,10 @@ class _ChatScreenState extends State<ChatScreen> {
                         backgroundColor: AppColors.imperialGold, foregroundColor: Colors.white, fixedSize: const Size(44, 44)),
                     icon: Icon(_editingMessage != null ? Icons.check_rounded : Icons.arrow_upward_rounded),
                     tooltip: _editingMessage != null ? 'Save edit' : 'Send',
-                    onPressed: _sending ? null : _sendText,
+                    onPressed: _sending ? null : () {
+                      ChurnTelemetryService.instance.recordButtonTap('chat_send_message_btn');
+                      _sendText();
+                    },
                   ),
                 ],
               ),

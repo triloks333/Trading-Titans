@@ -5,6 +5,7 @@ import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../models/order.dart';
 import '../../services/supabase_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
@@ -211,7 +212,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             borderRadius: BorderRadius.circular(AppRadius.sm), side: BorderSide(color: p == _period ? AppColors.goldMid : AppColors.birch)),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: () => setState(() => _period = p),
+          onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('analytics_period_1w_1m_3m_all_chip');
+            setState(() => _period = p);
+          },
           child: Container(
             height: 32,
             alignment: Alignment.center,
@@ -340,7 +344,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AutopsyScreen())),
+          onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('analytics_open_autopsy_leak_card');
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AutopsyScreen()));
+          },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(children: [

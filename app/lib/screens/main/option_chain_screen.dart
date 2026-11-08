@@ -460,7 +460,10 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   onTap: () {
-                    ChurnTelemetryService.instance.recordButtonTap('option_chain_expiry_chip', screenId: 'OptionChainScreen', extra: {'expiry': e});
+                    final i = _expiries.indexOf(e);
+                    if (i >= 0 && i < 3) {
+                      ChurnTelemetryService.instance.recordButtonTap(const ['option_chain_expiry_date_1_near', 'option_chain_expiry_date_2_next', 'option_chain_expiry_date_3_monthly'][i]);
+                    }
                     setState(() => _selectedExpiry = e);
                     _updateStrikesForExpiry(e);
                   },
@@ -525,7 +528,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
           flex: 2,
           child: InkWell(
             onTap: () {
-            ChurnTelemetryService.instance.recordButtonTap('option_chain_call_strike', screenId: 'OptionChainScreen', extra: {'strike': strike, 'underlying': widget.underlyingSymbol});
+            ChurnTelemetryService.instance.recordButtonTap('option_chain_call_ce_cell_tap', extra: {'sym': widget.underlyingSymbol});
             _openOptionDetail(call, true);
           },
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -545,7 +548,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
           flex: 2,
           child: InkWell(
             onTap: () {
-            ChurnTelemetryService.instance.recordButtonTap('option_chain_put_strike', screenId: 'OptionChainScreen', extra: {'strike': strike, 'underlying': widget.underlyingSymbol});
+            ChurnTelemetryService.instance.recordButtonTap('option_chain_put_pe_cell_tap', extra: {'sym': widget.underlyingSymbol});
             _openOptionDetail(put, false);
           },
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -640,8 +643,14 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                           child: Column(children: [
                             if (widget.market == 'stock') ...[
                               _segmented([
-                                ('Options', _derivativeType == 'options', () => setState(() => _derivativeType = 'options')),
-                                ('Futures', _derivativeType == 'futures', () => setState(() => _derivativeType = 'futures')),
+                                ('Options', _derivativeType == 'options', () {
+                                  ChurnTelemetryService.instance.recordButtonTap('option_chain_tab_options_btn');
+                                  setState(() => _derivativeType = 'options');
+                                }),
+                                ('Futures', _derivativeType == 'futures', () {
+                                  ChurnTelemetryService.instance.recordButtonTap('option_chain_tab_futures_btn');
+                                  setState(() => _derivativeType = 'futures');
+                                }),
                               ]),
                               const SizedBox(height: 10),
                             ],
@@ -649,8 +658,14 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                               _expiryChips(),
                               const SizedBox(height: 10),
                               _segmented([
-                                ('LTP · OI', !_greeks, () => setState(() => _greeks = false)),
-                                ('Greeks', _greeks, () => setState(() => _greeks = true)),
+                                ('LTP · OI', !_greeks, () {
+                                  ChurnTelemetryService.instance.recordButtonTap('option_chain_greeks_delta_iv_toggle');
+                                  setState(() => _greeks = false);
+                                }),
+                                ('Greeks', _greeks, () {
+                                  ChurnTelemetryService.instance.recordButtonTap('option_chain_greeks_delta_iv_toggle');
+                                  setState(() => _greeks = true);
+                                }),
                               ]),
                             ],
                           ]),
@@ -830,7 +845,12 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 children: [
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: isFutureExpired ? null : () => _openFutureOrder(future, true),
+                      onPressed: isFutureExpired
+                          ? null
+                          : () {
+                              ChurnTelemetryService.instance.recordButtonTap('option_chain_future_contract_buy_btn', extra: {'sym': widget.underlyingSymbol});
+                              _openFutureOrder(future, true);
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isFutureExpired ? AppColors.birch : AppColors.bull,
                         disabledBackgroundColor: AppColors.birch,
@@ -849,7 +869,12 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: isFutureExpired ? null : () => _openFutureOrder(future, false),
+                      onPressed: isFutureExpired
+                          ? null
+                          : () {
+                              ChurnTelemetryService.instance.recordButtonTap('option_chain_future_contract_sell_btn', extra: {'sym': widget.underlyingSymbol});
+                              _openFutureOrder(future, false);
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isFutureExpired ? AppColors.birch : AppColors.bear,
                         disabledBackgroundColor: AppColors.birch,

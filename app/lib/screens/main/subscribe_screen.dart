@@ -204,7 +204,10 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             builder: (_, _) => AuthIconButton(
               icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
               label: 'Toggle light or dark theme',
-              onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+              onTap: () {
+                ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+              },
             ),
           ),
         ]),
@@ -224,6 +227,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 excludeSemantics: true,
                 child: GestureDetector(
                   onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap(i == 0 ? 'subscribe_seg_tab_0_subscriptions' : 'subscribe_seg_tab_1_topups');
                     if (_selectedTab == i) return;
                     HapticFeedback.selectionClick();
                     setState(() {
@@ -288,10 +292,13 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 label: SizedBox(width: double.infinity, child: Text(label, textAlign: TextAlign.center)),
                 selected: _billingInterval == key,
                 showCheckmark: false,
-                onSelected: (_) => setState(() {
-                  _billingInterval = key;
-                  _selectedSku = null;
-                }),
+                onSelected: (_) {
+                  ChurnTelemetryService.instance.recordButtonTap('subscribe_interval_${key}_chip');
+                  setState(() {
+                    _billingInterval = key;
+                    _selectedSku = null;
+                  });
+                },
               ),
             ),
           ],
@@ -386,6 +393,18 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         features: const ['Starter simulation plan', 'Stocks, US and crypto paper trading'],
       );
 
+  /// Analytics ids for the plan cards; other skus (e.g. USD variants) record nothing.
+  static const _cardIds = {
+    'pro_monthly': 'pro_monthly_149',
+    'pro_annual': 'pro_annual_1199',
+    'titan_monthly': 'titan_monthly_799',
+    'titan_annual': 'titan_annual_5999',
+    'topup_mini': 'topup_mini_29',
+    'topup_boost': 'topup_boost_199',
+    'topup_plus': 'topup_plus_599',
+    'topup_max': 'topup_max_999',
+  };
+
   Widget _planCard(PlanOption p, Currency billing, {required bool selected, required bool current}) {
     final titan = p.tier == 'titan' || p.pricePaise >= 79900;
     final features = p.isSubscription
@@ -419,8 +438,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       approx: _approx(p, billing),
       features: features,
       onTap: current || _busySku != null ? null : () {
+        final cardId = _cardIds[p.sku];
+        if (cardId != null) ChurnTelemetryService.instance.recordButtonTap('subscribe_card_$cardId');
         ChurnTelemetryService.instance.recordPaywallPackView(p.sku);
-        ChurnTelemetryService.instance.recordButtonTap('select_pack_${p.sku}', screenId: 'SubscribeScreen');
         setState(() => _selectedSku = p.sku);
       },
     );
@@ -470,6 +490,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         border: Border.all(color: AppColors.birch),
       ),
       child: ExpansionTile(
+        onExpansionChanged: (open) {
+          if (open) ChurnTelemetryService.instance.recordButtonTap('subscribe_faq_mentorship_expand');
+        },
         tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 2),
         childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         title: Text(
@@ -508,6 +531,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         border: Border.all(color: AppColors.birch),
       ),
       child: ExpansionTile(
+        onExpansionChanged: (open) {
+          if (open) ChurnTelemetryService.instance.recordButtonTap('subscribe_faq_topup_expand');
+        },
         tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 2),
         childrenPadding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
         title: Text(
@@ -560,7 +586,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   // ---------------------------------------------------------------------------
   Future<void> _openCheckout(PlanOption product) async {
     if (_busySku != null) return;
-    ChurnTelemetryService.instance.recordButtonTap('pay_with_upi_btn', screenId: 'SubscribeScreen', extra: {'sku': product.sku, 'price_paise': product.pricePaise});
+    ChurnTelemetryService.instance.recordButtonTap('subscribe_footer_pay_with_upi_cta');
 
     if (Platform.isIOS) {
       _tell('In-app purchases are not enabled on iOS yet. All trading simulation features are completely free!');
@@ -775,6 +801,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           if (product != null)
             ElevatedButton(
               onPressed: () {
+                ChurnTelemetryService.instance.recordButtonTap('subscribe_payment_failed_retry_btn');
                 Navigator.of(ctx).pop();
                 _openCheckout(product);
               },
@@ -876,6 +903,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () async {
+                        ChurnTelemetryService.instance.recordButtonTap('subscribe_phone_sheet_continue_btn');
                         final raw = controller.text.replaceAll(RegExp(r'[^\d+]'), '').trim();
                         final digits = raw.replaceAll('+', '');
                         if (digits.length < 10 || digits.length > 15) {

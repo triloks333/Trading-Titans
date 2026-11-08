@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/money.dart';
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../models/challenge.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
@@ -104,7 +105,10 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                 builder: (_, _) => AuthIconButton(
                   icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
                   label: 'Toggle light or dark theme',
-                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                    ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+                  },
                 ),
               ),
             ]),

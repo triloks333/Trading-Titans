@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/supabase_service.dart';
 
@@ -205,7 +206,10 @@ class _ReferEarnScreenState extends State<ReferEarnScreen> {
                             ),
                             const SizedBox(width: AppSpacing.sm),
                             GestureDetector(
-                              onTap: () => _copyToClipboard(referralCode),
+                              onTap: () {
+                                ChurnTelemetryService.instance.recordButtonTap('refer_earn_copy_code_btn');
+                                _copyToClipboard(referralCode);
+                              },
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(

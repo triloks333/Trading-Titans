@@ -83,7 +83,45 @@ void main() {
     final keys = scoreIntel(const [], now: now, includeZeros: true).keys.where((k) => !k.startsWith('x_')).toSet();
     final unknown = keys.difference(names);
     expect(unknown, isEmpty, reason: 'scorer emits names not in the catalogue: ${unknown.take(5)}');
+
+    // A button's metrics only count when the app records its taps: its id appears
+    // literally in lib/ (call or id map) or matches an interpolated recordButtonTap id.
+    final src = [
+      for (final f in Directory('lib').listSync(recursive: true).whereType<File>())
+        if (f.path.endsWith('.dart') && !f.path.contains('intel_ids')) f.readAsStringSync(),
+    ].join('\n');
+    final patterns = [
+      for (final m in RegExp(r"recordButtonTap\(\s*'([^']*\$[^']*)'").allMatches(src))
+        RegExp('^${RegExp.escape(m[1]!).replaceAll(RegExp(r'\\\$\\\{[^}]*\\\}|\\\$\w+'), '[a-z0-9_]+')}\$'),
+    ];
+    final wired = kIntelButtons.where((b) => src.contains("'$b'") || patterns.any((p) => p.hasMatch(b))).toSet();
+    final unwired = kIntelButtons.toSet().difference(wired);
+    final live = keys.where((k) => !k.startsWith('btn_') || wired.any((b) => k.startsWith('btn_${b}_'))).length;
     // ignore: avoid_print
-    print('INTEL COVERAGE: ${keys.length} of ${names.length} catalogue indicators computed');
+    print('INTEL COVERAGE: $live of ${names.length} catalogue indicators computed '
+        '(${wired.length}/${kIntelButtons.length} buttons wired; unwired: ${unwired.join(', ')})');
+
+    // Rules with an honest live reaction: trigger detected + reaction delivered or guard-suppressed.
+    final slugs = kIntelSymbols.toSet();
+    var rules = 0;
+    final byBook = <int, int>{};
+    for (final r in (cat['rules'] as List).cast<Map<String, dynamic>>()) {
+      final b = r['b'] as int, persona = '${r['persona']}', target = '${r['target']}', sym = r['sym'];
+      final btn = (r['refs'] as List).cast<String>().firstWhere((x) => x.startsWith('btn_'), orElse: () => '');
+      final ok = switch (b) {
+        1 => slugs.contains(sym) && !persona.contains('Affluence'), // device-tier persona is out of scope
+        3 => slugs.contains(sym),
+        4 => slugs.contains(sym) && persona.contains('Consecutive'),
+        6 => (target.contains('Zero-Click') || target.contains('Rage-Tapped')) && wired.any((w) => btn.startsWith('btn_${w}_')),
+        8 => target.startsWith('App Crashed'),
+        _ => false,
+      };
+      if (ok) {
+        rules++;
+        byBook[b] = (byBook[b] ?? 0) + 1;
+      }
+    }
+    // ignore: avoid_print
+    print('INTEL RULES: $rules of ${(cat['rules'] as List).length} rules have an honest live reaction $byBook');
   });
 }

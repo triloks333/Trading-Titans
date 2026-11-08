@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/money.dart';
+import '../services/churn_telemetry_service.dart';
 
 class RewardCelebrationDialog extends StatefulWidget {
   final double amount;
@@ -188,7 +189,10 @@ class _RewardCelebrationDialogState extends State<RewardCelebrationDialog> with 
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: widget.onClose,
+                    onPressed: () {
+                      ChurnTelemetryService.instance.recordButtonTap('global_reward_celebration_claim_btn');
+                      widget.onClose();
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.ink,
                       padding: const EdgeInsets.symmetric(vertical: 14),

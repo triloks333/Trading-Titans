@@ -559,7 +559,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
               AuthIconButton(
                 icon: Icons.show_chart_rounded,
                 label: 'Analytics',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen())),
+                onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('portfolio_analytics_shortcut_btn');
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AnalyticsScreen()));
+                },
               ),
               const SizedBox(width: 8),
               ListenableBuilder(
@@ -683,7 +686,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                 label: '$label ($n)',
                 excludeSemantics: true,
                 child: GestureDetector(
-                  onTap: () => setState(() => _view = i),
+                  onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap(const ['portfolio_subtab_0_holdings_btn', 'portfolio_subtab_1_fo_positions_btn', 'portfolio_subtab_2_closed_trades_btn'][i]);
+                    setState(() => _view = i);
+                  },
                   child: Container(
                     height: 36,
                     alignment: Alignment.center,
@@ -791,7 +797,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       value: closed ? '—' : Money.instrument(h.displayCurrentPrice * h.quantity.abs(), market: h.market),
       pnl: pnl,
       up: h.displayPnl >= 0,
-      onTap: () => _openHolding(h),
+      onTap: () {
+        ChurnTelemetryService.instance.recordButtonTap('portfolio_holding_row_tap', extra: {'sym': h.symbol});
+        _openHolding(h);
+      },
       onExit: closed ? null : () => _exitHolding(h),
       dim: closed,
     );
@@ -807,7 +816,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     final num = AppFonts.mono(size: 12, color: AppColors.ink2);
     String money(double v) => Money.instrument(v, market: h.market);
     return InkWell(
-      onTap: () => _openHolding(h),
+      onTap: () {
+        ChurnTelemetryService.instance.recordButtonTap('portfolio_holding_row_tap', extra: {'sym': h.symbol});
+        _openHolding(h);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
@@ -904,7 +916,10 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       value: Money.wallet(_foCurrentValue(pos), decimals: 2),
       pnl: '${_fmtSigned(pnl)} (${pct >= 0 ? '+' : '−'}${pct.abs().toStringAsFixed(2)}%)',
       up: pnl >= 0,
-      onTap: () => _openFo(pos),
+      onTap: () {
+        ChurnTelemetryService.instance.recordButtonTap('portfolio_holding_row_tap', extra: {'sym': pos.symbol});
+        _openFo(pos);
+      },
       onExit: () => _exitFo(pos),
     );
   }
@@ -921,13 +936,14 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       );
 
   Widget _toolCards() {
-    Widget card(IconData icon, String title, String sub, Widget screen) => Expanded(
+    Widget card(String id, IconData icon, String title, String sub, Widget screen) => Expanded(
           child: Material(
             color: AppColors.pureWhite,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
             child: InkWell(
               borderRadius: BorderRadius.circular(AppRadius.md),
               onTap: () async {
+                ChurnTelemetryService.instance.recordButtonTap(id);
                 await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
                 _load();
               },
@@ -947,9 +963,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(children: [
-        card(Icons.manage_search_rounded, 'Trade autopsy', 'Why trades won or lost', const AutopsyScreen()),
+        card('portfolio_autopsy_shortcut_btn', Icons.manage_search_rounded, 'Trade autopsy', 'Why trades won or lost', const AutopsyScreen()),
         const SizedBox(width: 8),
-        card(Icons.format_list_bulleted_rounded, 'Orders', o == null ? 'Open and executed' : '${o.open} open · ${o.done} executed',
+        card('portfolio_orders_status_bar_card', Icons.format_list_bulleted_rounded, 'Orders', o == null ? 'Open and executed' : '${o.open} open · ${o.done} executed',
             const OrdersScreen()),
       ]),
     );

@@ -12,6 +12,7 @@ import '../../widgets/skeleton.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
 import '../../services/nav_tab_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -294,7 +295,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 label: '$label · ${orders.where((o) => OrdersScreen.tabOf(o.status) == i).length}',
                 excludeSemantics: true,
                 child: InkWell(
-                  onTap: () => setState(() => _tab = i),
+                  onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap(const ['orders_tab_pending_btn', 'orders_tab_executed_btn', 'orders_tab_cancelled_rejected_btn'][i]);
+                    setState(() => _tab = i);
+                  },
                   child: Container(
                     height: 44,
                     alignment: Alignment.center,
@@ -367,7 +371,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36)),
-                  onPressed: () => _showModifyOrderSheet(context, order),
+                  onPressed: () {
+                    ChurnTelemetryService.instance.recordButtonTap('orders_pending_modify_btn');
+                    _showModifyOrderSheet(context, order);
+                  },
                   child: const Text('Modify'),
                 ),
               ),
@@ -375,7 +382,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), foregroundColor: AppColors.bear),
-                  onPressed: () => _cancel(order.id),
+                  onPressed: () {
+                    ChurnTelemetryService.instance.recordButtonTap('orders_pending_cancel_btn');
+                    _cancel(order.id);
+                  },
                   child: const Text('Cancel order'),
                 ),
               ),
@@ -804,6 +814,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
+                          ChurnTelemetryService.instance.recordButtonTap('orders_pending_modify_btn');
                           Navigator.of(context).pop();
                           _showModifyOrderSheet(context, order);
                         },
@@ -829,6 +840,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
+                          ChurnTelemetryService.instance.recordButtonTap('orders_pending_cancel_btn');
                           Navigator.of(context).pop();
                           _cancel(order.id);
                         },

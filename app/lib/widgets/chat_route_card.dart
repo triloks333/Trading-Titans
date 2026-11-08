@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 import '../screens/main/subscribe_screen.dart';
 import '../screens/main/trade_screen.dart';
 import '../screens/main/portfolio_screen.dart';
@@ -261,6 +262,7 @@ class ChatRouteAttachmentCard extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
+                ChurnTelemetryService.instance.recordButtonTap('chat_shared_route_card_tap');
                 HapticFeedback.lightImpact();
                 meta.onOpen(context);
               },

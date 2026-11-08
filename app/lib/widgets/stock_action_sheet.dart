@@ -12,6 +12,7 @@ import '../screens/main/stock_detail_screen.dart';
 import '../screens/main/order_entry_screen.dart';
 import '../screens/main/option_chain_screen.dart';
 import '../services/supabase_service.dart';
+import '../services/churn_telemetry_service.dart';
 
 class StockActionSheet extends StatefulWidget {
   final String symbol;
@@ -127,6 +128,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
   }
 
   void _navigateToDetail() async {
+    ChurnTelemetryService.instance.recordButtonTap('stock_action_sheet_chart_detail_btn', extra: {'sym': widget.symbol});
     final navigator = Navigator.of(context);
     final refresh = widget.onRefresh;
     Navigator.pop(context);
@@ -143,6 +145,7 @@ class _StockActionSheetState extends State<StockActionSheet> {
   }
 
   void _navigateToOrder(bool isBuy) async {
+    ChurnTelemetryService.instance.recordButtonTap(isBuy ? 'stock_action_sheet_buy_btn' : 'stock_action_sheet_sell_btn', extra: {'sym': widget.symbol});
     if (_quote == null) return;
     final deriv = MarketService.parseDerivative(widget.symbol);
     final navigator = Navigator.of(context);

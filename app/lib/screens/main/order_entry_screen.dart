@@ -450,7 +450,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             runSpacing: 8,
             children: terms.map((t) {
               return GestureDetector(
-                onTap: () => showTermSheet(context, t),
+                onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('order_ticket_info_tooltip_icon');
+                  showTermSheet(context, t);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
@@ -524,7 +527,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       });
 
   Widget _buildValidityOption(String title) =>
-      _chip(title == 'DAY' ? 'Day' : title, _validity == title, () => setState(() => _validity = title));
+      _chip(title == 'DAY' ? 'Day' : title, _validity == title, () {
+        ChurnTelemetryService.instance.recordButtonTap('order_ticket_validity_day_vs_ioc_btn');
+        setState(() => _validity = title);
+      });
 
   Map<String, double> get _chargesPreview {
     final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
@@ -837,6 +843,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   /// Adds one unit (one lot for F&O, 0.01 for crypto, 1 share otherwise).
   void _stepQty() {
+    ChurnTelemetryService.instance.recordButtonTap('order_ticket_qty_plus_stepper_btn');
     if (_isCrypto) {
       final v = (double.tryParse(_qtyController.text) ?? 0) + 0.01;
       _qtyController.text = v.toStringAsFixed(v < 1 ? 4 : 2);
@@ -906,7 +913,12 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           label: label,
           excludeSemantics: true,
           child: GestureDetector(
-            onTap: widget.isExitOrder ? null : () => setState(() => _isBuy = buy),
+            onTap: widget.isExitOrder
+                ? null
+                : () {
+                    ChurnTelemetryService.instance.recordButtonTap(buy ? 'order_ticket_side_buy_toggle' : 'order_ticket_side_sell_toggle');
+                    setState(() => _isBuy = buy);
+                  },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               height: 36,
@@ -979,8 +991,14 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 // Product: hidden for crypto and exits, which have no product choice.
                 if (!_isCrypto && !widget.isExitOrder) ...[
                   _chipRow([
-                    _chip(optionLabels ? 'NRML' : 'Delivery', !_isIntraday, () => setState(() => _isIntraday = false)),
-                    _chip(optionLabels ? 'MIS' : 'Intraday', _isIntraday, () => setState(() => _isIntraday = true)),
+                    _chip(optionLabels ? 'NRML' : 'Delivery', !_isIntraday, () {
+                      ChurnTelemetryService.instance.recordButtonTap('order_ticket_product_delivery_cnc_btn');
+                      setState(() => _isIntraday = false);
+                    }),
+                    _chip(optionLabels ? 'MIS' : 'Intraday', _isIntraday, () {
+                      ChurnTelemetryService.instance.recordButtonTap('order_ticket_product_intraday_mis_btn');
+                      setState(() => _isIntraday = true);
+                    }),
                   ]),
                   if (optionLabels) ...[
                     const SizedBox(height: 6),
@@ -995,14 +1013,27 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 const SizedBox(height: 6),
                 _chipRow([
                   for (final t in _isCrypto ? const ['Market', 'Limit'] : const ['Market', 'Limit', 'SL', 'SL-M'])
-                    _chip(t, _orderType == t, () => _setOrderType(t)),
+                    _chip(t, _orderType == t, () {
+                      ChurnTelemetryService.instance.recordButtonTap(t == 'Market'
+                          ? 'order_ticket_type_market_btn'
+                          : t == 'Limit'
+                              ? 'order_ticket_type_limit_btn'
+                              : 'order_ticket_stoploss_switch');
+                      _setOrderType(t);
+                    }),
                 ]),
                 const SizedBox(height: 16),
                 _buildTermHelp(),
                 if (_isCrypto) ...[
                   _chipRow([
-                    _chip('Quantity', !_inputByMoney, () => setState(() => _inputByMoney = false)),
-                    _chip('Amount (${Money.symbol})', _inputByMoney, () => setState(() => _inputByMoney = true)),
+                    _chip('Quantity', !_inputByMoney, () {
+                      ChurnTelemetryService.instance.recordButtonTap('order_ticket_input_by_qty_vs_money_toggle');
+                      setState(() => _inputByMoney = false);
+                    }),
+                    _chip('Amount (${Money.symbol})', _inputByMoney, () {
+                      ChurnTelemetryService.instance.recordButtonTap('order_ticket_input_by_qty_vs_money_toggle');
+                      setState(() => _inputByMoney = true);
+                    }),
                   ]),
                   const SizedBox(height: 16),
                 ],
@@ -1066,7 +1097,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           InkWell(
-            onTap: () => setState(() => _isAdvancedOpen = !_isAdvancedOpen),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('order_ticket_advanced_options_accordion');
+              setState(() => _isAdvancedOpen = !_isAdvancedOpen);
+            },
             borderRadius: BorderRadius.circular(AppRadius.md),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1104,7 +1138,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   title: Text('Market protection', style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
                   subtitle: Text('Caps how far a market order can fill from the last price.', style: AppText.bodySmall),
                   value: _isMarketProtection,
-                  onChanged: (v) => setState(() => _isMarketProtection = v),
+                  onChanged: (v) {
+                    ChurnTelemetryService.instance.recordButtonTap('order_ticket_market_protection_switch');
+                    setState(() => _isMarketProtection = v);
+                  },
                 ),
               ]),
             ),
@@ -1129,7 +1166,12 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (_showSummary && _quantityValue > 0) _buildChargeBreakdownPanel(color),
         InkWell(
-          onTap: _quantityValue > 0 ? () => setState(() => _showSummary = !_showSummary) : null,
+          onTap: _quantityValue > 0
+              ? () {
+                  ChurnTelemetryService.instance.recordButtonTap('order_ticket_charges_summary_accordion');
+                  setState(() => _showSummary = !_showSummary);
+                }
+              : null,
           child: Row(children: [
             Expanded(
               child: Text.rich(TextSpan(style: AppFonts.sans(size: 12, color: AppColors.ink4), children: [
@@ -1201,7 +1243,10 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
             color: color,
             textColor: _onSide,
             isLoading: _isLoading,
-            onSwipeComplete: _submitOrder,
+            onSwipeComplete: () {
+              ChurnTelemetryService.instance.recordButtonTap('order_ticket_swipe_to_execute_slider', extra: {'sym': widget.quote.symbol});
+              _submitOrder();
+            },
           ),
       ]),
     );

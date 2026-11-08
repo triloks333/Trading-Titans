@@ -203,10 +203,10 @@ class _WalletScreenState extends State<WalletScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                           child: Row(children: [
                             _earnCard(Icons.track_changes_rounded, AppColors.titanGold, AppColors.titanGoldSoft, 'Challenges',
-                                'Demo cash for every win', const ChallengesScreen()),
+                                'Demo cash for every win', const ChallengesScreen(), 'wallet_earn_cash_challenges_row'),
                             const SizedBox(width: 8),
                             _earnCard(Icons.person_add_alt_1_outlined, AppColors.goldMid, AppColors.goldPale, 'Refer a friend',
-                                '${Money.wallet(kReferralReward, decimals: 0)} per signup', const ReferEarnScreen()),
+                                '${Money.wallet(kReferralReward, decimals: 0)} per signup', const ReferEarnScreen(), 'wallet_earn_cash_refer_friend_row'),
                           ]),
                         ),
                         if (monetized) _vipCard(),
@@ -290,7 +290,7 @@ class _WalletScreenState extends State<WalletScreen> {
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
-                  ChurnTelemetryService.instance.recordButtonTap('wallet_top_up_btn', screenId: 'WalletScreen');
+                  ChurnTelemetryService.instance.recordButtonTap('wallet_balance_card_upgrade_or_topup_cta');
                   _push(const SubscribeScreen(initialTabIndex: 1));
                 },
                 child: const Text('Top up'),
@@ -310,13 +310,16 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _earnCard(IconData icon, Color fg, Color bg, String title, String sub, Widget screen) => Expanded(
+  Widget _earnCard(IconData icon, Color fg, Color bg, String title, String sub, Widget screen, String tapId) => Expanded(
         child: Material(
           color: AppColors.pureWhite,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
           child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            onTap: () => _push(screen),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap(tapId);
+              _push(screen);
+            },
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

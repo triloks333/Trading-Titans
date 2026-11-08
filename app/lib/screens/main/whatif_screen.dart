@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../services/market_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
@@ -96,6 +97,8 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
       if (symbol != null) _symbol = symbol;
       if (years != null) _yearsAgo = years;
     });
+    // User-picked stock/period re-runs the simulation (there is no separate Run button).
+    ChurnTelemetryService.instance.recordButtonTap('whatif_run_simulation_cta', extra: {'sym': _symbol});
     _run();
   }
 

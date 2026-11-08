@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../models/quote.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/instrument_chart.dart';
@@ -54,6 +55,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
   }
 
   Future<void> _order(bool isBuy) async {
+    ChurnTelemetryService.instance.recordButtonTap(isBuy ? 'pro_chart_quick_buy_btn' : 'pro_chart_quick_sell_btn', extra: {'sym': widget.symbol});
     if (widget.quote == null) return;
     await Navigator.push(context, MaterialPageRoute(builder: (_) => OrderEntryScreen(quote: widget.quote!, isBuy: isBuy)));
   }

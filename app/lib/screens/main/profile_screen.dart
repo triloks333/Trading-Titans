@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../core/money.dart';
 import '../../core/app_constants.dart';
 import '../../services/auth_service.dart';
@@ -146,7 +147,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 AuthIconButton(
                   icon: AppColors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                   label: 'Toggle light or dark theme',
-                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                    ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+                  },
                 ),
               ]),
               const SizedBox(height: AppSpacing.md),
@@ -172,7 +176,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           mono: false),
                       VerticalDivider(width: 1, color: AppColors.birch),
                       _stat('Trading from', locationSummary(currency), mono: false,
-                          onTap: () => _open(const PreferencesScreen())),
+                          onTap: () {
+                            ChurnTelemetryService.instance.recordButtonTap('profile_edit_country_currency_cell');
+                            _open(const PreferencesScreen());
+                          }),
                     ]),
                   ),
                 ]),
@@ -184,7 +191,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.titanGold)),
                   child: InkWell(
-                    onTap: () => _open(const ConvertAccountScreen()),
+                    onTap: () {
+                      ChurnTelemetryService.instance.recordButtonTap('profile_convert_guest_to_permanent_card');
+                      _open(const ConvertAccountScreen());
+                    },
                     borderRadius: BorderRadius.circular(AppRadius.md),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
@@ -219,7 +229,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _row(Icons.bar_chart_rounded, 'Analytics', onTap: () => _open(const AnalyticsScreen())),
                 _row(Icons.medical_services_outlined, 'Trade autopsy', onTap: () => _open(const AutopsyScreen())),
                 _row(Icons.lightbulb_outline_rounded, 'What-If simulator', onTap: () => _open(const WhatIfScreen())),
-                _row(Icons.school_outlined, 'Trading glossary', onTap: () => _open(const GlossaryScreen())),
+                _row(Icons.school_outlined, 'Trading glossary', onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('profile_open_glossary_quiz_row_btn');
+                  _open(const GlossaryScreen());
+                }),
               ]),
               _group('More', [
                 _row(Icons.forum_outlined, 'Titans Room', subtitle: 'Chat, support tickets & wishlist',
@@ -238,7 +251,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       badge: _tag('ADMIN ONLY', gold: true), onTap: () => _open(const AdminPanelScreen())),
                 ]),
               _group(null, [
-                _row(Icons.logout_rounded, 'Sign out', chevron: false, onTap: auth.logout),
+                _row(Icons.logout_rounded, 'Sign out', chevron: false, onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('settings_sign_out_btn');
+                  auth.logout();
+                }),
               ]),
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.xs),

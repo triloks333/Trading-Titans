@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 
 class MaintenanceScreen extends StatelessWidget {
   /// Default copy shown when no maintenance message is configured (R10.4, R10.5).
@@ -313,6 +314,7 @@ class _SoftUpdateDialogState extends State<SoftUpdateDialog> {
   /// Handles the "Update" button: opens the store link. Dialog remains blocking
   /// since the update is compulsory.
   Future<void> _onUpdatePressed() async {
+    ChurnTelemetryService.instance.recordButtonTap('global_soft_update_now_btn');
     final launched = await _launchUpdate();
     if (!mounted) return;
     if (!launched) {
@@ -498,6 +500,7 @@ class _RateAppDialogState extends State<RateAppDialog> {
   /// open with an error, and nothing is recorded — the user has not been given
   /// a chance to rate yet, so they should still be asked later.
   Future<void> _onRateNowPressed() async {
+    ChurnTelemetryService.instance.recordButtonTap('global_rate_app_5_stars_btn');
     final launched = await _launchStore();
     if (!mounted) return;
     if (launched) {
@@ -557,6 +560,7 @@ class _RateAppDialogState extends State<RateAppDialog> {
               children: [
                 TextButton(
                   onPressed: () {
+                    ChurnTelemetryService.instance.recordButtonTap('global_rate_app_remind_later_btn');
                     widget.onRemindLater();
                     Navigator.of(context).pop();
                   },

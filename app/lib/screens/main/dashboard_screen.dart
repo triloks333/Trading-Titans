@@ -42,6 +42,13 @@ import 'watchlist_screen.dart';
 import 'whatif_screen.dart';
 
 /// Chart range buttons mapped to the `market-history` range they fetch.
+// Index strip symbol -> analytics id; SENSEX, ETH, SOL have none.
+const _indexChipIds = {
+  '^NSEI': 'home_index_strip_nifty50_chip',
+  '^NSEBANK': 'home_index_strip_banknifty_chip',
+  'BTC': 'home_index_strip_btc_chip',
+};
+
 const Map<String, String> kHomeRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', 'ALL': '5y'};
 
 /// One open position on the chart: its live value now, +1 long / -1 short, and
@@ -342,14 +349,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ]),
         ),
-        _badged(AuthIconButton(icon: Icons.chat_bubble_outline_rounded, label: 'Titans Room chat', onTap: _openChat),
+        _badged(AuthIconButton(icon: Icons.chat_bubble_outline_rounded, label: 'Titans Room chat', onTap: () {
+          ChurnTelemetryService.instance.recordButtonTap('home_header_titans_room_chat_btn');
+          _openChat();
+        }),
             count: _newChats),
         const SizedBox(width: 8),
         TitanShowcase(
           showcaseKey: _alertsKey,
           title: 'Notifications',
           description: 'Order fills, price alerts and announcements land here.',
-          child: _badged(AuthIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onTap: _openNotifications),
+          child: _badged(AuthIconButton(icon: Icons.notifications_none_rounded, label: 'Notifications', onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('home_header_notifications_bell_btn');
+            _openNotifications();
+          }),
               dot: _unread > 0),
         ),
         const SizedBox(width: 8),
@@ -411,7 +424,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   key: _chipKey(i),
                   padding: const EdgeInsets.only(right: 8),
                   child: _outlined(
-                    onTap: () => _openQuote(q),
+                    onTap: () {
+                      final id = _indexChipIds[q.symbol.startsWith('BTC') ? 'BTC' : q.symbol];
+                      if (id != null) ChurnTelemetryService.instance.recordButtonTap(id);
+                      _openQuote(q);
+                    },
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Text((q.displayName ?? q.name).toUpperCase(), style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: AppColors.ink3)),
                       const SizedBox(width: 6),
@@ -491,7 +508,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 padding: EdgeInsets.only(right: r == 'ALL' ? 0 : 6),
                 child: _outlined(
                   on: r == _range,
-                  onTap: () => setState(() => _range = r),
+                  onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('home_chart_range_${r.toLowerCase()}_btn');
+                    setState(() => _range = r);
+                  },
                   child: Text(r, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: r == _range ? AppColors.goldMid : AppColors.ink3)),
                 ),
               ),
@@ -502,7 +522,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: ElevatedButton(
               onPressed: () {
-                ChurnTelemetryService.instance.recordButtonTap('home_trade_now_btn', screenId: 'DashboardScreen');
                 NavTabService.goToTab(NavTabService.trade);
               },
               child: const Text('Trade now'),
@@ -513,7 +532,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(backgroundColor: AppColors.cream),
               onPressed: () {
-                ChurnTelemetryService.instance.recordButtonTap('home_add_demo_cash_btn', screenId: 'DashboardScreen');
                 NavTabService.goToTab(NavTabService.wallet);
               },
               child: const Text('Add demo cash'),
@@ -561,24 +579,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _quickActions() {
     final actions = <(IconData, String, VoidCallback)>[
-      (Icons.search_rounded, 'Search', () {
-        ChurnTelemetryService.instance.recordButtonTap('home_tool_search_btn', screenId: 'DashboardScreen');
-        NavTabService.goToTab(NavTabService.trade);
-      }),
+      (Icons.search_rounded, 'Search', () => NavTabService.goToTab(NavTabService.trade)),
       (Icons.format_list_bulleted_rounded, 'Orders', () {
-        ChurnTelemetryService.instance.recordButtonTap('home_tool_orders_btn', screenId: 'DashboardScreen');
+        ChurnTelemetryService.instance.recordButtonTap('home_quick_action_orders_btn');
         _push(const OrdersScreen());
       }),
       (Icons.lightbulb_outline_rounded, 'What-If', () {
-        ChurnTelemetryService.instance.recordButtonTap('home_tool_whatif_btn', screenId: 'DashboardScreen');
+        ChurnTelemetryService.instance.recordButtonTap('home_quick_action_whatif_btn');
         _push(const WhatIfScreen());
       }),
       (Icons.manage_search_rounded, 'Autopsy', () {
-        ChurnTelemetryService.instance.recordButtonTap('home_tool_autopsy_btn', screenId: 'DashboardScreen');
+        ChurnTelemetryService.instance.recordButtonTap('home_quick_action_autopsy_btn');
         _push(const AutopsyScreen());
       }),
       (Icons.show_chart_rounded, 'Analytics', () {
-        ChurnTelemetryService.instance.recordButtonTap('home_tool_analytics_btn', screenId: 'DashboardScreen');
+        ChurnTelemetryService.instance.recordButtonTap('home_quick_action_analytics_btn');
         _push(const AnalyticsScreen());
       }),
     ];
@@ -662,7 +677,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? 'Chat, support tickets & wishlist'
         : '${m.authorName ?? 'Titan'}: ${m.body?.trim().isNotEmpty == true ? m.body!.trim() : m.kind == 'voice' ? 'Voice note' : 'Photo'}';
     return _cardRow(
-      onTap: _openChat,
+      onTap: () {
+        ChurnTelemetryService.instance.recordButtonTap('home_titans_room_live_preview_card');
+        _openChat();
+      },
       leading: Stack(clipBehavior: Clip.none, children: [
         Icon(Icons.chat_bubble_outline_rounded, size: 26, color: AppColors.goldMid),
         Positioned(
@@ -702,7 +720,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     final ends = plans.saleEndsAt;
     return _cardRow(
-      onTap: () => _push(const SubscribeScreen()),
+      onTap: () {
+        ChurnTelemetryService.instance.recordButtonTap('home_sale_50pct_promo_banner');
+        _push(const SubscribeScreen());
+      },
       margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 4, AppSpacing.lg, 0),
       border: AppColors.titanGold,
       fill: AppColors.titanGoldSoft,
@@ -725,7 +746,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
   Widget _watchlistSection() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _sectionHead('Watchlist · Favourites', 'See all', () => _push(const WatchlistScreen())),
+        _sectionHead('Watchlist · Favourites', 'See all', () {
+          ChurnTelemetryService.instance.recordButtonTap('home_watchlist_manage_see_all_btn');
+          _push(const WatchlistScreen());
+        }),
         Divider(color: AppColors.birch),
         if (_watchlist.isEmpty)
           ListTile(
@@ -736,7 +760,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         for (final q in _watchlist.take(4))
           InkWell(
-            onTap: () => _openQuote(q),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('home_watchlist_item_row', extra: {'sym': q.symbol});
+              _openQuote(q);
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
               decoration: BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.birch))),
@@ -778,14 +805,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final parsed = parseNewsExcerpt(post['excerpt'] as String?);
     final age = newsAge(post['published_at'] as String?);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _sectionHead('Market news', 'More', () => _push(NewsListScreen(posts: _news))),
+      _sectionHead('Market news', 'More', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_news_view_all_btn');
+        _push(NewsListScreen(posts: _news));
+      }),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         child: Material(
           color: AppColors.pureWhite,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
           child: InkWell(
-            onTap: () => _push(NewsReaderScreen(post: post)),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('home_news_article_row');
+              _push(NewsReaderScreen(post: post));
+            },
             borderRadius: BorderRadius.circular(AppRadius.md),
             child: Padding(
               padding: const EdgeInsets.all(14),

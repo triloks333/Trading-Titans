@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 import '../services/theme_service.dart';
 
 /// Shared building blocks for the Titan Terminal auth screens (Welcome, Sign in,
@@ -67,7 +68,10 @@ class AuthTopBar extends StatelessWidget {
             builder: (_, _) => AuthIconButton(
               icon: AppColors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
               label: 'Toggle light or dark theme',
-              onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+onTap: () {
+                ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+              },
             ),
           ),
         ]),

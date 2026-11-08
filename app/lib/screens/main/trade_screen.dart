@@ -85,6 +85,15 @@ final Map<String, List<MoverSymbol>> kMoverUniverse = {
 };
 
 /// F&O tab: underlyings with an option chain, their name, and the quote that prices them.
+const _marketPillIds = {
+  'stock': 'trade_market_pill_nse_stock',
+  'us_stock': 'trade_market_pill_us_stock',
+  'crypto': 'trade_market_pill_crypto',
+  'pakistan_stock': 'trade_market_pill_pakistan_psx',
+  'italy_stock': 'trade_market_pill_italy_borsa',
+  'fo': 'trade_market_pill_nse_fo',
+};
+
 const List<(String, String, String)> kFoUnderlyings = [
   ('NIFTY', 'Nifty 50 index', 'NIFTY'), ('BANKNIFTY', 'Nifty Bank index', 'BANKNIFTY'),
   ('RELIANCE', 'Reliance Industries', 'RELIANCE'), ('HDFCBANK', 'HDFC Bank', 'HDFCBANK'), ('ICICIBANK', 'ICICI Bank', 'ICICIBANK'),
@@ -194,8 +203,9 @@ class _TradeScreenState extends State<TradeScreen> {
   Quote? _quote(String symbol) => _quotes['$symbol\x1F$_orderMarket'];
 
   void _selectMarket(String key) {
+    final id = _marketPillIds[key];
+    if (id != null) ChurnTelemetryService.instance.recordButtonTap(id);
     if (key == _market) return;
-    ChurnTelemetryService.instance.recordButtonTap('market_tab_$key', screenId: 'TradeScreen');
     setState(() {
       _market = key;
       _searchQuery = '';
@@ -267,7 +277,10 @@ class _TradeScreenState extends State<TradeScreen> {
               AuthIconButton(
                 icon: Icons.format_list_bulleted_rounded,
                 label: 'Order book',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen())),
+                onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('trade_header_orders_icon_btn');
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OrdersScreen()));
+                },
               ),
               const SizedBox(width: 8),
               ListenableBuilder(
@@ -285,6 +298,7 @@ class _TradeScreenState extends State<TradeScreen> {
             child: Column(children: [
               if (!_isComingSoon) ...[
                 TextField(
+                  onTap: () => ChurnTelemetryService.instance.recordButtonTap('trade_search_input_box'),
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
                   style: AppFonts.sans(size: 14, color: AppColors.ink),
@@ -393,13 +407,13 @@ class _TradeScreenState extends State<TradeScreen> {
       child: Row(children: [
         for (final (i, (sym, label)) in cards.indexed) ...[
           if (i > 0) const SizedBox(width: 8),
-          Expanded(child: _indexCard(sym, label)),
+          Expanded(child: _indexCard(sym, label, i == 0 ? 'trade_headline_index_left_card' : 'trade_headline_index_right_card')),
         ],
       ]),
     );
   }
 
-  Widget _indexCard(String sym, String label) {
+  Widget _indexCard(String sym, String label, String tapId) {
     final q = _quote(sym);
     final up = (q?.change ?? 0) >= 0;
     return Material(
@@ -407,8 +421,11 @@ class _TradeScreenState extends State<TradeScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.md),
-        onTap: () => Navigator.of(context)
-            .push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: sym, market: _orderMarket, name: label))),
+        onTap: () {
+          ChurnTelemetryService.instance.recordButtonTap(tapId);
+          Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => StockDetailScreen(symbol: sym, market: _orderMarket, name: label)));
+        },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -459,8 +476,14 @@ class _TradeScreenState extends State<TradeScreen> {
       _sectionHead(
         'Top movers · ${MarketTab.byKey(_market).label}',
         Row(mainAxisSize: MainAxisSize.min, children: [
-          _chip('Gainers', _gainers, () => setState(() => _gainers = true)),
-          _chip('Losers', !_gainers, () => setState(() => _gainers = false)),
+          _chip('Gainers', _gainers, () {
+            ChurnTelemetryService.instance.recordButtonTap('trade_movers_top_gainers_pill');
+            setState(() => _gainers = true);
+          }),
+          _chip('Losers', !_gainers, () {
+            ChurnTelemetryService.instance.recordButtonTap('trade_movers_top_losers_pill');
+            setState(() => _gainers = false);
+          }),
         ]),
       ),
       if (priced.isEmpty)
@@ -474,13 +497,20 @@ class _TradeScreenState extends State<TradeScreen> {
       else
         for (final q in movers)
           _row(bySymbol[q.symbol]?.display ?? q.symbol, bySymbol[q.symbol]?.name ?? q.name, q,
-              () => _openSheet(q.symbol, bySymbol[q.symbol]?.name ?? q.name)),
+              () {
+            ChurnTelemetryService.instance.recordButtonTap('trade_mover_stock_row_tap', extra: {'sym': q.symbol});
+            _openSheet(q.symbol, bySymbol[q.symbol]?.name ?? q.name);
+          }),
     ];
   }
 
   List<Widget> _foRows() => [
         _sectionHead('Option chains · futures'),
-        for (final (u, name, sym) in kFoUnderlyings) _row(u, name, _quote(sym), () => _openChain(u, _quote(sym)?.price ?? 0)),
+        for (final (u, name, sym) in kFoUnderlyings)
+          _row(u, name, _quote(sym), () {
+            ChurnTelemetryService.instance.recordButtonTap('trade_fo_${u.toLowerCase()}_chain_card', extra: {'sym': u});
+            _openChain(u, _quote(sym)?.price ?? 0);
+          }),
       ];
 
   List<Widget> _searchRows() {
@@ -545,7 +575,10 @@ class _TradeScreenState extends State<TradeScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
           child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            onTap: () => _openChain('NIFTY', _quote('NIFTY')?.price ?? 0),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('trade_fo_nifty_chain_card', extra: {'sym': 'NIFTY'});
+              _openChain('NIFTY', _quote('NIFTY')?.price ?? 0);
+            },
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(children: [

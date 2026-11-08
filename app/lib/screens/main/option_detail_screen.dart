@@ -6,6 +6,7 @@ import '../../core/money.dart';
 import '../../models/quote.dart';
 import '../../models/portfolio.dart';
 import '../../services/market_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/supabase_service.dart';
 import 'fullscreen_chart_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1261,6 +1262,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   onPressed: isExpired
                       ? null
                       : () async {
+                    ChurnTelemetryService.instance.recordButtonTap('option_detail_buy_contract_cta', extra: {'sym': _quote!.symbol});
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -1302,6 +1304,7 @@ class _OptionDetailScreenState extends State<OptionDetailScreen> {
                   onPressed: isExpired
                       ? null
                       : () async {
+                    ChurnTelemetryService.instance.recordButtonTap('option_detail_sell_write_contract_cta', extra: {'sym': _quote!.symbol});
                     await Navigator.push(
                       context,
                       MaterialPageRoute(

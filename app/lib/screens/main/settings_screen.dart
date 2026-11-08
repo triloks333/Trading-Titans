@@ -8,6 +8,7 @@ import '../../core/countries.dart';
 import '../../core/currency.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
@@ -57,7 +58,10 @@ Widget _header(BuildContext context, String title, {bool theme = true}) => Conta
             builder: (_, _) => AuthIconButton(
               icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
               label: 'Toggle light or dark theme',
-              onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+onTap: () {
+                ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+              },
             ),
           ),
       ]),
@@ -135,7 +139,10 @@ Widget themeSegments({bool icons = false}) => ListenableBuilder(
                 label: '$label theme',
                 excludeSemantics: true,
                 child: GestureDetector(
-                  onTap: () => ThemeService().setThemeMode(mode),
+onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                    ThemeService().setThemeMode(mode);
+                  },
                   child: Container(
                     height: icons ? 40 : 36,
                     alignment: Alignment.center,
@@ -313,16 +320,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       value: plan.isPaid ? '${plan.tier[0].toUpperCase()}${plan.tier.substring(1)}' : 'Free plan',
                       onTap: () => _push(const SubscribeScreen())),
                 _item(Icons.logout_rounded, 'Sign out', chevron: false, onTap: () async {
+                  ChurnTelemetryService.instance.recordButtonTap('settings_sign_out_btn');
                   final nav = Navigator.of(context);
                   await auth.logout();
                   nav.popUntil((r) => r.isFirst);
                 }),
                 _item(Icons.delete_outline_rounded, 'Delete account',
-                    sub: 'Permanently removes all data', color: AppColors.bear, chevron: false, onTap: () => showDeleteAccountDialog(context)),
+                    sub: 'Permanently removes all data', color: AppColors.bear, chevron: false, onTap: () {
+                      ChurnTelemetryService.instance.recordButtonTap('settings_delete_account_danger_btn');
+                      showDeleteAccountDialog(context);
+                    }),
               ]),
               _caption('Help & about'),
               _group([
-                _item(Icons.play_circle_outline_rounded, 'Replay app tour', chevron: false, onTap: _replayTour),
+                _item(Icons.play_circle_outline_rounded, 'Replay app tour', chevron: false, onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('profile_replay_showcase_tour_btn');
+                  _replayTour();
+                }),
                 _item(Icons.school_outlined, 'Trading glossary', onTap: () => _push(const GlossaryScreen())),
                 _item(Icons.star_rate_outlined, 'Rate Trading Titans', sub: 'On Google Play', chevron: false, onTap: _rate),
                 _item(Icons.gavel_outlined, 'Terms & conditions', onTap: () => _push(const LegalScreen())),
@@ -333,7 +347,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                 child: Column(children: [
                   GestureDetector(
-                    onTap: () => _push(const ChatScreen(initialTab: 1)),
+                    onTap: () {
+                      ChurnTelemetryService.instance.recordButtonTap('profile_open_support_tickets_row_btn');
+                      _push(const ChatScreen(initialTab: 1));
+                    },
                     child: Text.rich(
                       TextSpan(style: AppFonts.sans(size: 11, color: AppColors.ink4), children: [
                         const TextSpan(text: 'Need help? Use Tickets in '),

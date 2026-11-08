@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/market_hours.dart';
 import '../core/theme.dart';
 import '../screens/main/muhurat_screen.dart';
+import '../services/churn_telemetry_service.dart';
 
 /// Home card for the next special session (Diwali Muhurat). Renders nothing until
 /// a row exists in `market_special_sessions`, and hides itself once it ends.
@@ -39,7 +40,10 @@ class _MuhuratCardState extends State<MuhuratCard> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: gold)),
         child: InkWell(
           borderRadius: BorderRadius.circular(AppRadius.md),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MuhuratScreen())),
+          onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('home_muhurat_special_card_btn');
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MuhuratScreen()));
+          },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(children: [

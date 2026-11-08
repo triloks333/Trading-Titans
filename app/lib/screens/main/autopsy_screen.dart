@@ -7,6 +7,7 @@ import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../models/order.dart';
 import '../../services/supabase_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
@@ -147,7 +148,10 @@ class _AutopsyScreenState extends State<AutopsyScreen> {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
-                  onTap: () => setState(() => _picked = i),
+                  onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('autopsy_trade_chip_selector');
+                    setState(() => _picked = i);
+                  },
                   child: Container(
                     height: 32,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -286,8 +290,11 @@ class _AutopsyScreenState extends State<AutopsyScreen> {
         const SizedBox(width: 10),
         Expanded(
           child: ElevatedButton(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => StockDetailScreen(symbol: symbol, market: market, name: t['name'] as String? ?? symbol))),
+            onPressed: () {
+              ChurnTelemetryService.instance.recordButtonTap('autopsy_retake_trade_on_stock_btn', extra: {'sym': symbol});
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => StockDetailScreen(symbol: symbol, market: market, name: t['name'] as String? ?? symbol)));
+            },
             child: const Text('Trade again'),
           ),
         ),

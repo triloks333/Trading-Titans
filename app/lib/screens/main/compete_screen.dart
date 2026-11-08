@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/nav_tab_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
@@ -112,7 +113,10 @@ class _CompeteScreenState extends State<CompeteScreen> {
               AuthIconButton(
                 icon: Icons.track_changes_rounded,
                 label: 'Challenges',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChallengesScreen())),
+                onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('compete_header_challenges_icon_btn');
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChallengesScreen()));
+                },
               ),
               const SizedBox(width: 8),
               ListenableBuilder(
@@ -120,7 +124,10 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 builder: (_, _) => AuthIconButton(
                   icon: AppColors.isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
                   label: 'Toggle light or dark theme',
-                  onTap: () => ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark),
+onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('global_theme_dark_light_toggle');
+                    ThemeService().setThemeMode(AppColors.isDark ? ThemeMode.light : ThemeMode.dark);
+                  },
                 ),
               ),
             ]),
@@ -176,6 +183,8 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 excludeSemantics: true,
                 child: GestureDetector(
                   onTap: () {
+                    final id = const {'week': 'compete_scope_this_week_pill', 'all': 'compete_scope_all_time_pill', 'friends': 'compete_scope_friends_pill'}[scope];
+                    if (id != null) ChurnTelemetryService.instance.recordButtonTap(id);
                     if (_scope == scope) return;
                     _scope = scope;
                     _refresh();

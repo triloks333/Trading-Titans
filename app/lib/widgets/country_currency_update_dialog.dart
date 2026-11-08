@@ -5,6 +5,7 @@ import '../core/countries.dart';
 import '../core/currency.dart';
 import '../core/theme.dart';
 import '../services/currency_service.dart';
+import '../services/churn_telemetry_service.dart';
 
 /// Modal dialog presented to existing users upon update rollout, ensuring every
 /// user sets their specific country and chooses their preferred display currency.
@@ -204,6 +205,7 @@ class _CountryCurrencyUpdateDialogState
   }
 
   Future<void> _save() async {
+    ChurnTelemetryService.instance.recordButtonTap('global_country_currency_save_btn');
     setState(() => _saving = true);
     try {
       await CurrencyService.instance.setCountryAndState(_selectedCountry);
