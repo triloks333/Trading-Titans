@@ -100,6 +100,7 @@ class _AdminCustomerIntelligenceScreenState extends State<AdminCustomerIntellige
   String? _error;
   bool _loading = true;
   String _live = 'connecting';
+  bool _closing = false;
 
   @override
   void initState() {
@@ -142,7 +143,8 @@ class _AdminCustomerIntelligenceScreenState extends State<AdminCustomerIntellige
           },
         )
         .subscribe((status, err) {
-      if (mounted) setState(() => _live = status == RealtimeSubscribeStatus.subscribed ? 'live' : status.name);
+      // removeChannel() in dispose fires this synchronously; ignore it then.
+      if (mounted && !_closing) setState(() => _live = status == RealtimeSubscribeStatus.subscribed ? 'live' : status.name);
     });
     _overviewTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadOverview());
     // Keeps the "x ago" labels honest without refetching.
@@ -229,6 +231,7 @@ class _AdminCustomerIntelligenceScreenState extends State<AdminCustomerIntellige
 
   @override
   void dispose() {
+    _closing = true;
     _overviewTimer?.cancel();
     _clockTimer?.cancel();
     final ch = _channel;

@@ -188,9 +188,9 @@ void main() {
     expect(find.text('Already permanent'), findsOneWidget);
   });
 
-  testWidgets('Admin panel: four tabs', (tester) async {
+  testWidgets('Admin panel: five tabs', (tester) async {
     await _pump(tester, const AdminPanelScreen());
-    for (final t in ['Broadcast', 'Rewards', 'Blog', 'Users']) {
+    for (final t in ['Broadcast', 'Rewards', 'Blog', 'Users', 'Intelligence']) {
       expect(find.bySemanticsLabel(t), findsOneWidget, reason: t);
     }
     expect(find.text('ADMIN ONLY'), findsOneWidget);
