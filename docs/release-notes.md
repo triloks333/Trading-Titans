@@ -11,6 +11,23 @@ entry here, at the top, before arming.
 
 ---
 
+## 2.0.4 (versionCode 64)
+
+Guests must create an account (Google, email) or sign in after onboarding; Google upgrade fixed by enabling manual identity linking in Supabase. Replaced 2.0.3 (63) while it was in review. Built from 72e5287, production 100% on 2026-11-08.
+
+### Play Store "What's new" (paste this)
+
+```
+• New guided start: try the app and place your first trade in seconds, then create your account to keep it
+• Fixed: making a guest account permanent with Google
+• Trade feedback: a recap with Trade Autopsy after two losses in a row, and stop-loss tips after a big loss
+• First-time offers on Plans, with the real price and end time shown
+• Option chain: a quick guide to calls, puts and strikes
+• Order ticket tells you when a market is closed and your order will wait
+```
+
+---
+
 ## 2.0.3 (versionCode 63)
 
 Product analytics and live admin Intelligence page, honest reactions (loss recap, stop-loss tips, option-chain guide, market-closed note), two-stage first-time pack offers, and the value-first onboarding with a guided first trade. Built from e0619e8, released to production at 100% on 2026-11-08.
