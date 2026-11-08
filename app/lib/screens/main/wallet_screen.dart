@@ -17,6 +17,7 @@ import 'challenges_screen.dart';
 import 'orders_screen.dart';
 import 'refer_earn_screen.dart';
 import 'subscribe_screen.dart';
+import '../../services/churn_telemetry_service.dart';
 
 /// How one `wallet_transactions` row is presented.
 class WalletTxDisplay {
@@ -288,7 +289,10 @@ class _WalletScreenState extends State<WalletScreen> {
           if (monetized) ...[
             Expanded(
               child: ElevatedButton(
-                onPressed: () => _push(const SubscribeScreen(initialTabIndex: 1)),
+                onPressed: () {
+                  ChurnTelemetryService.instance.recordButtonTap('wallet_top_up_btn', screenId: 'WalletScreen');
+                  _push(const SubscribeScreen(initialTabIndex: 1));
+                },
                 child: const Text('Top up'),
               ),
             ),

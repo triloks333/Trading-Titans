@@ -18,6 +18,7 @@ import '../../widgets/auth_kit.dart';
 import 'fullscreen_chart_screen.dart';
 import 'option_chain_screen.dart';
 import 'order_entry_screen.dart';
+import '../../services/churn_telemetry_service.dart';
 
 /// Chart range buttons and the `market-history` range each one fetches.
 const Map<String, String> kStockRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', '5Y': '5y'};
@@ -63,6 +64,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   @override
   void initState() {
     super.initState();
+    ChurnTelemetryService.instance.recordSymbolChartView(widget.symbol);
     _loadData();
     _loadHistory(_range);
     _loadExtras();
@@ -569,6 +571,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     final sym = widget.symbol.toUpperCase();
     final isOption = sym.contains('-CE') || sym.contains('-PE');
     final isFuture = sym.contains('FUT') || sym.contains('FUTURE');
+    ChurnTelemetryService.instance.recordButtonTap(isBuy ? 'stock_detail_buy_btn' : 'stock_detail_sell_btn', screenId: 'StockDetailScreen', extra: {'symbol': widget.symbol});
     await _push(OrderEntryScreen(quote: _quote!, isBuy: isBuy, instrumentType: isOption ? 'OPTION' : (isFuture ? 'FUTURE' : 'EQUITY')));
   }
 }
@@ -650,6 +653,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
   @override
   void initState() {
     super.initState();
+    ChurnTelemetryService.instance.recordSymbolChartView(widget.symbol);
     _direction = 'above';
     _loadAlerts();
   }

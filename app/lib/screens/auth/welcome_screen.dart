@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../widgets/auth_kit.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -15,6 +16,12 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ChurnTelemetryService.instance.recordHomeScreen('welcome_screen');
+  }
+
   final _pages = PageController();
   int _page = 0;
 

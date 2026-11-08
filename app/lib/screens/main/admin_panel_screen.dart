@@ -7,6 +7,7 @@ import 'admin_analytics_screen.dart';
 import 'admin_blog_screen.dart';
 import 'admin_reward_screen.dart';
 import 'wishlist_moderation_screen.dart';
+import 'admin_customer_intelligence_screen.dart';
 
 /// Every admin tool behind one header: Broadcast, Rewards, Blog and Users.
 /// Each tab hosts the existing tool, so no admin logic lives here.
@@ -20,7 +21,7 @@ class AdminPanelScreen extends StatefulWidget {
 }
 
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
-  static const _tabs = ['Broadcast', 'Rewards', 'Blog', 'Users'];
+  static const _tabs = ['Broadcast', 'Rewards', 'Blog', 'Users', 'Intelligence'];
   late int _tab = widget.initialTab.clamp(0, _tabs.length - 1);
 
   @override
@@ -105,6 +106,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 ),
                 const Expanded(child: AdminAnalyticsScreen(embedded: true)),
               ]),
+              const AdminCustomerIntelligenceScreen(embedded: true),
             ]),
           ),
         ]),

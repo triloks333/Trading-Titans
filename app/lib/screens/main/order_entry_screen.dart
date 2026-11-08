@@ -12,6 +12,8 @@ import '../../widgets/auth_kit.dart';
 import '../../services/supabase_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/fo_instruments_service.dart';
+import '../../services/churn_telemetry_service.dart';
+import '../../services/action_reaction_engine.dart';
 import '../../widgets/swipe_button.dart';
 import '../../widgets/info_tooltip.dart';
 import 'subscribe_screen.dart';
@@ -323,6 +325,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         isExitOrder: widget.isExitOrder,
       );
 
+      ChurnTelemetryService.instance.recordTradePlaced(
+          symbol: widget.quote.symbol, side: _isBuy ? 'buy' : 'sell',
+          qty: _isCrypto ? _quantityValue : (_quantityValue * _lotSize), segment: widget.instrumentType);
       await authProvider.refreshUser(); // Update wallet balance
 
       // Funnel: record the user's first-ever trade (fires once per install).
@@ -362,15 +367,29 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       if (!mounted) return;
       final errText = e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
       final isInsufficient = errText.toLowerCase().contains('insufficient');
+      var offerTopUp = false;
+      if (isInsufficient) {
+        final available = context.read<AuthService>().user?.walletBalance ?? 0.0;
+        ChurnTelemetryService.instance.recordMarginShortfall(
+          symbol: widget.quote.symbol,
+          requiredMargin: _marginRequired,
+          availableCash: available,
+        );
+        // No top-up pitch right after a revenge re-entry or under ₹1,000 left.
+        offerTopUp = await ActionReactionEngine.instance
+            .offerMarginTopUp(symbol: widget.quote.symbol, required: _marginRequired, available: available);
+        if (!mounted) return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(isInsufficient ? errText : 'Failed to place order: $errText'),
           backgroundColor: AppColors.bear,
-          action: isInsufficient
+          action: offerTopUp
               ? SnackBarAction(
                   label: 'TOP UP',
                   textColor: Colors.white,
                   onPressed: () async {
+                    ChurnTelemetryService.instance.recordButtonTap('order_ticket_insufficient_cash_topup_cta');
                     final auth = context.read<AuthService>();
                     await Navigator.of(context).push(
                       MaterialPageRoute(

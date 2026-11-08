@@ -18,10 +18,12 @@ import 'services/app_flags_service.dart';
 import 'services/plan_service.dart';
 import 'services/currency_service.dart';
 import 'services/supabase_service.dart';
+import 'services/churn_telemetry_service.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
 Future<void> main() async {
+  ChurnTelemetryService.processStart = DateTime.now();
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
     url: supabaseUrl,
@@ -32,6 +34,9 @@ Future<void> main() async {
   // Read the cached currency choice before the first frame, so the app never
   // renders rupees at a user who picked dollars.
   await CurrencyService.instance.loadCached();
+  await ChurnTelemetryService.instance.init();
+  ChurnTelemetryService.instance.recordAppLaunch(source: 'app_launch');
+  await ChurnTelemetryService.instance.recordSessionStart();
   runApp(const TradingTitansApp());
 }
 
@@ -160,11 +165,20 @@ class TradingTitansApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             themeMode: themeService.themeMode,
             navigatorKey: AuthService.navigatorKey,
-            builder: (context, child) => webShell(child),
+            // Max scroll depth per screen for the analytics dashboard.
+            builder: (context, child) => NotificationListener<ScrollUpdateNotification>(
+              onNotification: (n) {
+                if (n.depth == 0) ChurnTelemetryService.instance.recordScroll(n.metrics);
+                return false;
+              },
+              child: webShell(child),
+            ),
             home: AppLifecycleGate(child: homeWidget),
-            navigatorObservers: FirebaseService.instance.isInitialized
-                ? [FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance)]
-                : [],
+            navigatorObservers: [
+              ChurnTelemetryNavigatorObserver(),
+              if (FirebaseService.instance.isInitialized)
+                FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+            ],
             debugShowCheckedModeBanner: false,
           );
         },
@@ -238,7 +252,14 @@ class _AppLifecycleGateState extends State<AppLifecycleGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // Uploads events and computed metrics; without it the dashboard stays empty.
+      ChurnTelemetryService.instance.flushToBackend();
+      ChurnTelemetryService.instance.recordCleanExit();
+    }
     if (state == AppLifecycleState.resumed) {
+      ChurnTelemetryService.instance.recordAppLaunch(source: 'resume');
+      ChurnTelemetryService.instance.resumeAfterPause();
       // Retains last-known gating states if the refresh fails (R10.7).
       context.read<AuthService>().reevaluate();
       if (context.read<AuthService>().isAuthenticated) {

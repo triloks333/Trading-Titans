@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/currency.dart';
 import '../../core/countries.dart';
 import '../../core/theme.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/currency_service.dart';
 import '../../widgets/auth_kit.dart';
 
@@ -16,6 +17,12 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ChurnTelemetryService.instance.recordHomeScreen('onboarding_screen');
+  }
+
   static const int _stepCount = 3;
 
   int _step = 0;

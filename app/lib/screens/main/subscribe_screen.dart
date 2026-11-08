@@ -21,6 +21,7 @@ import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/error_state.dart';
+import '../../services/churn_telemetry_service.dart';
 
 /// Plans and top-ups, presented with a clean segmented view.
 ///
@@ -417,7 +418,11 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       was: p.onSale ? _wasPrice(p, billing) : null,
       approx: _approx(p, billing),
       features: features,
-      onTap: current || _busySku != null ? null : () => setState(() => _selectedSku = p.sku),
+      onTap: current || _busySku != null ? null : () {
+        ChurnTelemetryService.instance.recordPaywallPackView(p.sku);
+        ChurnTelemetryService.instance.recordButtonTap('select_pack_${p.sku}', screenId: 'SubscribeScreen');
+        setState(() => _selectedSku = p.sku);
+      },
     );
   }
 
@@ -555,6 +560,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   // ---------------------------------------------------------------------------
   Future<void> _openCheckout(PlanOption product) async {
     if (_busySku != null) return;
+    ChurnTelemetryService.instance.recordButtonTap('pay_with_upi_btn', screenId: 'SubscribeScreen', extra: {'sku': product.sku, 'price_paise': product.pricePaise});
 
     if (Platform.isIOS) {
       _tell('In-app purchases are not enabled on iOS yet. All trading simulation features are completely free!');
@@ -575,6 +581,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     }
 
     setState(() => _busySku = product.sku);
+    ChurnTelemetryService.instance.recordPaywallStep('checkout_start', sku: product.sku);
     try {
       final session = await SupabaseService().createPaymentSession(
         product.sku,
@@ -656,6 +663,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
     final session = _activeSession;
     final product = _activeProduct;
+    ChurnTelemetryService.instance.recordPaywallStep('purchase_success', sku: product?.sku);
     if (!mounted) return;
 
     _tell('Payment received! Confirming and crediting your account...');
@@ -714,6 +722,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
+    ChurnTelemetryService.instance.recordPaywallStep('purchase_failed', sku: _activeProduct?.sku);
     if (!mounted) return;
     final product = _activeProduct;
     final session = _activeSession;

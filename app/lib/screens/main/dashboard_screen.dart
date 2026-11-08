@@ -27,6 +27,7 @@ import '../../widgets/home_news_section.dart';
 import '../../widgets/muhurat_card.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/titan_showcase.dart';
+import '../../services/churn_telemetry_service.dart';
 import 'analytics_screen.dart';
 import 'autopsy_screen.dart';
 import 'chat_screen.dart';
@@ -499,13 +500,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 14),
         Row(children: [
           Expanded(
-            child: ElevatedButton(onPressed: () => NavTabService.goToTab(NavTabService.trade), child: const Text('Trade now')),
+            child: ElevatedButton(
+              onPressed: () {
+                ChurnTelemetryService.instance.recordButtonTap('home_trade_now_btn', screenId: 'DashboardScreen');
+                NavTabService.goToTab(NavTabService.trade);
+              },
+              child: const Text('Trade now'),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(backgroundColor: AppColors.cream),
-              onPressed: () => NavTabService.goToTab(NavTabService.wallet),
+              onPressed: () {
+                ChurnTelemetryService.instance.recordButtonTap('home_add_demo_cash_btn', screenId: 'DashboardScreen');
+                NavTabService.goToTab(NavTabService.wallet);
+              },
               child: const Text('Add demo cash'),
             ),
           ),
@@ -551,11 +561,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _quickActions() {
     final actions = <(IconData, String, VoidCallback)>[
-      (Icons.search_rounded, 'Search', () => NavTabService.goToTab(NavTabService.trade)),
-      (Icons.format_list_bulleted_rounded, 'Orders', () => _push(const OrdersScreen())),
-      (Icons.lightbulb_outline_rounded, 'What-If', () => _push(const WhatIfScreen())),
-      (Icons.manage_search_rounded, 'Autopsy', () => _push(const AutopsyScreen())),
-      (Icons.show_chart_rounded, 'Analytics', () => _push(const AnalyticsScreen())),
+      (Icons.search_rounded, 'Search', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_tool_search_btn', screenId: 'DashboardScreen');
+        NavTabService.goToTab(NavTabService.trade);
+      }),
+      (Icons.format_list_bulleted_rounded, 'Orders', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_tool_orders_btn', screenId: 'DashboardScreen');
+        _push(const OrdersScreen());
+      }),
+      (Icons.lightbulb_outline_rounded, 'What-If', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_tool_whatif_btn', screenId: 'DashboardScreen');
+        _push(const WhatIfScreen());
+      }),
+      (Icons.manage_search_rounded, 'Autopsy', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_tool_autopsy_btn', screenId: 'DashboardScreen');
+        _push(const AutopsyScreen());
+      }),
+      (Icons.show_chart_rounded, 'Analytics', () {
+        ChurnTelemetryService.instance.recordButtonTap('home_tool_analytics_btn', screenId: 'DashboardScreen');
+        _push(const AnalyticsScreen());
+      }),
     ];
     return TitanShowcase(
       showcaseKey: _actionsKey,

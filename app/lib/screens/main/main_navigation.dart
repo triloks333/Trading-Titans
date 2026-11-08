@@ -9,9 +9,12 @@ import '../../core/money.dart';
 import '../../core/app_constants.dart';
 import '../../widgets/crown_logo.dart';
 import '../../core/rate_prompt.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/churn_telemetry_service.dart';
+import '../../services/action_reaction_engine.dart';
 import '../../services/tour_service.dart';
 import '../../services/nav_tab_service.dart';
 import '../../widgets/reward_celebration_dialog.dart';
@@ -61,9 +64,11 @@ class _MainNavigationState extends State<MainNavigation> {
       _checkRewards();
       SupabaseService().evaluatePriceAlerts();
     });
+    ChurnTelemetryService.instance.recordHomeScreen(_tabScreens[_currentIndex]);
     // Initial check after a brief load delay
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
+      _intelStartup();
       _checkRewards();
       _checkSoftUpdate();
       CountryCurrencyUpdateDialog.checkAndShow(context);
@@ -72,9 +77,39 @@ class _MainNavigationState extends State<MainNavigation> {
     });
   }
 
+  static const _tabScreens = ['dashboard_screen', 'trade_screen', 'portfolio_screen', 'wallet_screen', 'compete_screen', 'profile_screen'];
+
+  void _setTab(int i) {
+    setState(() => _currentIndex = i);
+    ChurnTelemetryService.instance.recordHomeScreen(_tabScreens[i.clamp(0, _tabScreens.length - 1)]);
+  }
+
+  /// Feeds account state into the health metrics and claims a pending crash
+  /// apology (the server decides whether it is owed).
+  Future<void> _intelStartup() async {
+    final auth = context.read<AuthService>();
+    final u = auth.user;
+    if (u != null) {
+      final providers = (Supabase.instance.client.auth.currentUser?.appMetadata['providers'] as List?) ?? const [];
+      ChurnTelemetryService.instance.updateLive(
+        walletBalance: u.walletBalance,
+        startingCash: auth.isGuest ? 5000 : 11000,
+        isGuest: auth.isGuest,
+        oauth: providers.contains('google') || providers.contains('apple'),
+        darkMode: context.read<ThemeService>().isDarkMode,
+        textScale: MediaQuery.textScalerOf(context).scale(1),
+      );
+    }
+    final r = await ActionReactionEngine.instance.claimCrashApologyIfPending();
+    if (r == null || !mounted) return;
+    await auth.refreshUser();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.text), duration: const Duration(seconds: 6)));
+  }
+
   void _onTourReplay() {
     if (!mounted) return;
-    setState(() => _currentIndex = 0);
+    _setTab(0);
   }
 
   void _onTabRequest() {
@@ -82,7 +117,7 @@ class _MainNavigationState extends State<MainNavigation> {
     // Derived from NavTabService.count, not a literal, so a new destination is
     // reachable from a deep link the moment it is added.
     if (!mounted || i < 0 || i >= NavTabService.count) return;
-    setState(() => _currentIndex = i);
+    _setTab(i);
   }
 
   /// Offers the soft update, at most once per app session.
@@ -263,7 +298,7 @@ class _MainNavigationState extends State<MainNavigation> {
               // track the app theme without needing a tab switch first.
               builder: (context, _, _) => _FloatingNavBar(
                 currentIndex: _currentIndex,
-                onTap: (index) => setState(() => _currentIndex = index),
+                onTap: _setTab,
               ),
             ),
           );
@@ -303,7 +338,7 @@ class _MainNavigationState extends State<MainNavigation> {
           Consumer<ThemeService>(
             builder: (context, _, _) => _DesktopSidebar(
               currentIndex: _currentIndex,
-              onTap: (index) => setState(() => _currentIndex = index),
+              onTap: _setTab,
             ),
           ),
           Expanded(
@@ -522,7 +557,10 @@ class _FloatingNavBar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
             child: Row(children: [
               for (var i = 0; i < kMainNavDests.length; i++)
-                Expanded(child: _NavButton(dest: kMainNavDests[i], selected: i == currentIndex, onTap: () => onTap(i))),
+                Expanded(child: _NavButton(dest: kMainNavDests[i], selected: i == currentIndex, onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap(const ['nav_tab_0_home', 'nav_tab_1_trade', 'nav_tab_2_portfolio', 'nav_tab_3_wallet', 'nav_tab_4_compete', 'nav_tab_5_profile'][i]);
+                  onTap(i);
+                })),
             ]),
           ),
         ),

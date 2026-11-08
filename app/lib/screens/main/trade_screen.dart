@@ -21,6 +21,8 @@ import 'muhurat_screen.dart';
 import 'option_chain_screen.dart';
 import 'orders_screen.dart';
 import 'stock_detail_screen.dart';
+import '../../services/churn_telemetry_service.dart';
+import '../../services/analytics_service.dart';
 
 typedef MoverSymbol = ({String symbol, String name, String? display});
 MoverSymbol _s(String symbol, String name, [String? display]) => (symbol: symbol, name: name, display: display);
@@ -193,6 +195,7 @@ class _TradeScreenState extends State<TradeScreen> {
 
   void _selectMarket(String key) {
     if (key == _market) return;
+    ChurnTelemetryService.instance.recordButtonTap('market_tab_$key', screenId: 'TradeScreen');
     setState(() {
       _market = key;
       _searchQuery = '';
@@ -222,6 +225,12 @@ class _TradeScreenState extends State<TradeScreen> {
         _results = results;
         _loading = false;
       });
+      if (results.isEmpty) {
+        AnalyticsService.log('telemetry_search_zero_results', {
+          'query': query,
+          'market': _orderMarket,
+        });
+      }
       _refreshPrices();
     } catch (_) {
       if (query != _searchQuery.trim() || !mounted) return;

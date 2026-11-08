@@ -305,6 +305,9 @@ class LegalDocs {
               'not connected to any broker and cannot place real trades.',
           'No contacts, no precise location, no microphone or camera access '
               'beyond a photo you deliberately choose to upload.',
+          'In-app usage analytics: which screens and buttons you use, your '
+              'simulated trades, and app crashes, linked to your account so we can '
+              'fix problems and improve the app. No device fingerprinting.',
         ],
       ),
       LegalSection(

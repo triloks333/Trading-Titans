@@ -14,6 +14,7 @@ import '../../widgets/auth_kit.dart';
 
 import 'option_detail_screen.dart';
 import 'order_entry_screen.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/supabase_service.dart';
 
 /// Black-Scholes delta from implied volatility in percent (r = 6.5%, as the
@@ -459,6 +460,7 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
                 child: InkWell(
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   onTap: () {
+                    ChurnTelemetryService.instance.recordButtonTap('option_chain_expiry_chip', screenId: 'OptionChainScreen', extra: {'expiry': e});
                     setState(() => _selectedExpiry = e);
                     _updateStrikesForExpiry(e);
                   },
@@ -522,7 +524,10 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         Expanded(
           flex: 2,
           child: InkWell(
-            onTap: () => _openOptionDetail(call, true),
+            onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('option_chain_call_strike', screenId: 'OptionChainScreen', extra: {'strike': strike, 'underlying': widget.underlyingSymbol});
+            _openOptionDetail(call, true);
+          },
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               cell(outer(call, true), shade: callItm),
               cell(ltp(call), shade: callItm, strong: true, align: TextAlign.right),
@@ -539,7 +544,10 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
         Expanded(
           flex: 2,
           child: InkWell(
-            onTap: () => _openOptionDetail(put, false),
+            onTap: () {
+            ChurnTelemetryService.instance.recordButtonTap('option_chain_put_strike', screenId: 'OptionChainScreen', extra: {'strike': strike, 'underlying': widget.underlyingSymbol});
+            _openOptionDetail(put, false);
+          },
             child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               cell(ltp(put), shade: putItm, strong: true),
               cell(outer(put, false), shade: putItm, align: TextAlign.right),

@@ -9,6 +9,7 @@ import '../screens/main/notifications_screen.dart'
     show openNotificationCta, parseActionData;
 import 'auth_service.dart' show AuthService;
 import 'chat_service.dart';
+import 'churn_telemetry_service.dart';
 import 'firebase_service.dart';
 
 /// Classifies a notification so it can be mapped to a dedicated Android
@@ -375,10 +376,14 @@ class NotificationService {
       // The foreground case is the local-notification callback in
       // _initLocalNotifications.
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        ChurnTelemetryService.instance.markLaunchFromNotification();
         openPushTarget(message.data);
       });
       final initial = await FirebaseMessaging.instance.getInitialMessage();
-      if (initial != null) openPushTarget(initial.data);
+      if (initial != null) {
+        ChurnTelemetryService.instance.markLaunchFromNotification();
+        openPushTarget(initial.data);
+      }
 
     } catch (e) {
       debugPrint('Error setting up Notification Service: $e');

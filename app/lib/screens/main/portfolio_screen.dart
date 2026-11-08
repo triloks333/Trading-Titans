@@ -17,11 +17,14 @@ import 'order_entry_screen.dart';
 import 'orders_screen.dart';
 import 'analytics_screen.dart';
 import 'autopsy_screen.dart';
+import 'subscribe_screen.dart';
 import '../../models/order.dart';
 import '../../models/quote.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/empty_state.dart';
+import '../../services/churn_telemetry_service.dart';
+import '../../services/action_reaction_engine.dart';
 import '../../services/nav_tab_service.dart';
 import '../../services/theme_service.dart';
 import 'package:provider/provider.dart';
@@ -422,6 +425,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   Future<void> _exitHolding(Holding h) async {
+    ChurnTelemetryService.instance.recordButtonTap('portfolio_holding_quick_exit_btn', extra: {'sym': h.symbol});
     final quote = Quote(
       symbol: h.symbol,
       yfSymbol: h.symbol,
@@ -442,7 +446,37 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         isExitOrder: true,
       ),
     ));
-    _load();
+    await _load();
+    await _afterExit(
+      stillOpen: _holdings.any((x) => x.symbol == h.symbol && x.market == h.market && x.quantity != 0),
+      symbol: h.symbol,
+      pnl: h.pnl,
+    );
+  }
+
+  /// Once an exit really closed the position, records it and shows at most one
+  /// honest reaction (loss recap or win-streak scaling). Backing out or a
+  /// partial exit leaves it open: nothing recorded.
+  // shortcut: the loss sign comes from the P&L estimated at exit, not the fill; read the closing order's netRealizedPnl if a near-zero trade is ever mislabelled.
+  Future<void> _afterExit({required bool stillOpen, required String symbol, required double pnl}) async {
+    if (stillOpen) return;
+    ChurnTelemetryService.instance.recordTradeOutcome(symbol: symbol, isProfit: pnl >= 0, pnl: pnl);
+    final auth = context.read<AuthService>();
+    await auth.refreshUser();
+    final r = await ActionReactionEngine.instance
+        .onTradeClosed(symbol: symbol, pnl: pnl, walletAfter: auth.user?.walletBalance ?? 0);
+    if (r == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(r.text),
+      duration: const Duration(seconds: 8),
+      action: r.action == null
+          ? null
+          : SnackBarAction(
+              label: r.actionLabel!,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => r.action == 'autopsy' ? const AutopsyScreen() : const SubscribeScreen())),
+            ),
+    ));
   }
 
   Future<void> _openFo(FoPosition pos) async {
@@ -475,6 +509,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   Future<void> _exitFo(FoPosition pos) async {
     // The same estimated price the row shows (carry for futures, Black-Scholes for options).
     final exitPrice = _estimateFoPrice(pos);
+    final pnl = pos.unrealizedPnl(exitPrice);
+    ChurnTelemetryService.instance.recordButtonTap('portfolio_holding_quick_exit_btn', extra: {'sym': pos.symbol});
     final quote = Quote(
       symbol: pos.symbol,
       yfSymbol: pos.symbol,
@@ -501,7 +537,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         marginUsed: _foCapitalUsed(pos),
       ),
     ));
-    _load();
+    await _load();
+    await _afterExit(stillOpen: _foPositions.any((x) => x.id == pos.id && x.netQty != 0), symbol: pos.symbol, pnl: pnl);
   }
 
   // ── Layout ──────────────────────────────────────────────────────────
