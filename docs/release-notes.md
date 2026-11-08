@@ -11,6 +11,35 @@ entry here, at the top, before arming.
 
 ---
 
+## 2.0.3 (versionCode 63)
+
+Product analytics and live admin Intelligence page, honest reactions (loss recap, stop-loss tips, option-chain guide, market-closed note), two-stage first-time pack offers, and the value-first onboarding with a guided first trade. Built from e0619e8, released to production at 100% on 2026-11-08.
+
+### Play Store "What's new" (paste this)
+
+```
+• New guided start: try the app as a guest and place your first trade in seconds
+• Trade feedback: a recap with Trade Autopsy after two losses in a row, and stop-loss tips after a big loss
+• First-time offers on Plans, with the real price and end time shown
+• Option chain: a quick guide to calls, puts and strikes
+• Order ticket now tells you when a market is closed and your order will wait
+• Stability and performance improvements
+```
+
+---
+
+## 2.0.2 (versionCode 62)
+
+Admins were bored so rolled out an update xD
+
+### Play Store "What's new" (paste this)
+
+```
+admins were bored so rolled out an update xD
+```
+
+---
+
 ## 2.0.1 (versionCode 61)
 
 Titans v2: the whole app rebuilt to the new design, Weekly League, per-type push switches, Kite-style holding rows with LTP, option chain priced like fills and opening at the money, Option chain only for real F&O names. Replaced 2.0.0 (60) before its review finished.
