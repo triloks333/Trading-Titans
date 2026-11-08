@@ -2,19 +2,16 @@ import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/currency.dart';
 import '../../core/countries.dart';
 import '../../core/theme.dart';
 import '../../services/analytics_service.dart';
-import '../../services/auth_service.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/currency_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/auth_kit.dart';
-import '../../widgets/save_portfolio_sheet.dart';
 import 'first_trade_flow.dart';
 
 /// Country to pre-select. Many Indian phones run an en_US locale, so the IST
@@ -173,9 +170,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _finish({required bool traded}) async {
     if (_saving) return;
     setState(() => _saving = true);
-    final isGuest = context.read<AuthService>().isGuest;
-    // A guest who just bought something has the most to keep: ask now.
-    if (traded && isGuest) await showSavePortfolioSheet(context, trigger: 'onboarding_first_trade');
+    // Guests are sent to the sign-up step (ConvertAccountScreen gate in main.dart)
+    // as soon as onboarding completes, so there is no optional sheet here.
     // Guests skipped the OS prompt at sign-in; a skipper never saw the alerts card.
     if (!traded) unawaited(NotificationService.instance.setup());
     if (_selectedCountryCode != null) {

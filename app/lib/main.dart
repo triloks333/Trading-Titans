@@ -20,6 +20,7 @@ import 'services/currency_service.dart';
 import 'services/supabase_service.dart';
 import 'services/churn_telemetry_service.dart';
 import 'screens/auth/onboarding_screen.dart';
+import 'screens/main/convert_account_screen.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
 Future<void> main() async {
@@ -148,13 +149,16 @@ class TradingTitansApp extends StatelessWidget {
               homeWidget = const OnboardingScreen();
               break;
             case ActiveGate.normal:
-              hasAppChrome = auth.isAuthenticated && !auth.isRecoveringPassword;
+              hasAppChrome = auth.isAuthenticated && !auth.isGuest && !auth.isRecoveringPassword;
               homeWidget = auth.isRecoveringPassword
                   ? const ResetPasswordScreen()
-                  : auth.isAuthenticated
-                      // ignore: deprecated_member_use
-                      ? ShowCaseWidget(builder: (context) => const MainNavigation())
-                      : const WelcomeScreen();
+                  : !auth.isAuthenticated
+                      ? const WelcomeScreen()
+                      // Guests finish onboarding on a guest session, then must sign up or sign in.
+                      : auth.isGuest
+                          ? const ConvertAccountScreen(requiredGate: true)
+                          // ignore: deprecated_member_use
+                          : ShowCaseWidget(builder: (context) => const MainNavigation());
               break;
           }
           if (!hasAppChrome) homeWidget = webFormPage(homeWidget);

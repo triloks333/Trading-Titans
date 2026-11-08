@@ -5,8 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme.dart';
 import '../../core/money.dart';
 import '../../services/auth_service.dart';
+import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
+import '../auth/login_screen.dart';
 
 /// Turns a guest session into a permanent account.
 ///
@@ -14,8 +16,14 @@ import '../../widgets/auth_kit.dart';
 /// auth.users row, so the portfolio, orders, rewards, streak and wallet history
 /// stay exactly where they are. The screen's only jobs are to attach an
 /// identity and then call the server-side finaliser.
+///
+/// With [requiredGate] it is the sign-up step every guest must pass after
+/// onboarding (main.dart shows it instead of the app): no back button, and a
+/// "Sign in" path for people who already have an account.
 class ConvertAccountScreen extends StatefulWidget {
-  const ConvertAccountScreen({super.key});
+  const ConvertAccountScreen({super.key, this.requiredGate = false});
+
+  final bool requiredGate;
 
   @override
   State<ConvertAccountScreen> createState() => _ConvertAccountScreenState();
@@ -29,6 +37,12 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
   bool _busy = false;
   bool _obscurePassword = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.requiredGate) ChurnTelemetryService.instance.recordHomeScreen('convert_account_screen');
+  }
 
   @override
   void dispose() {
@@ -102,7 +116,8 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              Navigator.of(context).pop();
+              // As the gate, the app replaces this screen by itself once the account is permanent.
+              if (!widget.requiredGate) Navigator.of(context).pop();
             },
             child: Text('Done',
                 style: GoogleFonts.ibmPlexSans(
@@ -137,7 +152,8 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, 10),
             child: Row(children: [
-              AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
+              if (!widget.requiredGate)
+                AuthIconButton(icon: Icons.arrow_back_rounded, label: 'Back', onTap: () => Navigator.of(context).maybePop()),
               const Spacer(),
               ListenableBuilder(
                 listenable: ThemeService(),
@@ -166,9 +182,14 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('Make your account permanent', style: AppFonts.sans(size: 28, weight: FontWeight.w700, color: AppColors.ink, height: 1.15)),
+                Text(widget.requiredGate ? 'Create your account' : 'Make your account permanent',
+                    style: AppFonts.sans(size: 28, weight: FontWeight.w700, color: AppColors.ink, height: 1.15)),
                 const SizedBox(height: 6),
-                Text('Keep everything you’ve built and unlock the full app.', style: AppFonts.sans(size: 14, color: AppColors.ink3)),
+                Text(
+                    widget.requiredGate
+                        ? 'Sign up to save your portfolio and start trading. Everything from your first trade comes with you.'
+                        : 'Keep everything you’ve built and unlock the full app.',
+                    style: AppFonts.sans(size: 14, color: AppColors.ink3)),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
@@ -231,6 +252,16 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                 label: _linkSent ? 'Make account permanent' : 'Send confirmation link',
                 busy: _busy,
                 onPressed: _busy ? null : (_linkSent ? _finish : _sendLink),
+              ),
+            ),
+          if (auth.isGuest && widget.requiredGate)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: TextButton(
+                // Signing in replaces the guest session, so the guest's practice trade stays behind.
+                onPressed: _busy ? null : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen())),
+                style: TextButton.styleFrom(foregroundColor: AppColors.ink3, minimumSize: const Size.fromHeight(44)),
+                child: const Text('Already have an account? Sign in'),
               ),
             ),
         ]),
