@@ -62,6 +62,17 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   PlanOption? _activeProduct;
   String? _savedPhone;
 
+  /// Open downshift offers by SKU (from intel_my_offers / intel_request_offer).
+  final Map<String, Map<String, dynamic>> _offers = {};
+  String? _lastViewedSku;
+
+  /// Viewing the first pack, then the second, without buying earns a real
+  /// discount on the second; the server decides and records it.
+  static const _downshifts = {
+    ('topup_max', 'topup_plus'), ('topup_plus', 'topup_boost'),
+    ('titan_annual', 'titan_monthly'), ('titan_monthly', 'pro_monthly'),
+  };
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +80,71 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     _plans = widget.catalogue != null ? Future.value(widget.catalogue!) : (SupabaseService().getPlanCatalogue()..ignore());
     _initRazorpay();
     _loadSavedPhone();
+    _loadOffers();
+  }
+
+  Future<void> _loadOffers() async {
+    try {
+      final res = await SupabaseService().client.rpc('intel_my_offers');
+      if (res is! List || !mounted) return;
+      setState(() {
+        for (final o in res.whereType<Map>()) {
+          _offers['${o['sku']}'] = Map<String, dynamic>.from(o);
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// Called on every pack tap; asks for an offer when the tap is a downshift.
+  Future<void> _onPackViewed(String sku) async {
+    final prev = _lastViewedSku;
+    _lastViewedSku = sku;
+    if (prev == null || !_downshifts.contains((prev, sku)) || _offers.containsKey(sku)) return;
+    try {
+      final res = await SupabaseService().client.rpc('intel_request_offer', params: {'p_from': prev, 'p_to': sku});
+      if (res is! Map || !mounted) return;
+      setState(() => _offers[sku] = Map<String, dynamic>.from(res));
+      ChurnTelemetryService.instance.recordPaywallStep('offer_shown', sku: sku);
+    } catch (_) {}
+  }
+
+  /// The offer's price in the billing currency, or null when it has none there.
+  int? _offerMinor(PlanOption p, Currency billing) {
+    final o = _offers[p.sku];
+    if (o == null || ((o['pct'] as num?) ?? 0) <= 0) return null;
+    final v = p.chargedIn(billing) == Currency.usd ? o['price_usd_cents'] : o['price_paise'];
+    return (v as num?)?.round();
+  }
+
+  String _fmtMinor(int minor, Currency c) {
+    final major = minor / 100;
+    return '${c.symbol}${major.toStringAsFixed(major == major.roundToDouble() ? 0 : 2)}';
+  }
+
+  /// The offer banner: real percent, real price, real end time.
+  Widget _offerBanner(Map<String, dynamic> o, PlanOption p, Currency billing) {
+    final pct = (o['pct'] as num?)?.toInt() ?? 0;
+    final price = _offerMinor(p, billing);
+    if (pct <= 0 || price == null) return const SizedBox.shrink();
+    final until = DateTime.tryParse('${pct == 50 ? o['stage2_at'] : o['expires_at']}')?.toLocal();
+    final list = p.chargedMinor(billing);
+    final when = until == null ? '' : ', until ${DateFormat('EEE d MMM, h:mm a').format(until)}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: AppColors.bullLight, borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Row(children: [
+        Icon(Icons.sell_outlined, size: 20, color: AppColors.bull),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '$pct% off ${p.title} for you: ${_fmtMinor(price, p.chargedIn(billing))} '
+            '(was ${_fmtMinor(list, p.chargedIn(billing))})$when.',
+            style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.ink),
+          ),
+        ),
+      ]),
+    );
   }
 
   void _initRazorpay() {
@@ -164,6 +240,8 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                   Expanded(
                     child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12), children: [
                       if (plan.saleActive) _saleBanner(plan),
+                      for (final p in options)
+                        if (_offers[p.sku] != null) _offerBanner(_offers[p.sku]!, p, billing),
                       if (billing != Money.display) _currencyNote(billing),
                       if (_selectedTab == 0 && hasAnnual) _intervalToggle(),
                       if (_selectedTab == 0) _starterCard(plan),
@@ -432,9 +510,12 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       tag: tag,
       goldTag: !current && (titan || tag == 'POPULAR' || tag == 'BEST VALUE'),
       selected: selected,
-      price: p.priceLabel(billing),
+      price: _offerMinor(p, billing) == null ? p.priceLabel(billing) : _fmtMinor(_offerMinor(p, billing)!, p.chargedIn(billing)),
       per: p.isSubscription ? (p.billingInterval == 'annual' ? 'per year' : 'per month') : 'one-time',
-      was: p.onSale ? _wasPrice(p, billing) : null,
+      was: _offerMinor(p, billing) != null
+          ? Text(p.priceLabel(billing),
+              style: AppFonts.mono(size: 13, color: AppColors.ink4).copyWith(decoration: TextDecoration.lineThrough))
+          : p.onSale ? _wasPrice(p, billing) : null,
       approx: _approx(p, billing),
       features: features,
       onTap: current || _busySku != null ? null : () {
@@ -442,6 +523,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         if (cardId != null) ChurnTelemetryService.instance.recordButtonTap('subscribe_card_$cardId');
         ChurnTelemetryService.instance.recordPaywallPackView(p.sku);
         setState(() => _selectedSku = p.sku);
+        _onPackViewed(p.sku);
       },
     );
   }
@@ -461,7 +543,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
               style: AppFonts.sans(size: 13, color: AppColors.ink3),
             ),
           ),
-          if (p != null) Text(p.priceLabel(billing), style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+          if (p != null)
+            Text(_offerMinor(p, billing) == null ? p.priceLabel(billing) : _fmtMinor(_offerMinor(p, billing)!, p.chargedIn(billing)),
+                style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
         ]),
         const SizedBox(height: 8),
         SizedBox(

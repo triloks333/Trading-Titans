@@ -16,6 +16,9 @@ import 'option_detail_screen.dart';
 import 'order_entry_screen.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/supabase_service.dart';
+import 'dart:async';
+import '../../services/action_reaction_engine.dart';
+import 'glossary_screen.dart';
 
 /// Black-Scholes delta from implied volatility in percent (r = 6.5%, as the
 /// strike detail uses). Calls are 0..1, puts -1..0.
@@ -76,6 +79,8 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
   @override
   void initState() {
     super.initState();
+    _openedAt = DateTime.now();
+    _helperTimer = Timer(const Duration(seconds: 8), _maybeShowHelper);
     _loadOptionChain();
     _spotPrice = widget.spotPrice;
     if (widget.market == 'stock') {
@@ -87,8 +92,52 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
 
   @override
   void dispose() {
+    _helperTimer?.cancel();
     _strikesScroll.dispose();
     super.dispose();
+  }
+
+  late final DateTime _openedAt;
+  Timer? _helperTimer;
+
+  /// Scrolled the chain for 8s without tapping a strike: explain how to read it.
+  Future<void> _maybeShowHelper() async {
+    final t = ChurnTelemetryService.instance;
+    final tapped = t.intel.events.any((e) =>
+        e.name == 'tap' && !e.ts.isBefore(_openedAt) && '${e.props['button']}'.endsWith('_cell_tap'));
+    if (!mounted || tapped || t.currentScrollPct <= 0) return;
+    if (!await ActionReactionEngine.instance.optionChainHelper(widget.underlyingSymbol) || !mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Reading the option chain', style: AppText.cardTitle),
+            const SizedBox(height: 10),
+            for (final line in const [
+              'Calls (CE) are on the left, puts (PE) on the right, strike prices in the middle.',
+              'ATM is the strike nearest the current price. Calls below it are in the money (ITM), above it out of the money (OTM). Puts are the reverse.',
+              'LTP is the premium for one unit. One lot costs premium × lot size.',
+              'A bought call gains if the price ends above strike + premium; a bought put if it ends below strike − premium.',
+            ])
+              Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('• $line', style: AppText.body)),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GlossaryScreen()));
+                },
+                child: const Text('Open glossary'),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadOptionChain() async {

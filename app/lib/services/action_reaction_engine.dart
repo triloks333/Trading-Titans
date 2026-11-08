@@ -58,7 +58,17 @@ class ActionReactionEngine {
     double? pnlPct,
   }) async {
     final r = await _streakReaction(symbol: symbol, pnl: pnl, walletAfter: walletAfter);
-    if (r != null || pnl <= 0 || pnlPct == null) return r;
+    if (r != null || pnlPct == null) return r;
+    if (pnl < 0 && pnlPct <= -5) {
+      // Trade Autopsy grade D. Education only: no upsell to a losing trade.
+      final tip = Reaction('stop_loss_tip',
+          '${symbol.toUpperCase()} closed ${pnlPct.toStringAsFixed(1)}%. A stop-loss on the order ticket exits at a price '
+          'you set, so a loss cannot run past it.',
+          actionLabel: 'Autopsy', action: 'autopsy');
+      await _fire(tip.key, delivered: true, reason: 'grade_d_loss', props: {'sym': symbol, 'pct': pnlPct});
+      return tip;
+    }
+    if (pnl <= 0) return null;
     final name = symbol.toUpperCase();
     final props = {'sym': symbol, 'slug': symbolSlug(symbol), 'pnl': pnl, 'pct': pnlPct};
     if (pnlPct >= 10) {
@@ -253,6 +263,47 @@ class ActionReactionEngine {
       return r;
     }
     return null;
+  }
+
+  /// True at most once per [every] for [key]; the gate behind repeat-limited tips.
+  Future<bool> _gate(String key, Duration every) async {
+    final prefs = await SharedPreferences.getInstance();
+    final last = DateTime.tryParse(prefs.getString('intel_gate_$key') ?? '');
+    if (last != null && DateTime.now().difference(last) < every) return false;
+    await prefs.setString('intel_gate_$key', DateTime.now().toIso8601String());
+    return true;
+  }
+
+  /// Option chain scrolled 8s+ with no strike tapped: offer the how-to-read
+  /// sheet, at most weekly.
+  Future<bool> optionChainHelper(String underlying) async {
+    if (!await _gate('option_chain_helper', const Duration(days: 7))) return false;
+    await _fire('option_chain_helper', delivered: true, reason: 'scrolled_8s_no_strike', props: {'sym': underlying});
+    return true;
+  }
+
+  /// Analytics showed the "losses bigger than wins" card with its stop-loss tip.
+  Future<void> analyticsLeakTip() async {
+    if (await _gate('analytics_leak_tip', const Duration(days: 7))) {
+      await _fire('analytics_leak_tip', delivered: true, reason: 'leak_card_viewed');
+    }
+  }
+
+  /// Ranked #11–25 at the weekend: the league screen states the real gap to the top 10.
+  Future<void> leagueNearMiss(int rank, String gapLabel) async {
+    final wd = DateTime.now().weekday;
+    if (rank < 11 || rank > 25 || wd < DateTime.friday) return;
+    if (await _gate('league_near_miss', const Duration(hours: 20))) {
+      await _fire('league_near_miss', delivered: true, reason: 'rank_11_25_weekend', props: {'rank': rank, 'gap': gapLabel});
+    }
+  }
+
+  /// An order ticket opened while its market is closed: the ticket says the
+  /// order will wait as pending and that crypto trades around the clock.
+  Future<void> marketClosedNote(String market, String symbol) async {
+    if (await _gate('market_closed_$market', const Duration(hours: 12))) {
+      await _fire('market_closed_note', delivered: true, reason: 'order_ticket_market_closed', props: {'market': market, 'sym': symbol});
+    }
   }
 
   /// A search came back empty: the screen shows a hint; logged for admins.

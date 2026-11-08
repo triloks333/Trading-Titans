@@ -47,6 +47,7 @@ class ChurnTelemetryService {
 
   bool get isInitialized => _initialized;
   String get currentScreenId => _currentScreenId;
+  double get currentScrollPct => _currentScrollPct;
 
   Future<void> init() async {
     if (_initialized) return;

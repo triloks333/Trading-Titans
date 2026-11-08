@@ -139,6 +139,10 @@ void main() {
         6 => ['Zero-Click', 'Rage-Tapped', 'Power Button'].any(target.contains) && wired.any((w) => btn.startsWith('btn_${w}_')),
         // Not the low-storage rule: it needs storage access.
         8 => ['App Crashed', 'Broke a', 'Inactive', 'Delete Account', 'Zero-Result', 'Guest Account'].any(target.contains),
+        // Option-chain helper, grade-D stop-loss tip, analytics leak tip, league gap, market-closed note.
+        // User types that need device/Wi-Fi data, prediction scores or book 2 stages are excluded.
+        7 => ['Option Chain Overwhelm', 'Autopsy Grade D', 'Biggest Leak', 'Top-10 Near-Miss', 'Evening Dead-Hours'].any(target.contains) &&
+            !['Affluence', 'Mid-Range', 'Campus Wi-Fi', 'Return Tomorrow Score', 'Buy Pack Score', 'Active Lead'].any(persona.contains),
         _ => false,
       };
       if (ok) {

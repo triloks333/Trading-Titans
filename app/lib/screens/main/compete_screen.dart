@@ -11,6 +11,7 @@ import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/skeleton.dart';
 import 'challenges_screen.dart';
+import '../../services/action_reaction_engine.dart';
 
 /// The letter in a row's avatar. Names are user input, so blank, whitespace-only
 /// and multi-code-unit names must not throw (that would blank the whole tab).
@@ -326,7 +327,13 @@ onTap: () {
       );
 
   /// Pinned "Your position" bar with the gap to the next tier.
-  Widget _myBar(List<Map<String, dynamic>> rows, Map<String, dynamic>? me) => Container(
+  Widget _myBar(List<Map<String, dynamic>> rows, Map<String, dynamic>? me) {
+    final rank = me?['rank'] as int?;
+    if (rank != null) ActionReactionEngine.instance.leagueNearMiss(rank, leagueGapLabel(rows, me));
+    return _myBarBody(rows, me);
+  }
+
+  Widget _myBarBody(List<Map<String, dynamic>> rows, Map<String, dynamic>? me) => Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 12),
         decoration: BoxDecoration(color: AppColors.goldPale, border: Border(top: BorderSide(color: AppColors.goldMid))),
         child: Row(children: [

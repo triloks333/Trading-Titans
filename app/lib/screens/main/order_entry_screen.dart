@@ -17,6 +17,7 @@ import '../../services/action_reaction_engine.dart';
 import '../../widgets/swipe_button.dart';
 import '../../widgets/info_tooltip.dart';
 import 'subscribe_screen.dart';
+import '../../core/market_hours.dart';
 
 class OrderEntryScreen extends StatefulWidget {
   final Quote quote;
@@ -100,6 +101,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   @override
   void initState() {
     super.initState();
+    if (_marketClosed) ActionReactionEngine.instance.marketClosedNote(widget.quote.market, widget.quote.symbol);
     _loadHolding();
     _loadLotSize();
 
@@ -406,6 +408,23 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool get _marketClosed => widget.quote.market != 'crypto' && !MarketHours.isOpen(widget.quote.market);
+
+  /// The server queues orders placed while the market is shut, so say so.
+  Widget _closedNote() {
+    final opens = MarketHours.nextOpen(widget.quote.market);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Text(
+        'This market is closed${opens.isEmpty ? '' : ' ($opens)'}. Your order will wait as pending until it opens. '
+        'Crypto trades 24/7 if you want to trade now.',
+        style: AppFonts.sans(size: 12, color: AppColors.ink3),
+      ),
+    );
   }
 
   /// A beginner helper shown above the quantity inputs: tappable chips that
@@ -1024,6 +1043,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                     }),
                 ]),
                 const SizedBox(height: 16),
+                if (_marketClosed) _closedNote(),
                 _buildTermHelp(),
                 if (_isCrypto) ...[
                   _chipRow([

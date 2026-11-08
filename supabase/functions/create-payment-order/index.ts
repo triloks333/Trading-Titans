@@ -228,9 +228,24 @@ Deno.serve(async (req: Request) => {
     const usd = prof?.location === "outside_india";
     const currency = usd ? "USD" : "INR";
 
-    const amount: number | null = usd ? plan.price_usd_cents : plan.price_paise;
+    let amount: number | null = usd ? plan.price_usd_cents : plan.price_paise;
     if (!amount || amount <= 0) {
       return json({ error: `That plan is not available in ${currency} yet.` }, 409);
+    }
+
+    // An open downshift offer (intel_offer_grants: 50%, then 75%) lowers the
+    // price of a prepaid order. The recurring mandate path keeps the plan price,
+    // since Razorpay plans have a fixed amount. A lookup failure charges full price.
+    let offerGrantId: string | null = null;
+    if (!useRecurringMandate) {
+      try {
+        const { data: offer } = await supabase.rpc("intel_offer_for_checkout", { p_user: user.id, p_sku: plan.sku });
+        const o = Array.isArray(offer) ? offer[0] : offer;
+        if (o?.grant_id && o.pct > 0) {
+          amount = Math.round(amount * (100 - o.pct) / 100);
+          offerGrantId = o.grant_id;
+        }
+      } catch (_) { /* full price */ }
     }
 
     const prefill = {
@@ -384,6 +399,7 @@ Deno.serve(async (req: Request) => {
         amount_paise: amount,
         currency,
         status: "created",
+        intel_offer_grant_id: offerGrantId,
       };
       if (resolvedPhone) subOrderInsert.customer_phone = resolvedPhone;
       const { error: subOrdErr } = await supabase.from("payment_orders").insert(subOrderInsert);
@@ -458,6 +474,7 @@ Deno.serve(async (req: Request) => {
       amount_paise: amount,
       currency,
       status: "created",
+      intel_offer_grant_id: offerGrantId,
     };
     if (resolvedPhone) topupInsert.customer_phone = resolvedPhone;
     const { error: topupErr } = await supabase.from("payment_orders").insert(topupInsert);

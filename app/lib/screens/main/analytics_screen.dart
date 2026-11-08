@@ -10,6 +10,7 @@ import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import 'autopsy_screen.dart';
+import '../../services/action_reaction_engine.dart';
 
 /// Period chips and how far back each looks.
 const Map<String, Duration?> kAnalyticsPeriods = {'1W': Duration(days: 7), '1M': Duration(days: 30), '3M': Duration(days: 90), 'All': null};
@@ -355,6 +356,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(i?.title ?? 'Trade autopsy', style: AppText.bodyBold),
                   Text(i?.detail ?? 'See why each trade won or lost', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                  if (i?.title.startsWith('Your biggest leak') ?? false) ...[
+                    const SizedBox(height: 6),
+                    Builder(builder: (_) {
+                      ActionReactionEngine.instance.analyticsLeakTip();
+                      return Text(
+                        'Tip: set a stop-loss when you enter, so each loss is capped at a size you chose.',
+                        style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink3),
+                      );
+                    }),
+                  ],
                 ]),
               ),
               Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
