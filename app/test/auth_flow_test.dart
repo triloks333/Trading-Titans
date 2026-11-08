@@ -18,6 +18,7 @@ import 'package:mobile/screens/auth/register_screen.dart';
 import 'package:mobile/screens/auth/welcome_screen.dart';
 import 'package:mobile/services/auth_service.dart';
 import 'package:mobile/services/theme_service.dart';
+import 'package:mobile/widgets/legal_consent.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(390, 844);
@@ -53,15 +54,16 @@ void main() {
     await Supabase.initialize(url: 'http://127.0.0.1:9', anonKey: 'auth-flow-test-key');
   });
 
-  testWidgets('Welcome: Continue reaches the balance slide, which offers sign-up', (tester) async {
+  testWidgets('Welcome: Start without consent shows the consent error', (tester) async {
     await _pump(tester, const WelcomeScreen());
-    expect(find.text('Real markets.\nVirtual stakes.'), findsOneWidget);
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-    expect(find.text('YOUR STARTING BALANCE'), findsOneWidget);
-    expect(find.text('Create free account'), findsOneWidget);
+    await tester.tap(find.text('Start practising — free'));
+    await tester.pump();
+    expect(find.text(LegalConsentCheckbox.errorText), findsOneWidget);
+  });
 
-    await tester.tap(find.text('Create free account'));
+  testWidgets('Welcome: Create an account instead opens sign-up', (tester) async {
+    await _pump(tester, const WelcomeScreen());
+    await tester.tap(find.text('Create an account instead'));
     await tester.pumpAndSettle();
     expect(find.byType(RegisterScreen), findsOneWidget);
   });

@@ -1,14 +1,34 @@
+import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../core/currency.dart';
 import '../../core/countries.dart';
 import '../../core/theme.dart';
+import '../../services/analytics_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/currency_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/auth_kit.dart';
+import '../../widgets/save_portfolio_sheet.dart';
+import 'first_trade_flow.dart';
 
-/// First-run questions, shown once after sign-in and before the home screen.
-///
-/// Three answers: country/residency, display currency, and preferred markets.
+/// Country to pre-select. Many Indian phones run an en_US locale, so the IST
+/// offset wins over the locale's country.
+String guessCountryCode({Duration? offset, String? localeCountry}) {
+  if ((offset ?? DateTime.now().timeZoneOffset) == const Duration(hours: 5, minutes: 30)) return 'IN';
+  final c = (localeCountry ?? PlatformDispatcher.instance.locale.countryCode)?.toUpperCase();
+  return (c != null && c.length == 2) ? c : 'IN';
+}
+
+/// First-run flow, shown once after sign-in (or one-tap guest start) and before
+/// the home screen: confirm region and markets, two one-tap questions, then a
+/// guided first trade. Onboarding is marked complete only at the very end, so
+/// the gate in main.dart keeps this screen up until then.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -21,16 +41,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void initState() {
     super.initState();
     ChurnTelemetryService.instance.recordHomeScreen('onboarding_screen');
+    _applyCountry(guessCountryCode());
   }
 
+  /// Question steps; the first trade comes after them and has no progress bar.
   static const int _stepCount = 3;
+  static const int _tradeStep = 3;
 
   int _step = 0;
   String? _selectedCountryCode = 'IN';
   TradingLocation? _location = TradingLocation.india;
   Currency? _currency = Currency.inr;
   final Set<String> _markets = {'stock', 'crypto'};
+  String? _goal;
+  String? _experience;
   bool _saving = false;
+
+  static const _goals = [
+    (key: 'learn', title: 'Learn how the market works', subtitle: 'Start from zero, no jargon', icon: Icons.school_outlined),
+    (key: 'fno', title: 'Practise F&O before real money', subtitle: 'Options, futures, greeks', icon: Icons.trending_up_rounded),
+    (key: 'compete', title: 'Compete and win', subtitle: 'Weekly league and challenges', icon: Icons.emoji_events_outlined),
+    (key: 'strategy', title: 'Test a strategy', subtitle: 'Try ideas with real prices', icon: Icons.science_outlined),
+  ];
+
+  static const _levels = [
+    (key: 'never', title: 'Never', subtitle: 'What’s a call option?', badge: '0'),
+    (key: 'little', title: 'A little', subtitle: 'Bought a few stocks, curious about F&O', badge: '1+'),
+    (key: 'regular', title: 'Regularly', subtitle: 'I trade with a real broker', badge: '10+'),
+  ];
 
   static const List<({String key, String title, String subtitle, IconData icon})>
       _marketOptions = [
@@ -67,9 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   ];
 
   bool get _canContinue => switch (_step) {
-        0 => _selectedCountryCode != null,
-        1 => _currency != null,
-        _ => _markets.isNotEmpty,
+        0 => _selectedCountryCode != null && _markets.isNotEmpty,
+        1 => _goal != null,
+        _ => _experience != null,
       };
 
   String _countryFlag(String code) {
@@ -80,9 +118,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return String.fromCharCode(first) + String.fromCharCode(second);
   }
 
-  void _selectCountry(String code) {
+  void _selectCountry(String code) => setState(() => _applyCountry(code));
+
+  void _applyCountry(String code) {
     final c = code.trim().toUpperCase();
-    setState(() {
+    {
       _selectedCountryCode = c;
       final loc = c == 'IN' ? TradingLocation.india : TradingLocation.outsideIndia;
       _location = loc;
@@ -108,7 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _markets.clear();
         _markets.addAll(['us_stock', 'crypto']);
       }
-    });
+    }
   }
 
   Future<void> _next() async {
@@ -116,7 +156,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       setState(() => _step++);
       return;
     }
+    // Answers are kept locally and in analytics; the server has no column yet.
+    unawaited(AnalyticsService.log('onboarding_answers', {
+      'country': _selectedCountryCode ?? '',
+      'goal': _goal ?? '',
+      'experience': _experience ?? '',
+    }));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('onboarding_goal', _goal ?? '');
+      await prefs.setString('onboarding_experience', _experience ?? '');
+    } catch (_) {}
+    if (mounted) setState(() => _step = _tradeStep);
+  }
+
+  Future<void> _finish({required bool traded}) async {
+    if (_saving) return;
     setState(() => _saving = true);
+    final isGuest = context.read<AuthService>().isGuest;
+    // A guest who just bought something has the most to keep: ask now.
+    if (traded && isGuest) await showSavePortfolioSheet(context, trigger: 'onboarding_first_trade');
+    // Guests skipped the OS prompt at sign-in; a skipper never saw the alerts card.
+    if (!traded) unawaited(NotificationService.instance.setup());
     if (_selectedCountryCode != null) {
       await CurrencyService.instance.setCountryAndState(_selectedCountryCode!);
     }
@@ -132,6 +193,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_step == _tradeStep) {
+      return Scaffold(
+        body: SafeArea(
+          child: AbsorbPointer(
+            absorbing: _saving,
+            child: FirstTradeFlow(markets: _markets.toList(), onFinish: _finish),
+          ),
+        ),
+      );
+    }
     final last = _step == _stepCount - 1;
     return Scaffold(
       body: SafeArea(
@@ -151,7 +222,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 const TitanCrown(size: 26),
                 const SizedBox(width: AppSpacing.sm),
               ],
-              Text('Trading Titans', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+              Text('Quick setup', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
               const Spacer(),
               Text('Step ${_step + 1} of $_stepCount', style: AppFonts.mono(size: 12, color: AppColors.ink4)),
             ]),
@@ -179,15 +250,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           Expanded(
             child: switch (_step) {
-              0 => _buildLocationStep(),
-              1 => _buildCurrencyStep(),
-              _ => _buildMarketsStep(),
+              0 => _buildRegionStep(),
+              1 => _buildGoalStep(),
+              _ => _buildExperienceStep(),
             },
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, AppSpacing.lg),
             child: AuthPrimaryButton(
-              label: last ? 'Start trading' : 'Continue',
+              label: last ? 'Set up my first trade' : (_step == 0 ? 'Looks right' : 'Continue'),
               busy: _saving,
               onPressed: _canContinue ? _next : null,
             ),
@@ -206,11 +277,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ]),
       );
 
-  Widget _buildLocationStep() {
-    const popularCodes = ['IN', 'PK', 'IT', 'US', 'GB', 'AE'];
+  Widget _buildRegionStep() {
+    final country = Countries.name(_selectedCountryCode) ?? 'your country';
     return ListView(children: [
-      _heading('Where are you trading from?',
-          'Sets your currency and markets automatically. It never restricts what you can trade, and you can change it later.'),
+      _heading('Looks like you’re in $country',
+          'We picked your currency and markets from your phone. You can still trade any market, any time.'),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Material(
@@ -229,7 +300,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(Countries.name(_selectedCountryCode) ?? 'Select country',
                         style: AppFonts.sans(size: 17, weight: FontWeight.w700, color: AppColors.ink)),
-                    Text('Tap to choose from 250+ countries', style: AppText.bodySmall),
+                    Text('Prices shown in ${_currency?.symbol ?? ''} ${_currency?.label ?? ''}', style: AppText.bodySmall),
                   ]),
                 ),
                 Text('Change', style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.goldMid)),
@@ -240,40 +311,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, AppSpacing.xl, 20, AppSpacing.sm),
-        child: Text('QUICK SELECT', style: AppText.sectionLabel),
+        child: Text('YOUR MARKETS · UP TO 3', style: AppText.sectionLabel),
       ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: [
-          for (final code in popularCodes)
-            ChoiceChip(
-              label: Text('${_countryFlag(code)}  ${Countries.name(code) ?? code}'),
-              selected: _selectedCountryCode == code,
-              showCheckmark: false,
+          for (final m in _marketOptions)
+            FilterChip(
+              label: Text(m.title),
+              selected: _markets.contains(m.key),
               labelStyle: AppFonts.sans(
-                  size: 13, weight: FontWeight.w600, color: _selectedCountryCode == code ? AppColors.goldMid : AppColors.ink2),
-              side: BorderSide(color: _selectedCountryCode == code ? AppColors.goldMid : AppColors.birch),
-              onSelected: (_) => _selectCountry(code),
+                  size: 13, weight: FontWeight.w600, color: _markets.contains(m.key) ? AppColors.goldMid : AppColors.ink2),
+              side: BorderSide(color: _markets.contains(m.key) ? AppColors.goldMid : AppColors.birch),
+              onSelected: (_) => _toggleMarket(m.key),
             ),
-        ]),
-      ),
-      Padding(
-        padding: const EdgeInsets.fromLTRB(20, AppSpacing.xl, 20, 0),
-        child: Row(children: [
-          Icon(Icons.info_outline_rounded, size: 16, color: AppColors.ink4),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text.rich(TextSpan(style: AppText.bodySmall, children: [
-              const TextSpan(text: 'Currency set to '),
-              TextSpan(
-                  text: '${_currency?.symbol ?? ''} ${_currency?.label ?? ''}',
-                  style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink2)),
-            ])),
-          ),
         ]),
       ),
     ]);
   }
+
+  void _toggleMarket(String key) => setState(() {
+        if (_markets.contains(key)) {
+          if (_markets.length > 1) {
+            _markets.remove(key);
+          } else {
+            _snack('Please select at least 1 market.');
+          }
+        } else if (_markets.length >= 3) {
+          _snack('You can select a maximum of 3 markets.');
+        } else {
+          _markets.add(key);
+        }
+      });
 
   void _showCountryPickerModal() {
     showModalBottomSheet(
@@ -337,46 +406,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildCurrencyStep() => ListView(children: [
-        _heading('Which currency should we use?',
-            'Every price, balance and profit figure is shown in this currency. Your wallet stays in rupees.'),
-        for (final c in Currency.values)
+  Widget _buildGoalStep() => ListView(children: [
+        _heading('What brings you here?', 'We’ll set up your first trade around it.'),
+        for (final g in _goals)
           _option(
-            selected: _currency == c,
-            title: c.label,
-            subtitle: c.subtitle,
-            leading: Text(c.symbol,
-                style: AppFonts.mono(size: 18, weight: FontWeight.w600, color: _currency == c ? AppColors.goldMid : AppColors.ink4)),
-            onTap: () => setState(() => _currency = c),
+            selected: _goal == g.key,
+            title: g.title,
+            subtitle: g.subtitle,
+            leading: Icon(g.icon, size: 22, color: _goal == g.key ? AppColors.goldMid : AppColors.ink4),
+            onTap: () => setState(() => _goal = g.key),
           ),
       ]);
 
-  Widget _buildMarketsStep() => ListView(children: [
-        _heading('What do you want to trade?', 'Pick up to 3. You can still trade anything, any time.'),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, AppSpacing.sm),
-          child: Text('${_markets.length}/3 SELECTED', style: AppText.sectionLabel),
-        ),
-        for (final m in _marketOptions)
+  Widget _buildExperienceStep() => ListView(children: [
+        _heading('How much have you traded?', 'So we explain just enough — not too much, not too little.'),
+        for (final l in _levels)
           _option(
-            selected: _markets.contains(m.key),
-            title: m.title,
-            subtitle: m.subtitle,
-            leading: Icon(m.icon, size: 20, color: _markets.contains(m.key) ? AppColors.goldMid : AppColors.ink4),
-            isCheckbox: true,
-            onTap: () => setState(() {
-              if (_markets.contains(m.key)) {
-                if (_markets.length > 1) {
-                  _markets.remove(m.key);
-                } else {
-                  _snack('Please select at least 1 market.');
-                }
-              } else if (_markets.length >= 3) {
-                _snack('You can select a maximum of 3 markets.');
-              } else {
-                _markets.add(m.key);
-              }
-            }),
+            selected: _experience == l.key,
+            title: l.title,
+            subtitle: l.subtitle,
+            leading: Text(l.badge,
+                style: AppFonts.mono(size: 14, weight: FontWeight.w600, color: _experience == l.key ? AppColors.goldMid : AppColors.ink4)),
+            onTap: () => setState(() => _experience = l.key),
           ),
       ]);
 

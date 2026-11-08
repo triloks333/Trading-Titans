@@ -267,7 +267,9 @@ class NotificationService {
     _channelsEnsured = true;
   }
 
-  Future<void> setup() async {
+  /// [askPermission] false skips the OS prompt: a brand-new guest is asked after
+  /// their first trade (onboarding), when the alert has an obvious purpose.
+  Future<void> setup({bool askPermission = true}) async {
     assert(
       _categoryConfig.length == NotificationCategory.values.length,
       '_categoryConfig must have exactly one entry per NotificationCategory',
@@ -301,15 +303,17 @@ class NotificationService {
       final messaging = FirebaseMessaging.instance;
 
       // 1. Request permissions (especially on iOS)
-      final settings = await messaging.requestPermission(
+      final settings = askPermission
+          ? await messaging.requestPermission(
         alert: true,
         announcement: false,
         badge: true,
         carPlay: false,
         criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
+              provisional: false,
+              sound: true,
+            )
+          : await messaging.getNotificationSettings();
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         debugPrint('User granted push notification permissions.');

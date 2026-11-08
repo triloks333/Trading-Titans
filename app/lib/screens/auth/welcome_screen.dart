@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
+import '../../services/analytics_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../widgets/auth_kit.dart';
+import '../../widgets/legal_consent.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
-/// First screen for signed-out users: two intro slides, then the way in.
-/// Sign in and Create account are pushed on top and pop themselves on success.
+/// First screen for signed-out users. Value first: one tap starts a guest
+/// session and onboarding walks them to a first trade; the account is asked for
+/// later as "Save your portfolio". Sign in and Create account are still here for
+/// people who want them.
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
 
@@ -16,79 +22,101 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
+  bool _accepted = false;
+  bool _showLegalError = false;
+  bool _busy = false;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
     ChurnTelemetryService.instance.recordHomeScreen('welcome_screen');
-  }
-
-  final _pages = PageController();
-  int _page = 0;
-
-  @override
-  void dispose() {
-    _pages.dispose();
-    super.dispose();
+    AnalyticsService.logOnboardingOpen();
   }
 
   void _push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
+  Future<void> _start() async {
+    // Starting creates a guest account, so it needs the same consent as Login.
+    if (!_accepted) {
+      setState(() => _showLegalError = true);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final auth = context.read<AuthService>();
+    try {
+      await AnalyticsService.logSignupMethodSelected('guest');
+      await auth.continueAsGuest();
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final last = _page == 1;
     return Scaffold(
       body: SafeArea(
         child: Column(children: [
           AuthTopBar(
             trailing: TextButton(
-              onPressed: () => _push(const LoginScreen()),
+              onPressed: _busy ? null : () => _push(const LoginScreen()),
               style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
               child: const Text('Sign in'),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, 0),
-            child: Row(children: [
-              const TitanCrown(size: 26),
-              const SizedBox(width: AppSpacing.sm),
-              Text('Trading Titans', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
-            ]),
-          ),
           Expanded(
-            child: PageView(
-              controller: _pages,
-              onPageChanged: (i) => setState(() => _page = i),
-              children: const [_HeroSlide(), _BalanceSlide()],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, AppSpacing.lg),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                for (var i = 0; i < 2; i++)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: i == _page ? 24 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: i == _page ? AppColors.goldMid : AppColors.birch,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
+            child: ListView(padding: const EdgeInsets.symmetric(horizontal: 20), children: [
+              Row(children: [
+                const TitanCrown(size: 26),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Trading Titans', style: AppFonts.sans(size: 16, weight: FontWeight.w700, color: AppColors.ink)),
+              ]),
+              const SizedBox(height: AppSpacing.xl),
+              AspectRatio(
+                aspectRatio: 350 / 200,
+                child: CustomPaint(painter: _HeroPainter(AppColors.bull, AppColors.bear, AppColors.titanGold)),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Practise trading with ₹500 of demo cash.',
+                  style: AppFonts.sans(size: 32, weight: FontWeight.w700, color: AppColors.ink, height: 1.1, spacing: -0.6)),
+              const SizedBox(height: AppSpacing.md),
+              Text('Live NSE, US and crypto prices. Zero risk. No KYC, no card — your first trade is a minute away.',
+                  style: AppFonts.sans(size: 16, color: AppColors.ink3, height: 1.45)),
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: [
+                for (final f in const ['Live NSE prices', 'Real brokerage charges', 'Option greeks'])
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: AppCard.badge(AppColors.cream),
+                    child: Text(f, style: AppFonts.mono(size: 12, color: AppColors.ink2)),
                   ),
               ]),
               const SizedBox(height: AppSpacing.lg),
-              AuthPrimaryButton(
-                label: last ? 'Create free account' : 'Continue',
-                onPressed: last
-                    ? () => _push(const RegisterScreen())
-                    : () => _pages.nextPage(duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, AppSpacing.lg),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              LegalConsentCheckbox(
+                value: _accepted,
+                showError: _showLegalError,
+                onChanged: (v) => setState(() {
+                  _accepted = v;
+                  if (v) _showLegalError = false;
+                }),
               ),
-              // Guests start with Rs 500; the consent checkbox lives on Sign in.
+              const SizedBox(height: AppSpacing.md),
+              if (_error != null) ...[AuthError(_error!), const SizedBox(height: AppSpacing.sm)],
+              AuthPrimaryButton(label: 'Start practising — free', busy: _busy, onPressed: _start),
               TextButton(
-                onPressed: () => _push(const LoginScreen()),
+                onPressed: _busy ? null : () => _push(const RegisterScreen()),
                 style: TextButton.styleFrom(foregroundColor: AppColors.ink3, minimumSize: const Size.fromHeight(44)),
-                child: const Text('Try as guest with ₹500'),
+                child: const Text('Create an account instead'),
               ),
             ]),
           ),
@@ -96,52 +124,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     );
   }
-}
-
-class _HeroSlide extends StatelessWidget {
-  const _HeroSlide();
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          AspectRatio(aspectRatio: 350 / 200, child: CustomPaint(painter: _HeroPainter(AppColors.bull, AppColors.bear, AppColors.titanGold))),
-          const SizedBox(height: AppSpacing.xl),
-          Text('Real markets.\nVirtual stakes.',
-              style: AppFonts.sans(size: 34, weight: FontWeight.w700, color: AppColors.ink, height: 1.1, spacing: -0.6)),
-          const SizedBox(height: AppSpacing.md),
-          Text('Practise stocks, F&O, US equities and crypto with live prices and zero risk.',
-              style: AppFonts.sans(size: 16, color: AppColors.ink3, height: 1.45)),
-        ]),
-      );
-}
-
-class _BalanceSlide extends StatelessWidget {
-  const _BalanceSlide();
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('YOUR STARTING BALANCE', style: AppText.sectionLabel.copyWith(color: AppColors.titanGold)),
-          const SizedBox(height: AppSpacing.md),
-          Text('₹1,100', style: AppFonts.mono(size: 64, weight: FontWeight.w600, color: AppColors.ink, spacing: -2)),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Demo cash to build a portfolio, compete in the weekly league and earn more through challenges. No card needed.',
-            style: AppFonts.sans(size: 16, color: AppColors.ink3, height: 1.45),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.sm, children: [
-            for (final f in const ['Live NSE prices', 'Real brokerage charges', 'Option greeks'])
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: AppCard.badge(AppColors.cream),
-                child: Text(f, style: AppFonts.mono(size: 12, color: AppColors.ink2)),
-              ),
-          ]),
-        ]),
-      );
 }
 
 /// Candles climbing toward a gold crown, drawn in a 350 x 200 design space.

@@ -542,7 +542,8 @@ class AuthService extends ChangeNotifier {
         ));
       }
       if (isAuthenticated) {
-        unawaited(NotificationService.instance.setup());
+        // Permission is asked after the first trade in onboarding, not here.
+        unawaited(NotificationService.instance.setup(askPermission: false));
         if (FirebaseService.instance.isInitialized) {
           unawaited(FirebaseAnalytics.instance.setUserId(id: _supabase.client.auth.currentUser!.id));
           unawaited(FirebaseCrashlytics.instance.setCustomKey('user_id', _supabase.client.auth.currentUser!.id));
