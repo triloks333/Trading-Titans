@@ -29,6 +29,15 @@ void main() {
   ev('margin_shortfall', {'sym': 'NIFTY25NOV24000CE', 'required': 9000, 'available': 1000});
   ev('rage_tap', {'screen': 'trade_screen', 'button': 'trade_search_input_box', 'count': 3});
   ev('paywall_step', {'step': 'checkout_start', 'sku': 'plus'});
+  ev('paywall_step', {'step': 'purchase_failed', 'sku': 'plus', 'code': '2'}, sec: 3); // cancelled in 3s
+  ev('paywall_step', {'step': 'phone_sheet_shown'}); // never continued
+  ev('screen_view', {'screen': 'portfolio_screen'});
+  ev('tap', {'screen': 'portfolio_screen', 'button': 'portfolio_holding_row_tap'});
+  ev('error_view', {'screen': 'portfolio_screen'}, sec: 2);
+  ev('skeleton', {'screen': 'portfolio_screen', 'ms': 800});
+  ev('dead_tap', {'screen': 'portfolio_screen'});
+  ev('positions', {'TCS.NS': -22.5, 'INFY': 3.1});
+  ev('trade_closed', {'sym': 'INFY', 'pnl': 40, 'pnl_pct': 0.6});
   ev('app_pause', {});
 
   final m = scoreIntel(events, now: now, live: const {'wallet_balance_to_starting_ratio': 0.5});
@@ -41,7 +50,7 @@ void main() {
     expect(m['scr_trade_screen_opens_today'], 1);
     expect(m['scr_trade_screen_max_scroll_depth_pct'], 60);
     expect(m['scr_order_entry_screen_pogo_bounce_under_1500ms'], 1);
-    expect(m['scr_order_entry_screen_session_exit_drop_off'], 1);
+    expect(m['scr_portfolio_screen_session_exit_drop_off'], 1);
     expect(m['btn_trade_movers_top_gainers_pill_clicks_today'], 1);
     expect(m['btn_trade_movers_top_gainers_pill_first_click_latency_ms'], 3000);
     expect(m['btn_trade_movers_top_gainers_pill_ctr_pct_7d'], 100);
@@ -55,6 +64,18 @@ void main() {
     expect(m['sym_nifty_margin_shortfall_rejections'], 1);
     expect(m['x_revenge_reentry_24h'], 1);
     expect(m['x_paywall_checkout_dropoff_pct'], 100);
+    expect(m['btn_portfolio_holding_row_tap_error_after_click'], 1);
+    expect(m['btn_portfolio_holding_row_tap_impressions_today'], 1);
+    expect(m['scr_portfolio_screen_error_state_views'], 1);
+    expect(m['scr_portfolio_screen_skeleton_wait_ms'], 800);
+    expect(m['scr_portfolio_screen_dead_tap_non_clickable'], 1);
+    expect(m['sym_tcs_unrealized_open_pnl_pct'], -22.5);
+    expect(m['sym_tcs_bag_holding_days_over_20pct_loss'], 1);
+    expect(m['sym_infy_premature_profit_exit_under_1pct'], 1);
+    expect(m['sym_infy_unrealized_open_pnl_pct'], 3.1, reason: 'closing does not erase the last snapshot value');
+    expect(m['mon_razorpay_cancelled_under_5_seconds_today_ist'], 1);
+    expect(m['mon_abandoned_at_10digit_phone_dialog_in_current_session'], 1);
+    expect(m['mon_consecutive_losses_2x_recovery_needed_rolling_7d_window'], 1);
     expect(m.containsKey('scr_welcome_screen_opens_today'), isFalse, reason: 'zeros are dropped for upload');
   });
 
@@ -111,9 +132,13 @@ void main() {
       final ok = switch (b) {
         1 => slugs.contains(sym) && !persona.contains('Affluence'), // device-tier persona is out of scope
         3 => slugs.contains(sym),
-        4 => slugs.contains(sym) && persona.contains('Consecutive'),
-        6 => (target.contains('Zero-Click') || target.contains('Rage-Tapped')) && wired.any((w) => btn.startsWith('btn_${w}_')),
-        8 => target.startsWith('App Crashed'),
+        // Streak scaling, 10%+ "textbook" note, quick-win note, sold-too-early, profitable week.
+        // Not "after recovery notification": that persona depends on the disguised push.
+        4 => slugs.contains(sym) &&
+            ['Consecutive', 'Quick Scalping', 'Textbook', 'Exited Too Early', 'Profitable Week'].any(persona.contains),
+        6 => ['Zero-Click', 'Rage-Tapped', 'Power Button'].any(target.contains) && wired.any((w) => btn.startsWith('btn_${w}_')),
+        // Not the low-storage rule: it needs storage access.
+        8 => ['App Crashed', 'Broke a', 'Inactive', 'Delete Account', 'Zero-Result', 'Guest Account'].any(target.contains),
         _ => false,
       };
       if (ok) {

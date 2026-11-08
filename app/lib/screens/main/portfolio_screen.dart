@@ -126,6 +126,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           _holdings = holdingsData;
           _foPositions = foPositionsData;
           _quotes = quoteMap;
+          _recordPositions();
           _loading = false;
         });
       }
@@ -193,6 +194,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
           _holdings = holdingsData;
           _foPositions = foPositionsData;
           _quotes = quoteMap;
+          _recordPositions();
         });
       }
     } catch (_) {}
@@ -294,6 +296,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   // Capital/Margin used for F&O
+  /// Open positions and their return %, for the analytics dashboard.
+  void _recordPositions() => ChurnTelemetryService.instance.recordPositions({
+        for (final h in _holdings) h.symbol: h.displayPnlPct,
+        for (final p in _foPositions)
+          if (_foCapitalUsed(p) > 0) p.symbol: p.unrealizedPnl(_estimateFoPrice(p)) / _foCapitalUsed(p) * 100,
+      });
+
   double _foCapitalUsed(FoPosition pos) {
     if (pos.instrumentType == 'OPTION' && pos.netQty > 0) {
       // Long option - premium paid is the capital used
@@ -451,6 +460,9 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       stillOpen: _holdings.any((x) => x.symbol == h.symbol && x.market == h.market && x.quantity != 0),
       symbol: h.symbol,
       pnl: h.pnl,
+      pnlPct: h.displayPnlPct,
+      price: h.currentPrice,
+      market: h.market,
     );
   }
 
@@ -458,13 +470,21 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   /// honest reaction (loss recap or win-streak scaling). Backing out or a
   /// partial exit leaves it open: nothing recorded.
   // shortcut: the loss sign comes from the P&L estimated at exit, not the fill; read the closing order's netRealizedPnl if a near-zero trade is ever mislabelled.
-  Future<void> _afterExit({required bool stillOpen, required String symbol, required double pnl}) async {
+  Future<void> _afterExit({
+    required bool stillOpen,
+    required String symbol,
+    required double pnl,
+    double? pnlPct,
+    double? price,
+    String? market,
+  }) async {
     if (stillOpen) return;
-    ChurnTelemetryService.instance.recordTradeOutcome(symbol: symbol, isProfit: pnl >= 0, pnl: pnl);
+    ChurnTelemetryService.instance
+        .recordTradeOutcome(symbol: symbol, isProfit: pnl >= 0, pnl: pnl, pnlPct: pnlPct, price: price, market: market);
     final auth = context.read<AuthService>();
     await auth.refreshUser();
     final r = await ActionReactionEngine.instance
-        .onTradeClosed(symbol: symbol, pnl: pnl, walletAfter: auth.user?.walletBalance ?? 0);
+        .onTradeClosed(symbol: symbol, pnl: pnl, walletAfter: auth.user?.walletBalance ?? 0, pnlPct: pnlPct);
     if (r == null || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(r.text),
@@ -538,7 +558,13 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       ),
     ));
     await _load();
-    await _afterExit(stillOpen: _foPositions.any((x) => x.id == pos.id && x.netQty != 0), symbol: pos.symbol, pnl: pnl);
+    final capital = _foCapitalUsed(pos);
+    await _afterExit(
+      stillOpen: _foPositions.any((x) => x.id == pos.id && x.netQty != 0),
+      symbol: pos.symbol,
+      pnl: pnl,
+      pnlPct: capital > 0 ? pnl / capital * 100 : null,
+    );
   }
 
   // ── Layout ──────────────────────────────────────────────────────────

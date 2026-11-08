@@ -22,6 +22,7 @@ import 'option_chain_screen.dart';
 import 'orders_screen.dart';
 import 'stock_detail_screen.dart';
 import '../../services/churn_telemetry_service.dart';
+import '../../services/action_reaction_engine.dart';
 import '../../services/analytics_service.dart';
 
 typedef MoverSymbol = ({String symbol, String name, String? display});
@@ -240,6 +241,7 @@ class _TradeScreenState extends State<TradeScreen> {
           'query': query,
           'market': _orderMarket,
         });
+        ActionReactionEngine.instance.onZeroResultSearch(query, _orderMarket);
       }
       _refreshPrices();
     } catch (_) {
@@ -522,7 +524,7 @@ class _TradeScreenState extends State<TradeScreen> {
           child: EmptyState(
             icon: Icons.search_off_rounded,
             title: 'No results',
-            message: 'No matches for "${_searchQuery.trim()}". Try a different name or symbol.',
+            message: 'No matches for "${_searchQuery.trim()}" in this market. Try the exchange symbol (e.g. RELIANCE, AAPL, BTC) or switch market above.',
           ),
         ),
       ];

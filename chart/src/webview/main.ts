@@ -479,11 +479,14 @@ const controls = mountControls(controlsRoot, {
   market: () => market,
   currentPeriod: () => periodId,
   onPeriod(id) {
+    // Analytics: Flutter records this as the pro_chart_timeframe_<id>_btn tap.
+    send('tap', { control: 'timeframe', id })
     periodId = id
     savePrefs({ period: id })
     void load()
   },
   onIndicators(next) {
+    send('tap', { control: 'indicators', count: next.length })
     entries = next
     paintIndicators()
   },

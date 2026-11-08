@@ -28,7 +28,20 @@ const kHealthMetrics = [
   'cold_start_under_1500ms', 'cold_start_slow_over_4000ms', 'login_streak_current_days',
   'login_streak_broken_yesterday', 'wallet_balance_to_starting_ratio', 'guest_account_unconverted_status',
   'google_or_apple_verified_oauth', 'dark_mode_active_preference', 'font_scale_enlarged_accessibility',
+  'country_india_inr_resident', 'country_tier1_international_usd', 'country_nri_indian_markets_trader',
+  'phone_number_verified_on_profile', 'xp_level_tier_progression', 'quote_api_stale_or_failed_polls',
 ];
+
+/// Paywall/account funnel facts (no discount cascade, no device or network conditions).
+const kFunnelBases = [
+  'abandoned_at_10digit_phone_dialog', 'abandoned_at_guest_permanent_wall', 'razorpay_cancelled_under_5_seconds',
+  'razorpay_failed_or_timed_out_over_30s', 'toggled_subscriptions_vs_topups_3x', 'fno_first_trade_lot_size_blocked',
+  'wallet_bankruptcy_under_200_inr', 'consecutive_losses_2x_recovery_needed', 'consecutive_wins_2x_greed_multiplier',
+];
+
+final _derivative = RegExp(r'\d.*(CE|PE|FUT)$', caseSensitive: false);
+// NSE/BSE symbols come first in the catalogue, US stocks start at aapl.
+final _indianSlugs = kIntelSymbols.sublist(0, kIntelSymbols.indexOf('aapl')).toSet();
 
 const kPaywallSteps = ['pack_view', 'checkout_start', 'purchase_success', 'purchase_failed'];
 
@@ -66,11 +79,12 @@ Map<String, num> scoreIntel(
   final launches = <String, num>{};
   final openDays = <DateTime>{};
   num lastColdStart = 0;
-  var appOpens7 = 0, appOpens30 = 0;
+  var appOpens7 = 0, appOpens30 = 0, appOpensToday = 0;
   for (final e in events.where((e) => e.name == 'app_open' && in30(e.ts))) {
     openDays.add(_day(e.ts));
     appOpens30++;
     if (in7(e.ts)) appOpens7++;
+    if (isToday(e.ts)) appOpensToday++;
     final src = '${e.props['source']}';
     if (kLaunchSources.contains(src)) inc(launches, 'launch_${src}_${launchWindow(e.ts)}');
     if (e.props['cold_start_ms'] != null) lastColdStart = _n(e.props['cold_start_ms']);
@@ -105,8 +119,17 @@ Map<String, num> scoreIntel(
     'login_streak_broken_yesterday':
         !openDays.contains(yesterday) && openDays.contains(yesterday.subtract(const Duration(days: 1))) ? 1 : 0,
     for (final k in ['wallet_balance_to_starting_ratio', 'guest_account_unconverted_status',
-        'google_or_apple_verified_oauth', 'dark_mode_active_preference', 'font_scale_enlarged_accessibility'])
+        'google_or_apple_verified_oauth', 'dark_mode_active_preference', 'font_scale_enlarged_accessibility',
+        'phone_number_verified_on_profile', 'xp_level_tier_progression'])
       k: live[k] ?? 0,
+    // Country is what the user declared at onboarding, not a location lookup.
+    'country_india_inr_resident': live['country_code_declared'] == 1 ? 1 : 0,
+    'country_tier1_international_usd': live['country_code_declared'] == 2 ? 1 : 0,
+    'country_nri_indian_markets_trader': live['country_code_declared'] == 2 &&
+            events.any((e) => e.name == 'trade_placed' && _indianSlugs.contains(symbolSlug('${e.props['sym']}')))
+        ? 1
+        : 0,
+    'quote_api_stale_or_failed_polls': events.where((e) => e.name == 'quote_fail' && isToday(e.ts)).length,
   };
   for (final k in kHealthMetrics) {
     final series = [
@@ -126,6 +149,7 @@ Map<String, num> scoreIntel(
   final opensToday = <String, num>{}, opens7 = <String, num>{}, opens30 = <String, num>{}, everOpened = <String>{};
   final dwellToday = <String, num>{}, dwell30 = <String, num>{}, exits30 = <String, num>{};
   final bounces = <String, num>{}, scroll = <String, num>{}, rageScr = <String, num>{}, dropOff = <String, num>{};
+  final stateCounts = <String, num>{}, skeletonSum = <String, num>{}, skeletonN = <String, num>{};
   final sessionScreens = <String, Set<String>>{};
   final purchaseSessions = <String>{};
   String? lastScreen;
@@ -153,6 +177,13 @@ Map<String, num> scoreIntel(
         if (in7(e.ts) && ms < 1500) inc(bounces, s);
       case 'rage_tap':
         if (in7(e.ts)) inc(rageScr, s);
+      case 'error_view' || 'error_retry' || 'empty_view' || 'empty_cta' || 'pull_refresh' || 'dead_tap' || 'screenshot':
+        if (in30(e.ts)) inc(stateCounts, '${e.name}|$s');
+      case 'skeleton':
+        if (in30(e.ts)) {
+          inc(skeletonSum, s, _n(e.props['ms']));
+          inc(skeletonN, s);
+        }
       case 'app_pause':
         if (lastScreen != null && in30(e.ts)) inc(dropOff, lastScreen);
       case 'paywall_step':
@@ -176,11 +207,24 @@ Map<String, num> scoreIntel(
     final withS = sessionScreens.entries.where((x) => x.value.contains(s)).map((x) => x.key).toList();
     final rate = withS.isEmpty ? 0 : withS.where(purchaseSessions.contains).length / withS.length;
     put('${p}_paid_conversion_lift_score', withS.isEmpty ? 0 : ((rate - baseRate) * 1000).round() / 10);
+    // 30-day counts of shared UI states on this screen.
+    for (final (kind, name) in const [
+      ('error_view', 'error_state_views'), ('error_retry', 'error_retry_clicks'), ('empty_view', 'empty_state_views'),
+      ('empty_cta', 'empty_state_cta_clicks'), ('pull_refresh', 'pull_to_refresh_count'),
+      ('dead_tap', 'dead_tap_non_clickable'), ('screenshot', 'screenshots_captured'),
+    ]) {
+      put('${p}_$name', stateCounts['$kind|$s'] ?? 0);
+    }
+    put('${p}_skeleton_wait_ms', (skeletonN[s] ?? 0) == 0 ? 0 : (skeletonSum[s]! / skeletonN[s]!).round());
   }
 
   // ── Buttons ─────────────────────────────────────────────────────────────
   final tapsToday = <String, num>{}, taps7 = <String, num>{}, taps30 = <String, num>{}, rageBtn = <String, num>{};
-  final latencySum = <String, num>{}, latencyN = <String, num>{}, led = <String, num>{};
+  final latencySum = <String, num>{}, latencyN = <String, num>{}, led = <String, num>{}, errAfter = <String, num>{};
+  final errors = [
+    for (final e in events)
+      if (e.name == 'error_view' || e.name == 'action_error') (e.ts, e.props['screen']),
+  ];
   final lastViewAt = <String, DateTime>{};
   final tappedSinceView = <String, Set<String>>{};
   DateTime? lastAppOpen;
@@ -204,6 +248,8 @@ Map<String, num> scoreIntel(
         inc(taps30, b);
         final until = e.ts.add(const Duration(minutes: 5));
         if (outcomes.any((t) => !t.isBefore(e.ts) && !t.isAfter(until))) inc(led, b);
+        final errUntil = e.ts.add(const Duration(seconds: 5));
+        if (errors.any((x) => x.$2 == e.props['screen'] && !x.$1.isBefore(e.ts) && !x.$1.isAfter(errUntil))) inc(errAfter, b);
       }
       if (in7(e.ts)) inc(taps7, b);
       if (isToday(e.ts)) inc(tapsToday, b);
@@ -221,6 +267,10 @@ Map<String, num> scoreIntel(
     final scr = buttonScreen(b);
     final denom7 = scr == null ? appOpens7 : (opens7[scr] ?? 0);
     final denom30 = scr == null ? appOpens30 : (opens30[scr] ?? 0);
+    // shortcut: an impression is an open of the button's screen (or an app open for global
+    // controls), not a visibility check; add a viewport detector if below-the-fold buttons matter.
+    put('${p}_impressions_today', scr == null ? appOpensToday : (opensToday[scr] ?? 0));
+    put('${p}_error_after_click', errAfter[b] ?? 0);
     put('${p}_clicks_today', tapsToday[b] ?? 0);
     put('${p}_clicks_7d', taps7[b] ?? 0);
     put('${p}_clicks_30d', taps30[b] ?? 0);
@@ -239,7 +289,27 @@ Map<String, num> scoreIntel(
   final winStreak = <String, num>{}, lossStreak = <String, num>{};
   final openedAt = <String, DateTime>{}, lastLossAt = <String, DateTime>{};
   var revengeAny24h = false;
+  final gradeD = <String, num>{}, earlyExit = <String, num>{};
+  final heldSince = <String, DateTime>{}, latestPct = <String, num>{}, bagDays = <String, Set<DateTime>>{};
+  final winHits = <(DateTime, String)>[], lossHits = <(DateTime, String)>[];
   for (final e in events) {
+    if (e.name == 'positions') {
+      // Snapshot of every open position: anything missing has been closed.
+      final now_ = <String, num>{};
+      for (final p in e.props.entries) {
+        final sl = symbolSlug(p.key);
+        if (sl != null) now_[sl] = _n(p.value);
+      }
+      heldSince.removeWhere((k, _) => !now_.containsKey(k));
+      for (final x in now_.entries) {
+        heldSince.putIfAbsent(x.key, () => _day(e.ts));
+        if (x.value <= -20 && in30(e.ts)) (bagDays[x.key] ??= {}).add(_day(e.ts));
+      }
+      latestPct
+        ..clear()
+        ..addAll(now_);
+      continue;
+    }
     final slug = symbolSlug('${e.props['sym'] ?? ''}');
     if (slug == null) continue;
     switch (e.name) {
@@ -258,8 +328,16 @@ Map<String, num> scoreIntel(
         final win = pnl >= 0;
         winStreak[slug] = win ? (winStreak[slug] ?? 0) + 1 : 0;
         lossStreak[slug] = win ? 0 : (lossStreak[slug] ?? 0) + 1;
+        if (winStreak[slug] == 2) winHits.add((e.ts, e.session));
+        if (lossStreak[slug] == 2) lossHits.add((e.ts, e.session));
         if (!win) lastLossAt[slug] = e.ts;
+        heldSince.remove(slug);
         final opened = openedAt.remove(slug);
+        final pct = e.props['pnl_pct'] == null ? null : _n(e.props['pnl_pct']);
+        if (pct != null && in30(e.ts)) {
+          if (pct <= -5) inc(gradeD, slug); // Trade Autopsy grade D: lost 5% or more
+          if (pct > 0 && pct < 1) inc(earlyExit, slug);
+        }
         if (in30(e.ts)) {
           inc(closed30, slug);
           if (win) inc(won30, slug);
@@ -294,6 +372,13 @@ Map<String, num> scoreIntel(
     put('${p}_user_personal_win_prob_0_to_1', (closed30[s] ?? 0) == 0 ? 0 : ((won30[s] ?? 0) / closed30[s]! * 100).round() / 100);
     put('${p}_option_chain_strikes_tapped', strikes[s] ?? 0);
     put('${p}_whatif_time_machine_runs', whatif[s] ?? 0);
+    put('${p}_unrealized_open_pnl_pct', latestPct[s] ?? 0);
+    put('${p}_held_overnight_into_tomorrow', heldSince[s] != null && heldSince[s]!.isBefore(today) ? 1 : 0);
+    put('${p}_active_price_alert_set', live['alert_$s'] ?? 0);
+    put('${p}_autopsy_grade_d_received', gradeD[s] ?? 0);
+    put('${p}_premature_profit_exit_under_1pct', earlyExit[s] ?? 0);
+    put('${p}_bag_holding_days_over_20pct_loss', bagDays[s]?.length ?? 0);
+    put('${p}_community_global_win_prob_today', live['community_$s'] ?? 0);
   }
   put('x_revenge_reentry_24h', revengeAny24h ? 1 : 0);
 
@@ -309,5 +394,58 @@ Map<String, num> scoreIntel(
   put('x_paywall_checkout_dropoff_pct', starts == 0 ? 0 : ((1 - (steps['purchase_success'] ?? 0) / starts) * 100).round());
   final views = steps['pack_view'] ?? 0;
   put('x_paywall_view_to_checkout_pct', views == 0 ? 0 : (starts / views * 100).round());
+
+  // ── Funnel facts: each base is a list of (when, session) occurrences ────
+  final hits = <String, List<(DateTime, String)>>{for (final b in kFunnelBases) b: []};
+  final shownAt = <String, DateTime>{}; // session → phone sheet shown, not continued
+  final wallAt = <String, DateTime>{}; // session → convert screen opened, not converted
+  final segTaps = <String, int>{};
+  DateTime? checkoutAt;
+  var anyTrade = false;
+  for (final e in events) {
+    final step = e.name == 'paywall_step' ? '${e.props['step']}' : null;
+    final btn = e.name == 'tap' ? '${e.props['button']}' : null;
+    if (step == 'phone_sheet_shown') shownAt[e.session] = e.ts;
+    if (btn == 'subscribe_phone_sheet_continue_btn') shownAt.remove(e.session);
+    if (e.name == 'screen_view' && e.props['screen'] == 'convert_account_screen') wallAt[e.session] = e.ts;
+    if (step == 'account_converted') wallAt.remove(e.session);
+    if (step == 'checkout_start') checkoutAt = e.ts;
+    if (step == 'purchase_failed' && checkoutAt != null) {
+      final secs = e.ts.difference(checkoutAt).inSeconds;
+      if (secs < 5) hits['razorpay_cancelled_under_5_seconds']!.add((e.ts, e.session));
+      if (secs >= 30) hits['razorpay_failed_or_timed_out_over_30s']!.add((e.ts, e.session));
+    }
+    if (btn != null && btn.startsWith('subscribe_seg_tab_') && (segTaps[e.session] = (segTaps[e.session] ?? 0) + 1) == 3) {
+      hits['toggled_subscriptions_vs_topups_3x']!.add((e.ts, e.session));
+    }
+    if (e.name == 'trade_placed') anyTrade = true;
+    if (e.name == 'margin_shortfall' && !anyTrade && _derivative.hasMatch('${e.props['sym']}')) {
+      hits['fno_first_trade_lot_size_blocked']!.add((e.ts, e.session));
+    }
+  }
+  hits['abandoned_at_10digit_phone_dialog']!.addAll(shownAt.entries.map((x) => (x.value, x.key)));
+  hits['abandoned_at_guest_permanent_wall']!.addAll(wallAt.entries.map((x) => (x.value, x.key)));
+  hits['consecutive_wins_2x_greed_multiplier']!.addAll(winHits);
+  hits['consecutive_losses_2x_recovery_needed']!.addAll(lossHits);
+  final session = events.isEmpty ? '' : events.last.session;
+  for (final day in snapshots.entries) {
+    final w = day.value['wallet_balance'];
+    final d = DateTime.tryParse(day.key);
+    if (w != null && w < 200 && d != null) hits['wallet_bankruptcy_under_200_inr']!.add((d.add(const Duration(hours: 12)), ''));
+  }
+  final wallet = live['wallet_balance'];
+  if (wallet != null && wallet < 200) hits['wallet_bankruptcy_under_200_inr']!.add((now, session));
+  final hasPhone = live['phone_number_verified_on_profile'] == 1;
+  for (final b in kFunnelBases) {
+    final h = hits[b]!.where((x) => in30(x.$1)).toList();
+    int n(bool Function((DateTime, String)) f) => h.where(f).length;
+    put('mon_${b}_in_current_session', n((x) => x.$2 == session));
+    put('mon_${b}_today_ist', n((x) => isToday(x.$1)));
+    put('mon_${b}_rolling_3d_pursuit_window', n((x) => now.difference(x.$1).inDays < 3));
+    put('mon_${b}_rolling_7d_window', n((x) => in7(x.$1)));
+    put('mon_${b}_rolling_30d_window', h.length);
+    put('mon_${b}_during_evening_comfort_20_23_ist', n((x) => x.$1.hour >= 20 && x.$1.hour < 23));
+    put('mon_${b}_with_saved_10digit_mobile_ready', hasPhone ? h.length : 0);
+  }
   return out;
 }

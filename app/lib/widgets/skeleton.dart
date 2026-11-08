@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 
 /// Animated shimmer wrapper. Wrap any layout of [SkeletonBox]es in a single
 /// [Shimmer] so the highlight sweeps across all of them uniformly. Colors come
@@ -14,6 +15,8 @@ class Shimmer extends StatefulWidget {
 
 class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final _shown = DateTime.now();
+  final _screen = ChurnTelemetryService.instance.currentScreenId;
 
   @override
   void initState() {
@@ -26,6 +29,7 @@ class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    ChurnTelemetryService.instance.recordSkeleton(_screen, DateTime.now().difference(_shown).inMilliseconds);
     _controller.dispose();
     super.dispose();
   }

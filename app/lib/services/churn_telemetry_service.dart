@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -51,6 +53,10 @@ class ChurnTelemetryService {
     try {
       _prefs = await SharedPreferences.getInstance();
       await intel.load();
+      // Android 14+ reports screenshots through MainActivity (see ScreenCaptureCallback there).
+      const MethodChannel('tt/screen_capture').setMethodCallHandler((call) async {
+        if (call.method == 'screenshot') recordScreenshot();
+      });
       _uploadTimer ??= Timer.periodic(const Duration(seconds: 60), (_) {
         uploadEvents();
         if (++_ticks % 5 == 0) uploadState();
@@ -134,6 +140,77 @@ class ChurnTelemetryService {
     if (pct > _currentScrollPct) _currentScrollPct = pct;
   }
 
+  double _pullAtTop = 0;
+
+  /// Global scroll notifications: depth, plus pull-to-refresh as a user drag
+  /// past the top edge by more than RefreshIndicator's trigger distance.
+  // shortcut: counts the pull gesture, not whether the screen has a RefreshIndicator; wrap onRefresh per screen if that ever matters.
+  void recordScrollNotification(ScrollNotification n) {
+    if (n.depth != 0 || n.metrics.axis != Axis.vertical) return;
+    if (n is ScrollUpdateNotification) recordScroll(n.metrics);
+    if (n is OverscrollNotification && n.dragDetails != null && n.overscroll < 0) _pullAtTop -= n.overscroll;
+    if (n is ScrollStartNotification) _pullAtTop = 0;
+    if (n is ScrollEndNotification) {
+      if (_pullAtTop > 100) intel.add('pull_refresh', {'screen': _currentScreenId});
+      _pullAtTop = 0;
+    }
+  }
+
+  final Map<String, DateTime> _stateSeen = {};
+
+  /// One view of a shared UI state ('error_view', 'empty_view') on the current
+  /// screen. Rebuilds within 3s count once.
+  void recordStateView(String kind) {
+    final key = '$kind|$_currentScreenId';
+    final now = DateTime.now();
+    final last = _stateSeen[key];
+    _stateSeen[key] = now;
+    if (last != null && now.difference(last).inSeconds < 3) return;
+    intel.add(kind, {'screen': _currentScreenId});
+  }
+
+  /// A tap on a shared state's action ('error_retry', 'empty_cta').
+  void recordStateAction(String kind) => intel.add(kind, {'screen': _currentScreenId});
+
+  /// How long a loading skeleton stayed on screen.
+  void recordSkeleton(String screen, int ms) => intel.add('skeleton', {'screen': screen, 'ms': ms});
+
+  /// A failed user action (order rejected, payment failed): feeds error-after-click.
+  void recordActionError(String kind) => intel.add('action_error', {'screen': _currentScreenId, 'kind': kind});
+
+  Offset? _downAt;
+  DateTime? _downTime;
+
+  void onPointerDown(PointerDownEvent e) {
+    _downAt = e.position;
+    _downTime = DateTime.now();
+  }
+
+  /// A quick tap that hit nothing with a tap handler counts as a dead tap.
+  // shortcut: controls built with excludeFromSemantics (e.g. modal barriers) look untappable here; whitelist them if they show up in the dashboard.
+  void onPointerUp(PointerUpEvent e) {
+    final down = _downAt, t = _downTime;
+    if (down == null || t == null) return;
+    if ((e.position - down).distance > 18 || DateTime.now().difference(t).inMilliseconds > 500) return;
+    try {
+      final result = HitTestResult();
+      WidgetsBinding.instance.hitTestInView(result, e.position, e.viewId);
+      final tappable = result.path.any((entry) {
+        final target = entry.target;
+        return target is PlatformViewRenderBox ||
+            target is RenderAndroidView ||
+            (target is RenderSemanticsGestureHandler && (target.onTap != null || target.onLongPress != null));
+      });
+      if (!tappable) intel.add('dead_tap', {'screen': _currentScreenId});
+    } catch (_) {}
+  }
+
+  /// The OS reported a screenshot (Android 14+).
+  void recordScreenshot() => intel.add('screenshot', {'screen': _currentScreenId});
+
+  /// A market quote fetch that failed.
+  void recordQuoteFail(String source) => intel.add('quote_fail', {'source': source});
+
   // ── Buttons ───────────────────────────────────────────────────────────────
   /// [buttonId] is a catalogue id from `kIntelButtons` (e.g.
   /// 'order_ticket_type_limit_btn'). Pass `sym` in [extra] for symbol-scoped taps.
@@ -161,8 +238,16 @@ class ChurnTelemetryService {
   void recordTradePlaced({required String symbol, required String side, required num qty, required String segment}) =>
       intel.add('trade_placed', {'sym': symbol, 'side': side, 'qty': qty, 'segment': segment});
 
-  void recordTradeOutcome({required String symbol, required bool isProfit, double? pnl}) {
-    intel.add('trade_closed', {'sym': symbol, 'pnl': pnl ?? (isProfit ? 0 : -1)});
+  /// [pnlPct] is the return in percent; [price] the exit price (for the
+  /// "sold too early" check later).
+  void recordTradeOutcome({required String symbol, required bool isProfit, double? pnl, double? pnlPct, double? price, String? market}) {
+    intel.add('trade_closed', {
+      'sym': symbol,
+      'pnl': pnl ?? (isProfit ? 0 : -1),
+      if (pnlPct != null && pnlPct.isFinite) 'pnl_pct': (pnlPct * 100).round() / 100,
+      if (price != null && price > 0) 'price': price,
+      'market': ?market,
+    });
     AnalyticsService.log('telemetry_trade_outcome', {'symbol': symbol, 'is_profit': isProfit});
   }
 
@@ -194,8 +279,22 @@ class ChurnTelemetryService {
     });
   }
 
+  DateTime? _lastPositions;
+
+  /// Open positions with their return in percent, at most every 15 minutes.
+  /// Feeds unrealized P&L, held-overnight and bag-holding metrics.
+  void recordPositions(Map<String, double> pctBySymbol) {
+    final now = DateTime.now();
+    if (_lastPositions != null && now.difference(_lastPositions!).inMinutes < 15) return;
+    _lastPositions = now;
+    intel.add('positions', {for (final e in pctBySymbol.entries) e.key: (e.value * 100).round() / 100});
+  }
+
   // ── Paywall ───────────────────────────────────────────────────────────────
-  void recordPaywallStep(String step, {String? sku}) => intel.add('paywall_step', {'step': step, 'sku': sku});
+  /// Steps: pack_view, checkout_start, purchase_success, purchase_failed,
+  /// phone_sheet_shown, guest_wall_shown, account_converted.
+  void recordPaywallStep(String step, {String? sku, Object? code}) =>
+      intel.add('paywall_step', {'step': step, 'sku': sku, if (code != null) 'code': '$code'});
 
   void recordPaywallPackView(String sku) {
     recordPaywallStep('pack_view', sku: sku);
@@ -210,6 +309,9 @@ class ChurnTelemetryService {
     required bool oauth,
     required bool darkMode,
     required double textScale,
+    String? countryCode,
+    bool hasPhone = false,
+    int totalXp = 0,
   }) {
     _live
       ..['wallet_balance'] = walletBalance
@@ -217,7 +319,10 @@ class ChurnTelemetryService {
       ..['guest_account_unconverted_status'] = isGuest ? 1 : 0
       ..['google_or_apple_verified_oauth'] = oauth ? 1 : 0
       ..['dark_mode_active_preference'] = darkMode ? 1 : 0
-      ..['font_scale_enlarged_accessibility'] = textScale > 1.1 ? 1 : 0;
+      ..['font_scale_enlarged_accessibility'] = textScale > 1.1 ? 1 : 0
+      ..['country_code_declared'] = countryCode == null ? 0 : (countryCode.toUpperCase() == 'IN' ? 1 : 2)
+      ..['phone_number_verified_on_profile'] = hasPhone ? 1 : 0
+      ..['xp_level_tier_progression'] = totalXp;
   }
 
   num? get walletBalance => _live['wallet_balance'];
@@ -257,21 +362,57 @@ class ChurnTelemetryService {
   /// today's health values for the 7d/30d series. Never throws.
   Future<void> uploadState() async {
     try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      if (user != null) await _refreshServerFacts(client);
       final metrics = computeMetrics();
       for (final k in kHealthMetrics) {
         intel.snapshot('hw_$k', metrics['hw_${k}_current'] ?? 0);
       }
-      final client = Supabase.instance.client;
-      final user = client.auth.currentUser;
+      final wallet = _live['wallet_balance'];
+      if (wallet != null) intel.snapshot('wallet_balance', wallet);
       if (user == null) return;
       await client.from('intel_user_state').upsert({
         'user_id': user.id,
         'metrics': metrics,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       });
-      await ActionReactionEngine.instance.flagDeadButtons(metrics);
+      await ActionReactionEngine.instance.flagButtons(metrics);
     } catch (e) {
       debugPrint('[ChurnTelemetryService] uploadState non-fatal error: $e');
+    }
+  }
+
+  /// Server-side facts the scorer can't see locally: active price alerts and
+  /// today's community win rate per symbol (only for 5+ closed trades).
+  Future<void> _refreshServerFacts(SupabaseClient client) async {
+    try {
+      final alerts = await client
+          .from('price_alerts')
+          .select('symbol')
+          .eq('user_id', client.auth.currentUser!.id)
+          .eq('status', 'active');
+      _live.removeWhere((k, _) => k.startsWith('alert_') || k.startsWith('community_'));
+      for (final r in alerts) {
+        final slug = symbolSlug('${r['symbol']}');
+        if (slug != null) _live['alert_$slug'] = 1;
+      }
+      final rates = await client.rpc('intel_community_win_rates');
+      if (rates is Map) {
+        final wins = <String, num>{}, total = <String, num>{};
+        for (final e in rates.entries) {
+          final slug = symbolSlug('${e.key}');
+          final v = e.value;
+          if (slug == null || v is! Map) continue;
+          wins[slug] = (wins[slug] ?? 0) + ((v['wins'] as num?) ?? 0);
+          total[slug] = (total[slug] ?? 0) + ((v['total'] as num?) ?? 0);
+        }
+        for (final sl in total.keys) {
+          if (total[sl]! >= 5) _live['community_$sl'] = (wins[sl]! / total[sl]! * 100).round() / 100;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ChurnTelemetryService] server facts non-fatal error: $e');
     }
   }
 

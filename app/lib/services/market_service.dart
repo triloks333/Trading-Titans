@@ -6,6 +6,7 @@ import '../core/option_pricing.dart';
 import '../core/market_hours.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
+import 'churn_telemetry_service.dart';
 import 'diagnostics_service.dart';
 
 class MarketService {
@@ -287,6 +288,7 @@ class MarketService {
         return quoteVal;
       }
     } catch (_) {}
+    ChurnTelemetryService.instance.recordQuoteFail('market-quote');
     return null;
   }
 

@@ -9,6 +9,7 @@ import '../../core/currency.dart';
 import '../../core/money.dart';
 import '../../core/theme.dart';
 import '../../services/churn_telemetry_service.dart';
+import '../../services/action_reaction_engine.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
@@ -640,11 +641,14 @@ Future<String?> pickFromList(
 // ── Delete account ────────────────────────────────────────────────────────────
 
 /// "Delete account?" with what goes, gated on typing DELETE.
-Future<void> showDeleteAccountDialog(BuildContext context) => showDialog(
+Future<void> showDeleteAccountDialog(BuildContext context) {
+  ActionReactionEngine.instance.onDeleteAccountOpened();
+  return showDialog(
       context: context,
       barrierColor: const Color(0x9E03060A),
       builder: (_) => const DeleteAccountDialog(),
     );
+}
 
 class DeleteAccountDialog extends StatefulWidget {
   const DeleteAccountDialog({super.key});
@@ -729,6 +733,10 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
               line('League rankings & Titan level'),
             ]),
           ),
+          const SizedBox(height: 10),
+          // Offers help without standing in the way of deletion.
+          Text('Leaving because something broke? Support Tickets in Titans Room reach us directly.',
+              style: AppFonts.sans(size: 12, color: AppColors.ink3)),
           const SizedBox(height: 14),
           Text.rich(TextSpan(style: AppFonts.sans(size: 12, color: AppColors.ink3), children: [
             const TextSpan(text: 'Type '),

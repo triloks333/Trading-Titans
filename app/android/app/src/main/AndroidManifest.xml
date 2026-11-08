@@ -4,6 +4,8 @@
          Declaring this permission unlocks the "One-time products" section in the
          Play Console. Real Play Billing flows are wired later via in_app_purchase. -->
     <uses-permission android:name="com.android.vending.BILLING"/>
+    <!-- Android 14+: lets the app learn a screenshot was taken (no image access). Install-time, no prompt. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE"/>
     <application
         android:label="Trading Titans"
         android:name="${applicationName}"

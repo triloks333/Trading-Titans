@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../services/churn_telemetry_service.dart';
+
 import 'native_candle_chart.dart';
 import '../services/currency_service.dart';
 
@@ -208,6 +210,16 @@ class _InstrumentChartState extends State<InstrumentChart> {
     }
 
     switch (data['type']) {
+      case 'tap':
+        // Chart controls live in the page; record them under their catalogue ids.
+        final id = data['control'] == 'timeframe'
+            ? const {
+                '1m': 'pro_chart_timeframe_1m_btn', '5m': 'pro_chart_timeframe_5m_btn', '15m': 'pro_chart_timeframe_15m_btn',
+                '1h': 'pro_chart_timeframe_1h_btn', '1D': 'pro_chart_timeframe_1d_btn',
+              }[data['id']]
+            : 'pro_chart_indicator_toggle_btn';
+        if (id != null) ChurnTelemetryService.instance.recordButtonTap(id, extra: {'sym': widget.symbol});
+        break;
       case 'ready':
         _ready = true;
         _call('window.ttChart.setTheme(${jsonEncode(_isDark ? 'dark' : 'light')})');

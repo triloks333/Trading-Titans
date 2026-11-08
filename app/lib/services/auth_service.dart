@@ -14,6 +14,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'notification_service.dart';
 import 'firebase_service.dart';
 import 'analytics_service.dart';
+import 'churn_telemetry_service.dart';
 import 'diagnostics_service.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -736,6 +737,7 @@ class AuthService extends ChangeNotifier {
     }
     final result = await _supabase.convertGuestAccount();
     if (!result.converted) return null;
+    ChurnTelemetryService.instance.recordPaywallStep('account_converted');
     await refreshUser();
     notifyListeners();
     return result.bonus;

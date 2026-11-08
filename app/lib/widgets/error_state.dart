@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 
 /// A consistent "couldn't load" view: a friendly icon, plain-English message,
 /// and a Retry button. Used wherever a data load can fail, so every error
@@ -20,6 +21,7 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ChurnTelemetryService.instance.recordStateView('error_view');
     return LayoutBuilder(
       builder: (context, constraints) {
         final minHeight =
@@ -67,7 +69,12 @@ class ErrorState extends StatelessWidget {
                     if (onRetry != null) ...[
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton.icon(
-                        onPressed: onRetry,
+                        onPressed: onRetry == null
+                            ? null
+                            : () {
+                                ChurnTelemetryService.instance.recordStateAction('error_retry');
+                                onRetry!();
+                              },
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(
                           'Retry',

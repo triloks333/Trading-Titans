@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import '../services/churn_telemetry_service.dart';
 
 /// A single, consistent "nothing here yet" view used across the app: a friendly
 /// circular icon, a warm headline, a one-line explanation, and an optional CTA
@@ -26,6 +27,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ChurnTelemetryService.instance.recordStateView('empty_view');
     return LayoutBuilder(
       builder: (context, constraints) {
         final minHeight =
@@ -72,7 +74,10 @@ class EmptyState extends StatelessWidget {
                     if (actionLabel != null && onAction != null) ...[
                       const SizedBox(height: AppSpacing.lg),
                       ElevatedButton(
-                        onPressed: onAction,
+                        onPressed: () {
+                          ChurnTelemetryService.instance.recordStateAction('empty_cta');
+                          onAction!();
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.imperialGold,
                           foregroundColor: AppColors.pureWhite,

@@ -748,7 +748,8 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
-    ChurnTelemetryService.instance.recordPaywallStep('purchase_failed', sku: _activeProduct?.sku);
+    ChurnTelemetryService.instance.recordPaywallStep('purchase_failed', sku: _activeProduct?.sku, code: response.code);
+    ChurnTelemetryService.instance.recordActionError('payment_failed');
     if (!mounted) return;
     final product = _activeProduct;
     final session = _activeSession;
@@ -825,6 +826,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   Future<String?> _promptForMobileNumber(PlanOption product) async {
     final controller = TextEditingController(text: _savedPhone ?? '');
     String? errorText;
+    ChurnTelemetryService.instance.recordPaywallStep('phone_sheet_shown', sku: product.sku);
 
     return showModalBottomSheet<String>(
       context: context,

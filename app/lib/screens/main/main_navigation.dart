@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/currency_service.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/action_reaction_engine.dart';
 import '../../services/tour_service.dart';
@@ -26,6 +27,8 @@ import 'portfolio_screen.dart';
 import 'wallet_screen.dart';
 import 'compete_screen.dart';
 import 'profile_screen.dart';
+import 'autopsy_screen.dart';
+import 'convert_account_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -91,20 +94,49 @@ class _MainNavigationState extends State<MainNavigation> {
     final u = auth.user;
     if (u != null) {
       final providers = (Supabase.instance.client.auth.currentUser?.appMetadata['providers'] as List?) ?? const [];
+      final darkMode = context.read<ThemeService>().isDarkMode;
+      final textScale = MediaQuery.textScalerOf(context).scale(1);
+      final stats = await SupabaseService().getGamificationStats();
+      final phone = await _profilePhone();
       ChurnTelemetryService.instance.updateLive(
         walletBalance: u.walletBalance,
         startingCash: auth.isGuest ? 5000 : 11000,
         isGuest: auth.isGuest,
         oauth: providers.contains('google') || providers.contains('apple'),
-        darkMode: context.read<ThemeService>().isDarkMode,
-        textScale: MediaQuery.textScalerOf(context).scale(1),
+        darkMode: darkMode,
+        textScale: textScale,
+        countryCode: CurrencyService.instance.countryCode,
+        hasPhone: phone,
+        totalXp: stats['total_xp'] ?? 0,
       );
     }
-    final r = await ActionReactionEngine.instance.claimCrashApologyIfPending();
+    final engine = ActionReactionEngine.instance;
+    final r = await engine.claimCrashApologyIfPending() ?? await engine.startupReactions(isGuest: auth.isGuest);
     if (r == null || !mounted) return;
-    await auth.refreshUser();
+    if (r.key == 'crash_apology') await auth.refreshUser();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(r.text), duration: const Duration(seconds: 6)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(r.text),
+      duration: const Duration(seconds: 8),
+      action: r.action == null
+          ? null
+          : SnackBarAction(
+              label: r.actionLabel!,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => r.action == 'convert' ? const ConvertAccountScreen() : const AutopsyScreen())),
+            ),
+    ));
+  }
+
+  /// Whether the profile has a saved mobile number (for the funnel metrics).
+  Future<bool> _profilePhone() async {
+    try {
+      final client = Supabase.instance.client;
+      final row = await client.from('profiles').select('phone').eq('id', client.auth.currentUser!.id).maybeSingle();
+      return '${row?['phone'] ?? ''}'.trim().isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _onTourReplay() {

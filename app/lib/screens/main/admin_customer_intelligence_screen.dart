@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme.dart';
+import '../../services/intel/intel_scorer.dart';
 
 /// Admin → Intelligence tab. Live from three realtime streams:
 /// `intel_events` (raw events, last 24h), `intel_user_state` (per-user computed
@@ -349,14 +350,61 @@ Widget _row(List<String> cells, TextStyle style) => Padding(
       ]),
     );
 
-/// Header row + rows of cells; first column flexes.
-Widget _table(List<String> head, List<List<String>> rows, {String empty = 'No data yet'}) {
+/// Header row + rows of cells; first column flexes. With [onTap], a row opens
+/// that entity's full metric breakdown.
+Widget _table(List<String> head, List<List<String>> rows, {String empty = 'No data yet', void Function(String first)? onTap}) {
   if (rows.isEmpty) return _empty(empty);
   return ListView.separated(
     itemCount: rows.length + 1,
     separatorBuilder: (_, _) => Divider(height: 1, color: AppColors.birch),
-    itemBuilder: (_, i) => i == 0 ? _row(head, AppText.sectionLabel) : _row(rows[i - 1], AppFonts.mono(size: 12, color: AppColors.ink)),
+    itemBuilder: (_, i) {
+      if (i == 0) return _row(head, AppText.sectionLabel);
+      final r = _row(rows[i - 1], AppFonts.mono(size: 12, color: AppColors.ink));
+      return onTap == null ? r : InkWell(onTap: () => onTap(rows[i - 1].first), child: r);
+    },
   );
+}
+
+void _openEntity(BuildContext context, _Store store, String title, String prefix) =>
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => _EntityDetail(store: store, title: title, prefix: prefix)));
+
+/// Every metric for one screen, button or symbol, across all scored users:
+/// total, users with a non-zero value, and the average among those users.
+class _EntityDetail extends StatelessWidget {
+  const _EntityDetail({required this.store, required this.title, required this.prefix});
+  final _Store store;
+  final String title;
+  final String prefix;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title), backgroundColor: AppColors.pureWhite, foregroundColor: AppColors.ink, elevation: 0),
+      body: ListenableBuilder(
+        listenable: store,
+        builder: (_, _) {
+          final keys = <String>{
+            for (final u in store.states.keys)
+              for (final k in store.metricsOf(u).keys)
+                if (k.startsWith(prefix)) k,
+          }.toList()
+            ..sort();
+          if (keys.isEmpty) return _empty('No users have a value here yet');
+          return ListView(children: [
+            _row(['METRIC', 'TOTAL', 'USERS', 'AVG'], AppText.sectionLabel),
+            for (final k in keys)
+              () {
+                final users = store.usersWith(k);
+                final total = store.sum(k);
+                return _row([k.substring(prefix.length), _fmt(total), '$users', users == 0 ? '–' : _fmt(total / users)],
+                    AppFonts.mono(size: 11, color: AppColors.ink));
+              }(),
+            const SizedBox(height: AppSpacing.xxl),
+          ]);
+        },
+      ),
+    );
+  }
 }
 
 /// Distinct entity ids found in metric keys, e.g. `btn_<id>_clicks_7d` → id.
@@ -422,6 +470,27 @@ class _OverviewTab extends StatelessWidget {
       _row(['STEP', 'COUNT', '% OF VIEWS'], AppText.sectionLabel),
       for (final (label, n) in [('Pack viewed', pv), ('Checkout started', cs), ('Purchase succeeded', ps), ('Purchase failed', pf)])
         _row([label, _fmt(n), pv == 0 ? '–' : '${(n / pv * 100).round()}%'], AppFonts.mono(size: 12, color: AppColors.ink)),
+      _section('App health (users with each flag)'),
+      _row(['METRIC', 'USERS', 'AVG'], AppText.sectionLabel),
+      for (final k in kHealthMetrics)
+        _row([
+          k.replaceAll('_', ' '),
+          '${s.usersWith('hw_${k}_current')}',
+          s.usersWith('hw_${k}_current') == 0 ? '–' : _fmt(s.sum('hw_${k}_current') / s.usersWith('hw_${k}_current')),
+        ], AppFonts.mono(size: 12, color: AppColors.ink)),
+      _section('Account & paywall funnel (all users)'),
+      _row(['EVENT', 'TODAY', '7D', '30D'], AppText.sectionLabel),
+      for (final b in kFunnelBases)
+        _row([
+          b.replaceAll('_', ' '),
+          _fmt(s.sum('mon_${b}_today_ist')),
+          _fmt(s.sum('mon_${b}_rolling_7d_window')),
+          _fmt(s.sum('mon_${b}_rolling_30d_window')),
+        ], AppFonts.mono(size: 12, color: AppColors.ink)),
+      _section('Launches by source (30d)'),
+      _row(['SOURCE', 'LAUNCHES'], AppText.sectionLabel),
+      for (final src in kLaunchSources)
+        _row([src, _fmt(kLaunchWindows.fold<num>(0, (a, w) => a + s.sum('launch_${src}_$w')))], AppFonts.mono(size: 12, color: AppColors.ink)),
       _section('Events by name (24h)'),
       for (final e in byName.take(20)) _row([e.key, '${e.value}'], AppFonts.mono(size: 12, color: AppColors.ink)),
       const SizedBox(height: AppSpacing.xxl),
@@ -501,7 +570,7 @@ class _UserDetailState extends State<_UserDetail> {
   String _q = '';
 
   static const _sections = {
-    'launch_': 'Launches', 'hw_': 'App health', 'scr_': 'Screens', 'btn_': 'Buttons', 'sym_': 'Symbols', 'x_': 'Other',
+    'launch_': 'Launches', 'hw_': 'App health', 'scr_': 'Screens', 'btn_': 'Buttons', 'sym_': 'Symbols', 'mon_': 'Funnel', 'x_': 'Other',
   };
 
   @override
@@ -605,15 +674,15 @@ class _ScreensTab extends StatelessWidget {
     }
 
     screens.sort((a, b) => s.sum('scr_${b}_opens_7d').compareTo(s.sum('scr_${a}_opens_7d')));
-    return _table(['SCREEN', '24H LIVE', 'OPENS 7D', 'AVG DWELL', 'BOUNCE', 'SCROLL', 'RAGE', 'EXITS'], [
+    return _table(onTap: (x) => _openEntity(context, s, x, 'scr_${x}_'), ['SCREEN', '24H LIVE', 'OPENS 7D', 'AVG DWELL', 'ERRORS', 'DEAD', 'RAGE', 'EXITS'], [
       for (final x in screens)
         [
           x,
           '${live[x] ?? 0}',
           _fmt(s.sum('scr_${x}_opens_7d')),
           '${avgOf('scr_${x}_avg_dwell_sec_per_visit').toStringAsFixed(1)}s',
-          _fmt(s.sum('scr_${x}_pogo_bounce_under_1500ms')),
-          '${avgOf('scr_${x}_max_scroll_depth_pct').round()}%',
+          _fmt(s.sum('scr_${x}_error_state_views')),
+          _fmt(s.sum('scr_${x}_dead_tap_non_clickable')),
           _fmt(s.sum('scr_${x}_rage_tap_bursts')),
           _fmt(s.sum('scr_${x}_session_exit_drop_off')),
         ],
@@ -637,7 +706,7 @@ class _ButtonsTab extends StatelessWidget {
     num score(String b) => s.sum('btn_${b}_rage_double_taps') * 1000 + s.usersWith('btn_${b}_zero_click_dead_button_flag') * 100 + s.sum('btn_${b}_clicks_7d');
     btns.sort((a, b) => score(b).compareTo(score(a)));
     // Flags first: rage-tapped or dead buttons are what admins act on.
-    return _table(['BUTTON', '24H LIVE', '7D', 'CTR 7D', 'DEAD FOR', 'RAGE', '→TRADE'], [
+    return _table(onTap: (b) => _openEntity(context, s, b, 'btn_${b}_'), ['BUTTON', '24H LIVE', '7D', 'CTR 7D', 'DEAD FOR', 'RAGE', 'ERR', 'POWER'], [
       for (final b in btns)
         [
           b,
@@ -646,7 +715,9 @@ class _ButtonsTab extends StatelessWidget {
           s.states.isEmpty ? '–' : '${(s.sum('btn_${b}_ctr_pct_7d') / s.states.length).toStringAsFixed(1)}%',
           '${s.usersWith('btn_${b}_zero_click_dead_button_flag')}',
           _fmt(s.sum('btn_${b}_rage_double_taps')),
-          _fmt(s.sum('btn_${b}_led_to_revenue_or_trade_5m')),
+          _fmt(s.sum('btn_${b}_error_after_click')),
+          // Users who tapped it 5+ times this week.
+          '${s.states.keys.where((u) => (s.metricsOf(u)['btn_${b}_clicks_7d'] ?? 0) >= 5).length}',
         ],
     ]);
   }
@@ -664,7 +735,7 @@ class _SymbolsTab extends StatelessWidget {
     }.toList();
     num trades(String x) => s.sum('sym_${x}_trades_won_7d') + s.sum('sym_${x}_trades_lost_7d');
     syms.sort((a, b) => (trades(b) * 10 + s.sum('sym_${b}_chart_views_7d')).compareTo(trades(a) * 10 + s.sum('sym_${a}_chart_views_7d')));
-    return _table(['SYMBOL', 'VIEWS 7D', 'W/L 7D', 'WIN %', 'P&L 30D', 'SHORT', 'REVENGE', 'HOLD'], [
+    return _table(onTap: (x) => _openEntity(context, s, x, 'sym_${x}_'), ['SYMBOL', 'VIEWS 7D', 'W/L 7D', 'WIN %', 'P&L 30D', 'SHORT', 'REVENGE', 'HOLD'], [
       for (final x in syms)
         [
           x,

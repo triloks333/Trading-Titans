@@ -166,12 +166,18 @@ class TradingTitansApp extends StatelessWidget {
             themeMode: themeService.themeMode,
             navigatorKey: AuthService.navigatorKey,
             // Max scroll depth per screen for the analytics dashboard.
-            builder: (context, child) => NotificationListener<ScrollUpdateNotification>(
-              onNotification: (n) {
-                if (n.depth == 0) ChurnTelemetryService.instance.recordScroll(n.metrics);
-                return false;
-              },
-              child: webShell(child),
+            // Scroll depth, pull-to-refresh and dead taps for the analytics dashboard.
+            builder: (context, child) => Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: ChurnTelemetryService.instance.onPointerDown,
+              onPointerUp: ChurnTelemetryService.instance.onPointerUp,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  ChurnTelemetryService.instance.recordScrollNotification(n);
+                  return false;
+                },
+                child: webShell(child),
+              ),
             ),
             home: AppLifecycleGate(child: homeWidget),
             navigatorObservers: [

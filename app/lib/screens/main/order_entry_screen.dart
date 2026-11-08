@@ -367,6 +367,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       if (!mounted) return;
       final errText = e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
       final isInsufficient = errText.toLowerCase().contains('insufficient');
+      ChurnTelemetryService.instance.recordActionError(isInsufficient ? 'insufficient_funds' : 'order_failed');
       var offerTopUp = false;
       if (isInsufficient) {
         final available = context.read<AuthService>().user?.walletBalance ?? 0.0;
