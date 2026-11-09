@@ -11,6 +11,22 @@ entry here, at the top, before arming.
 
 ---
 
+## 2.0.5 (versionCode 65)
+
+Commodities (gold, silver, crude, natural gas, copper) as a market, priced off Yahoo futures in USD and shown in the display currency; bought by amount in fractions. Trade bar becomes 3 preferred markets + More sheet (F&O moved there); search shows Browse tiles. Charts follow light/dark everywhere. Built from 4848e19 + version bump.
+
+### Play Store "What's new" (paste this)
+
+```
+• New: Commodities! Trade gold, silver, crude oil, natural gas and copper with live prices in your currency
+• Buy commodities by amount, so you can start small
+• Trade tab is cleaner: your 3 markets up front, everything else (including F&O) under More
+• Tap search to browse every market
+• Charts now follow light and dark mode on every screen
+```
+
+---
+
 ## 2.0.4 (versionCode 64)
 
 Guests must create an account (Google, email) or sign in after onboarding; Google upgrade fixed by enabling manual identity linking in Supabase. Replaced 2.0.3 (63) while it was in review. Built from 72e5287, production 100% on 2026-11-08.
