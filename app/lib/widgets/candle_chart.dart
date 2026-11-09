@@ -49,9 +49,10 @@ class _CandleChartState extends State<CandleChart> {
               style:       ChartStyle(
                 priceGainColor: AppColors.bull,
                 priceLossColor: AppColors.bear,
-                volumeColor: Color(0x33000000), // Unused if volume is null
+                // Theme ink, not fixed near-black: those vanished on the dark palette.
+                volumeColor: AppColors.ink4.withValues(alpha: 0.2), // Unused if volume is null
                 priceGridLineColor: AppColors.birch,
-                selectionHighlightColor: Color(0x330B1B2B),
+                selectionHighlightColor: AppColors.ink.withValues(alpha: 0.2),
                 overlayBackgroundColor: AppColors.pureWhite,
                 overlayTextStyle: TextStyle(color: AppColors.ink, fontSize: 12),
               ),

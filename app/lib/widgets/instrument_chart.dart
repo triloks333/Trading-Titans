@@ -11,6 +11,7 @@ import '../services/churn_telemetry_service.dart';
 
 import 'native_candle_chart.dart';
 import '../services/currency_service.dart';
+import '../services/theme_service.dart';
 
 /// The instrument chart: our own chart, drawn from our own prices.
 ///
@@ -44,8 +45,9 @@ class InstrumentChart extends StatefulWidget {
   /// 'stock' | 'us_stock' | 'crypto'.
   final String market;
 
-  /// 'light' or 'dark'. Anything else is treated as dark.
-  final String theme;
+  /// 'light' or 'dark' to pin the chart; null (the default) follows the app's
+  /// light/dark setting live, so no host screen can forget to pass it.
+  final String? theme;
 
   /// Optional live quote price pushed by the host screen to keep candle moving
   /// smoothly with every incoming tick.
@@ -55,7 +57,7 @@ class InstrumentChart extends StatefulWidget {
     super.key,
     required this.symbol,
     this.market = 'stock',
-    this.theme = 'dark',
+    this.theme,
     this.livePrice,
   });
 
@@ -80,7 +82,19 @@ class _InstrumentChartState extends State<InstrumentChart> {
 
   final CurrencyService _currency = CurrencyService.instance;
 
-  bool get _isDark => widget.theme != 'light';
+  bool get _isDark => widget.theme == null ? AppColors.isDark : widget.theme != 'light';
+
+  /// Pushes the current theme into the page and the WebView's pre-paint colour.
+  void _applyTheme() {
+    _controller?.setBackgroundColor(_surface);
+    _call('window.ttChart.setTheme(${jsonEncode(_isDark ? 'dark' : 'light')})');
+  }
+
+  void _onAppThemeChanged() {
+    if (widget.theme != null || !mounted) return;
+    setState(() {}); // repaint the loading/notice overlays in the new surface
+    _applyTheme();
+  }
 
   /// Matches `--surface` in the chart page, so the gap before the first paint is
   /// not a different colour from the chart that replaces it.
@@ -117,6 +131,7 @@ class _InstrumentChartState extends State<InstrumentChart> {
     // and coming back from there changes nothing this widget's own fields would
     // notice.
     _currency.addListener(_onCurrencyChanged);
+    ThemeService().addListener(_onAppThemeChanged);
 
     // Polls quote to keep live candle updating smoothly
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -128,10 +143,7 @@ class _InstrumentChartState extends State<InstrumentChart> {
   void didUpdateWidget(covariant InstrumentChart old) {
     super.didUpdateWidget(old);
     if (kIsWeb) return;
-    if (old.theme != widget.theme) {
-      _controller?.setBackgroundColor(_surface);
-      _call('window.ttChart.setTheme(${jsonEncode(_isDark ? 'dark' : 'light')})');
-    }
+    if (old.theme != widget.theme) _applyTheme();
     if (old.symbol != widget.symbol || old.market != widget.market) {
       setState(() {
         _phase = _Phase.loading;
@@ -150,7 +162,10 @@ class _InstrumentChartState extends State<InstrumentChart> {
   @override
   void dispose() {
     _poll?.cancel();
-    if (!kIsWeb) _currency.removeListener(_onCurrencyChanged);
+    if (!kIsWeb) {
+      _currency.removeListener(_onCurrencyChanged);
+      ThemeService().removeListener(_onAppThemeChanged);
+    }
     super.dispose();
   }
 
@@ -222,7 +237,7 @@ class _InstrumentChartState extends State<InstrumentChart> {
         break;
       case 'ready':
         _ready = true;
-        _call('window.ttChart.setTheme(${jsonEncode(_isDark ? 'dark' : 'light')})');
+        _applyTheme();
         // Before the first load, so the very first paint is already in the right
         // currency rather than flashing rupees at someone who chose dollars.
         _sendCurrency();
