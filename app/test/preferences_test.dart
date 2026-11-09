@@ -113,7 +113,7 @@ void main() {
         preferredKeys: ['crypto'],
       );
       expect(bar.orderedTabs.map((t) => t.key).toList(),
-          ['crypto', 'stock', 'us_stock', 'pakistan_stock', 'italy_stock']);
+          ['crypto', 'stock', 'us_stock', 'commodity', 'pakistan_stock', 'italy_stock']);
     });
 
     test('every market stays present, so no position becomes unreachable', () {
@@ -122,15 +122,15 @@ void main() {
         onSelected: _noop,
         preferredKeys: ['us_stock'],
       );
-      expect(bar.orderedTabs.length, 5);
+      expect(bar.orderedTabs.length, 6);
       expect(bar.orderedTabs.map((t) => t.key).toSet(),
-          {'stock', 'us_stock', 'crypto', 'pakistan_stock', 'italy_stock'});
+          {'stock', 'us_stock', 'crypto', 'commodity', 'pakistan_stock', 'italy_stock'});
     });
 
     test('no preference keeps the canonical order', () {
       const bar = MarketNavBar(selectedKey: 'stock', onSelected: _noop);
       expect(bar.orderedTabs.map((t) => t.key).toList(),
-          ['stock', 'us_stock', 'crypto', 'pakistan_stock', 'italy_stock']);
+          ['stock', 'us_stock', 'crypto', 'commodity', 'pakistan_stock', 'italy_stock']);
     });
 
     test('all three preferred is still the canonical order', () {
@@ -140,7 +140,7 @@ void main() {
         preferredKeys: ['crypto', 'us_stock', 'stock'],
       );
       expect(bar.orderedTabs.map((t) => t.key).toList(),
-          ['stock', 'us_stock', 'crypto', 'pakistan_stock', 'italy_stock']);
+          ['stock', 'us_stock', 'crypto', 'commodity', 'pakistan_stock', 'italy_stock']);
     });
 
     testWidgets('renders in the preferred order', (tester) async {
@@ -161,7 +161,7 @@ void main() {
   group('MarketTabOrder', () {
     test('canonical order matches the nav bar default', () {
       expect(MarketTabOrder.canonical,
-          ['stock', 'us_stock', 'crypto', 'pakistan_stock', 'italy_stock']);
+          ['stock', 'us_stock', 'crypto', 'commodity', 'pakistan_stock', 'italy_stock']);
     });
   });
 

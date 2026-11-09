@@ -86,6 +86,7 @@ class TradeStats {
           : switch (o.market) {
               'us_stock' => 'US',
               'crypto' => 'Crypto',
+              'commodity' => 'Commodities',
               'pakistan_stock' => 'Pakistan',
               'italy_stock' => 'Italy',
               _ => 'India',

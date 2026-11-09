@@ -64,7 +64,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   bool _isIntraday = true;
   bool _isStoploss = false;
   bool _isMarketProtection = false;
-  bool _inputByMoney = false; // false = quantity mode, true = money mode
+  // false = quantity mode, true = money mode. Commodities open on amount: see _isFractional.
+  late bool _inputByMoney = widget.quote.market == 'commodity';
   
   bool _isAdvancedOpen = false;
   String _validity = 'DAY';
@@ -77,7 +78,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   /// loaded (and stays 1 for equities/crypto which trade in single units).
   int _foLotSize = 1;
 
-  bool get _isCrypto => widget.quote.market == 'crypto';
+  /// Fractional, buy-by-amount instruments. A gold ounce costs more than a new
+  /// user's whole wallet, so commodities need fractions just like crypto does.
+  bool get _isFractional => widget.quote.market == 'crypto' || widget.quote.market == 'commodity';
 
   String get _exchangeLabel {
     switch (widget.quote.market) {
@@ -89,6 +92,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         return 'BORSA ITALIANA';
       case 'us_stock':
         return 'US';
+      case 'commodity':
+        return 'COMMODITY';
       case 'stock':
       default:
         return 'NSE';
@@ -117,7 +122,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       }
     }
     
-    final qtyStr = _isCrypto 
+    final qtyStr = _isFractional 
         ? initialQty.toString() 
         : initialQty.toInt().toString();
 
@@ -205,7 +210,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   }
 
   double get _quantityValue {
-    if (_inputByMoney && _isCrypto) {
+    if (_inputByMoney && _isFractional) {
       // The amount is typed in the user's display currency, but _price is in the
       // instrument's own currency. Convert before dividing, or a dollar-entered
       // amount would buy ~88x too much.
@@ -216,7 +221,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       if (_price > 0) return money / _price;
       return 0.0;
     }
-    if (_isCrypto) {
+    if (_isFractional) {
       return double.tryParse(_qtyController.text) ?? 0.0;
     }
     return (int.tryParse(_qtyController.text) ?? 0).toDouble();
@@ -243,13 +248,13 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     // Exit orders (closing existing positions) never require new capital
     if (widget.isExitOrder) return 0.0;
 
-    if (_inputByMoney && _isCrypto) {
+    if (_inputByMoney && _isFractional) {
       // Compared against the wallet, which is rupees, so the typed figure has to
       // come back to rupees regardless of what is being displayed.
       return Money.typedToInr(double.tryParse(_moneyController.text) ?? 0.0);
     }
 
-    final orderQty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    final orderQty = _isFractional ? _quantityValue : (_quantityValue * _lotSize);
     final isMarginDerivative = widget.instrumentType == 'FUTURE' || (widget.instrumentType == 'OPTION' && !_isBuy);
     final marginPct = isMarginDerivative ? 0.15 : 1.0;
     
@@ -302,7 +307,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
     if (_quantityValue <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_inputByMoney && _isCrypto
+        SnackBar(content: Text(_inputByMoney && _isFractional
           ? 'Please enter an amount to invest.'
           : 'Please enter a valid quantity.')),
       );
@@ -317,7 +322,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
         symbol: widget.quote.symbol,
         market: widget.quote.market,
         side: _isBuy ? 'buy' : 'sell',
-        quantity: _isCrypto ? _quantityValue : (_quantityValue * _lotSize),
+        quantity: _isFractional ? _quantityValue : (_quantityValue * _lotSize),
         price: _price,
         isMarket: _isMarket,
         instrumentType: widget.instrumentType,
@@ -329,7 +334,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
       ChurnTelemetryService.instance.recordTradePlaced(
           symbol: widget.quote.symbol, side: _isBuy ? 'buy' : 'sell',
-          qty: _isCrypto ? _quantityValue : (_quantityValue * _lotSize), segment: widget.instrumentType);
+          qty: _isFractional ? _quantityValue : (_quantityValue * _lotSize), segment: widget.instrumentType);
       await authProvider.refreshUser(); // Update wallet balance
 
       // Funnel: record the user's first-ever trade (fires once per install).
@@ -553,7 +558,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       });
 
   Map<String, double> get _chargesPreview {
-    final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    final qty = _isFractional ? _quantityValue : (_quantityValue * _lotSize);
     if (qty <= 0 || widget.quote.market != 'stock') {
       return {
         'brokerage': 0, 'stamp_duty': 0, 'stt': 0,
@@ -571,7 +576,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
 
   Widget _buildChargeBreakdownPanel(Color color) {
     final charges = _chargesPreview;
-    final qty = _isCrypto ? _quantityValue : (_quantityValue * _lotSize);
+    final qty = _isFractional ? _quantityValue : (_quantityValue * _lotSize);
     final price = _price;
     final totalValue = qty * price;
     final totalCharges = charges['total_charges'] ?? 0.0;
@@ -655,7 +660,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           ),
           const SizedBox(height: 10),
           _buildBillRow(
-            '${_isCrypto ? _quantityValue.toStringAsFixed(6) : qty.toStringAsFixed(0)} ${widget.quote.symbol} × ${Money.instrument(price, market: widget.quote.market)}',
+            '${_isFractional ? _quantityValue.toStringAsFixed(6) : qty.toStringAsFixed(0)} ${widget.quote.symbol} × ${Money.instrument(price, market: widget.quote.market)}',
             Money.instrument(totalValue, market: widget.quote.market),
             AppColors.ink,
             isMain: true,
@@ -864,7 +869,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
   /// Adds one unit (one lot for F&O, 0.01 for crypto, 1 share otherwise).
   void _stepQty() {
     ChurnTelemetryService.instance.recordButtonTap('order_ticket_qty_plus_stepper_btn');
-    if (_isCrypto) {
+    if (_isFractional) {
       final v = (double.tryParse(_qtyController.text) ?? 0) + 0.01;
       _qtyController.text = v.toStringAsFixed(v < 1 ? 4 : 2);
     } else {
@@ -994,7 +999,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     final walletBalance = context.watch<AuthService>().user?.walletBalance ?? 0.0;
     final color = _sideColor;
     final optionLabels = widget.instrumentType == 'OPTION';
-    final moneyMode = _inputByMoney && _isCrypto;
+    final moneyMode = _inputByMoney && _isFractional;
     final marketHint = Money.bare(widget.quote.price, from: Money.sourceFor(widget.quote.market));
 
     return Scaffold(
@@ -1007,9 +1012,9 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               children: [
                 _sideToggle(),
                 const SizedBox(height: 16),
-                if (widget.isExitOrder && !_isCrypto) ...[_exitBanner(), const SizedBox(height: 16)],
+                if (widget.isExitOrder && !_isFractional) ...[_exitBanner(), const SizedBox(height: 16)],
                 // Product: hidden for crypto and exits, which have no product choice.
-                if (!_isCrypto && !widget.isExitOrder) ...[
+                if (!_isFractional && !widget.isExitOrder) ...[
                   _chipRow([
                     _chip(optionLabels ? 'NRML' : 'Delivery', !_isIntraday, () {
                       ChurnTelemetryService.instance.recordButtonTap('order_ticket_product_delivery_cnc_btn');
@@ -1032,7 +1037,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 Text('ORDER TYPE', style: AppText.sectionLabel),
                 const SizedBox(height: 6),
                 _chipRow([
-                  for (final t in _isCrypto ? const ['Market', 'Limit'] : const ['Market', 'Limit', 'SL', 'SL-M'])
+                  for (final t in _isFractional ? const ['Market', 'Limit'] : const ['Market', 'Limit', 'SL', 'SL-M'])
                     _chip(t, _orderType == t, () {
                       ChurnTelemetryService.instance.recordButtonTap(t == 'Market'
                           ? 'order_ticket_type_market_btn'
@@ -1045,7 +1050,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                 const SizedBox(height: 16),
                 if (_marketClosed) _closedNote(),
                 _buildTermHelp(),
-                if (_isCrypto) ...[
+                if (_isFractional) ...[
                   _chipRow([
                     _chip('Quantity', !_inputByMoney, () {
                       ChurnTelemetryService.instance.recordButtonTap('order_ticket_input_by_qty_vs_money_toggle');
@@ -1071,8 +1076,8 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                         _label(_isDerivative ? 'Qty (lots) · 1 lot = $_lotSize' : 'Quantity'),
                         _field(
                           _qtyController,
-                          decimal: _isCrypto,
-                          formatters: _isCrypto ? null : [FilteringTextInputFormatter.digitsOnly],
+                          decimal: _isFractional,
+                          formatters: _isFractional ? null : [FilteringTextInputFormatter.digitsOnly],
                           onStep: _stepQty,
                           stepLabel: 'Increase quantity',
                         ),
@@ -1093,7 +1098,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
                   _label('Stoploss trigger'),
                   _field(_triggerPriceController, hint: marketHint),
                 ],
-                if (!_isCrypto) ...[
+                if (!_isFractional) ...[
                   const SizedBox(height: 16),
                   Text('VALIDITY', style: AppText.sectionLabel),
                   const SizedBox(height: 6),
@@ -1178,7 +1183,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
     final totalRequiredInr = marginRequiredInr + (_marginRequired > 0 ? chargesInr : 0.0);
     final insufficient = totalRequiredInr > walletBalance && _quantityValue > 0 && !widget.isExitOrder;
     final requiredLabel =
-        _inputByMoney && _isCrypto ? 'Amount' : ((widget.instrumentType == 'OPTION' && _isBuy) ? 'Total' : 'Required');
+        _inputByMoney && _isFractional ? 'Amount' : ((widget.instrumentType == 'OPTION' && _isBuy) ? 'Total' : 'Required');
     TextSpan mono(String t, {Color? c}) => TextSpan(text: t, style: AppFonts.mono(size: 12, color: c ?? AppColors.ink));
 
     return Container(

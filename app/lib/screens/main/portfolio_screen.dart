@@ -361,7 +361,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   String _fmtSigned(double v) => '${v >= 0 ? '+' : '-'}${_fmt(v.abs())}';
 
   static const _marketNames = {
-    'stock': 'India', 'us_stock': 'US', 'crypto': 'Crypto', 'pakistan_stock': 'Pakistan', 'italy_stock': 'Italy'};
+    'stock': 'India', 'us_stock': 'US', 'crypto': 'Crypto', 'commodity': 'Commodities', 'pakistan_stock': 'Pakistan', 'italy_stock': 'Italy'};
 
   /// Allocation of open holdings by market (derivatives grouped as F&O), as a
   /// stacked bar plus legend. Empty when nothing is held.
@@ -740,7 +740,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         child: Text(text, style: AppText.badge.copyWith(color: fg ?? AppColors.ink3)),
       );
 
-  static const _exchange = {'stock': 'NSE', 'us_stock': 'US', 'crypto': 'CRYPTO', 'pakistan_stock': 'PSX', 'italy_stock': 'MIL'};
+  static const _exchange = {'stock': 'NSE', 'us_stock': 'US', 'crypto': 'CRYPTO', 'commodity': 'COMMODITY', 'pakistan_stock': 'PSX', 'italy_stock': 'MIL'};
 
   /// One row: symbol + tags, "qty × avg", value, signed P&L, and an Exit chip
   /// while the position is open.
@@ -819,7 +819,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         if (closed) _tag('CLOSED'),
         if (!closed && h.isShort) _tag('SHORT', fg: AppColors.bear, bg: AppColors.bearLight),
       ],
-      qtyAvg: '${h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 6 : 0)} × ${Money.instrument(h.displayAvgPrice, market: h.market)}',
+      qtyAvg: '${h.quantity.abs().toStringAsFixed(MarketHours.isFractional(h.market) ? 6 : 0)} × ${Money.instrument(h.displayAvgPrice, market: h.market)}',
       value: closed ? '—' : Money.instrument(h.displayCurrentPrice * h.quantity.abs(), market: h.market),
       pnl: pnl,
       up: h.displayPnl >= 0,
@@ -857,7 +857,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
                   child: Text.rich(
                     TextSpan(children: [
                       TextSpan(text: 'Qty. ', style: muted),
-                      TextSpan(text: h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 6 : 0), style: num),
+                      TextSpan(text: h.quantity.abs().toStringAsFixed(MarketHours.isFractional(h.market) ? 6 : 0), style: num),
                       TextSpan(text: '  •  Avg. ', style: muted),
                       TextSpan(text: money(h.displayAvgPrice), style: num),
                     ]),

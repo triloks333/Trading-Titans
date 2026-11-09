@@ -345,6 +345,7 @@ class MarketTabOrder {
     'stock',
     MarketHours.usStock,
     'crypto',
+    MarketHours.commodity,
     MarketHours.pakistanStock,
     MarketHours.italyStock,
   ];

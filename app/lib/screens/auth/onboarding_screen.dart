@@ -88,6 +88,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.currency_bitcoin,
     ),
     (
+      key: 'commodity',
+      title: 'Commodities',
+      subtitle: 'Gold, silver, crude oil and gas',
+      icon: Icons.diamond_outlined,
+    ),
+    (
       key: 'pakistan_stock',
       title: 'Pakistan Stocks',
       subtitle: 'PSX equities and market indices',

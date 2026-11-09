@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { US_MARKET, getUsdInrRate, getPkrInrRate, getEurInrRate, isUsMarketOpen } from "../_shared/us_market.ts";
+import { COMMODITY_MARKET, US_MARKET, getUsdInrRate, getPkrInrRate, getEurInrRate, isCommodityOpen, isUsMarketOpen } from "../_shared/us_market.ts";
 import { isRestingLimit, resolveFillPrice } from "../_shared/fill_price.ts";
 import { pickLotSize } from "../_shared/lot_size.ts";
 import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
@@ -47,6 +47,7 @@ function isItalyMarketOpen(): boolean {
 function isMarketOpen(market: string): boolean {
   if (market === "crypto") return true;
   if (market === US_MARKET) return isUsMarketOpen();
+  if (market === COMMODITY_MARKET) return isCommodityOpen();
   if (market === "pakistan_stock") return isPakistanMarketOpen();
   if (market === "italy_stock") return isItalyMarketOpen();
   return isStockOpen();
@@ -242,7 +243,8 @@ serve(async (req) => {
 
       if (!(isMarketOpen(market) || force)) { report.push({ id: o.id, skipped: "market_closed" }); continue; }
 
-      const isUs = market === US_MARKET;
+      // Commodities are quoted in USD too, so they take the same USD→INR fill path.
+      const isUs = market === US_MARKET || market === COMMODITY_MARKET;
       // A crypto FUTURES order carries a CoinDCX contract symbol (`B-BTC_USDT`)
       // while the quote feed is keyed by the coin (`BTC`), so the raw symbol
       // matched nothing and the order was skipped on every run -- one had been

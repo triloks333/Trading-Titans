@@ -194,6 +194,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   String get _exchange => switch (widget.market) {
         'crypto' => 'Crypto',
         'us_stock' => 'US',
+        'commodity' => 'Commodity',
         'pakistan_stock' => 'PSX',
         'italy_stock' => 'Borsa Italiana',
         _ => 'NSE',
@@ -449,7 +450,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ]),
         const SizedBox(height: 10),
         Row(children: [
-          cell('Qty', h.quantity.abs().toStringAsFixed(h.market == 'crypto' ? 4 : 0)),
+          cell('Qty', h.quantity.abs().toStringAsFixed(MarketHours.isFractional(h.market) ? 4 : 0)),
           cell('Avg', Money.instrument(h.displayAvgPrice, market: h.market)),
           cell('P&L', '${h.pnl >= 0 ? '+' : '−'}${Money.wallet(h.pnl.abs(), decimals: 2)}', color: tone, end: true),
         ]),

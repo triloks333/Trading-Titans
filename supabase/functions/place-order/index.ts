@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { US_MARKET } from "../_shared/us_market.ts";
+import { COMMODITY_MARKET, US_MARKET } from "../_shared/us_market.ts";
 // Shared session window: the old inline copy closed at 15:15, so orders placed in
 // the last 15 minutes of the session were routed to pending instead of filling.
 import { isStockOpen } from "../_shared/market_hours.ts";
@@ -76,9 +76,9 @@ serve(async (req) => {
     if (!Number.isFinite(qty) || qty <= 0) return json({ error: "quantity must be > 0" }, 400);
     if (qty > 10000000) return json({ error: "Quantity exceeds maximum allowable order size (10,000,000)" }, 400);
     if (!["EQUITY", "FUTURE", "OPTION"].includes(instrumentType)) return json({ error: "invalid instrumentType" }, 400);
-    if (!["stock", "crypto", US_MARKET, "pakistan_stock", "italy_stock"].includes(market)) return json({ error: "invalid market" }, 400);
+    if (!["stock", "crypto", US_MARKET, COMMODITY_MARKET, "pakistan_stock", "italy_stock"].includes(market)) return json({ error: "invalid market" }, 400);
     // There is no international derivatives support: no contract master, no lot sizes.
-    if ((market === US_MARKET || market === "pakistan_stock" || market === "italy_stock") && instrumentType !== "EQUITY") {
+    if ((market === US_MARKET || market === COMMODITY_MARKET || market === "pakistan_stock" || market === "italy_stock") && instrumentType !== "EQUITY") {
       return json({ error: `${market} derivatives are not supported yet` }, 400);
     }
     if (!isMarket && (!Number.isFinite(limitPrice) || limitPrice <= 0)) return json({ error: "limit price must be > 0" }, 400);
@@ -161,7 +161,7 @@ serve(async (req) => {
     // --- Warm a trusted price into quotes_cache so the engine can price immediately ---
     // US tickers are already bare (AAPL), so extractUnderlying would only ever
     // damage them — it truncates at the first digit and splits on "-".
-    const underlyingKey = (market === "crypto" || market === US_MARKET || market === "pakistan_stock" || market === "italy_stock") ? symbol.toUpperCase() : extractUnderlying(symbol);
+    const underlyingKey = (market === "crypto" || market === US_MARKET || market === COMMODITY_MARKET || market === "pakistan_stock" || market === "italy_stock") ? symbol.toUpperCase() : extractUnderlying(symbol);
     let refPrice = 0;
     try {
       const qurl = `${SUPABASE_URL}/functions/v1/market-quote?symbol=${encodeURIComponent(underlyingKey)}&market=${encodeURIComponent(market)}`;
@@ -245,7 +245,7 @@ serve(async (req) => {
     // with INR at fill and keeps the USD figure in native_price. Stamping
     // native_currency now means the app can tell "this is a dollar number" at
     // both stages instead of guessing from the market alone.
-    const nativeCols = market === US_MARKET
+    const nativeCols = (market === US_MARKET || market === COMMODITY_MARKET)
       ? { native_price: storedPrice, native_currency: "USD" }
       : market === "pakistan_stock"
       ? { native_price: storedPrice, native_currency: "PKR" }
@@ -285,7 +285,7 @@ serve(async (req) => {
     if (resultStatus === "pending") {
       try {
         // International prices are quoted in their native currency.
-        const ccy = market === US_MARKET ? "$" : market === "pakistan_stock" ? "Rs " : market === "italy_stock" ? "€" : "\u20b9";
+        const ccy = (market === US_MARKET || market === COMMODITY_MARKET) ? "$" : market === "pakistan_stock" ? "Rs " : market === "italy_stock" ? "€" : "\u20b9";
         // action_type "order_pending" (not "order"): channelFor() in
         // push-notification maps "order" to the ORDER EXECUTED channel, so a
         // pending order was arriving with the executed sound. The app's

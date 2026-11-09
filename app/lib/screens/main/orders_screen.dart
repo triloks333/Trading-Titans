@@ -570,7 +570,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Divider(color: AppColors.birch, height: 1),
               const SizedBox(height: 24),
               _buildDetailGrid([
-                _buildGridItem('Quantity', order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0)),
+                _buildGridItem('Quantity', order.quantity.toStringAsFixed(MarketHours.isFractional(order.market) ? 4 : 0)),
                 // A resting order's number is a trigger, not a traded price.
                 // Labelling both "Price" is what let an unfilled limit order
                 // read as a missed fill when the LTP sat the wrong side of it.
@@ -904,7 +904,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   void _showModifyOrderSheet(BuildContext context, Order order) {
-    final qtyController = TextEditingController(text: order.quantity.toStringAsFixed(order.market == 'crypto' ? 4 : 0));
+    final qtyController = TextEditingController(text: order.quantity.toStringAsFixed(MarketHours.isFractional(order.market) ? 4 : 0));
     final priceController = TextEditingController(
         text: Money.bare(order.displayPrice, from: Money.sourceFor(order.market)));
     bool isSubmitting = false;

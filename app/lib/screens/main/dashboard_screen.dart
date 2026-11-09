@@ -788,6 +788,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static String _marketLabel(String market) => switch (market) {
         'crypto' => 'Crypto',
         'us_stock' => 'NASDAQ',
+        'commodity' => 'Commodity',
         'pakistan_stock' => 'PSX',
         'italy_stock' => 'Borsa',
         _ => 'NSE',

@@ -36,7 +36,7 @@ class Money {
   /// US equities arrive in USD, Pakistan stocks in PKR, Italy stocks in EUR;
   /// Indian equities, F&O and crypto arrive in INR.
   static Currency sourceFor(String? market) => switch (market) {
-        MarketHours.usStock => Currency.usd,
+        MarketHours.usStock || MarketHours.commodity => Currency.usd,
         MarketHours.pakistanStock => Currency.pkr,
         MarketHours.italyStock => Currency.eur,
         _ => Currency.inr,
@@ -101,7 +101,7 @@ class Money {
 
   /// Quantity precision: crypto trades in fractions, equities in whole units.
   static String quantity(num value, {String? market}) =>
-      market == 'crypto' ? value.toStringAsFixed(4) : value.toStringAsFixed(0);
+      MarketHours.isFractional(market) ? value.toStringAsFixed(4) : value.toStringAsFixed(0);
 
   /// True when the display currency differs from the stored one, so screens can
   /// show a "converted at" note where the real charge matters.

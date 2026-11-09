@@ -1048,7 +1048,7 @@ class SupabaseService {
             }
           } catch (_) {}
         }
-      } else if (market == MarketHours.usStock) {
+      } else if (market == MarketHours.usStock || market == MarketHours.commodity) {
         // A US quote is in USD but avg_price came from the engine in INR, so
         // every figure computed below would mix currencies. Convert the quote to
         // INR here and keep the USD pair aside for the dollar display.

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { pooledMap } from "https://deno.land/std@0.177.0/async/pool.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { US_MARKET, isUsMarketOpen } from "../_shared/us_market.ts";
+import { COMMODITIES, COMMODITY_MARKET, US_MARKET, isCommodityOpen, isUsMarketOpen } from "../_shared/us_market.ts";
 import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
 // Shared session window: the old inline copy closed at 15:15, so quotes stopped
 // refreshing 15 minutes before the exchange did -- which also starved the
@@ -45,6 +45,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): boolean {
   if (market === "crypto") return true;
   if (market === US_MARKET) return usOpen;
+  if (market === COMMODITY_MARKET) return isCommodityOpen();
   return stockOpen;
 }
 
@@ -73,6 +74,7 @@ const POPULAR: { symbol: string; market: string }[] = [
   ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
       "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
     .map((symbol) => ({ symbol, market: US_MARKET })),
+  ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
 ];
 
 async function buildUniverse(supabase: any): Promise<{ symbol: string; market: string }[]> {

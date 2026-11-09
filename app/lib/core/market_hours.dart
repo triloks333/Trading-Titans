@@ -11,6 +11,12 @@ class MarketHours {
   /// Market key used for US equities on `orders.market` / `holdings.market`.
   static const String usStock = 'us_stock';
 
+  /// Commodity futures (GC=F…), on the CME Globex session. Mirrors isCommodityOpen in us_market.ts.
+  static const String commodity = 'commodity';
+
+  /// Markets traded in fractions (by amount) rather than whole units.
+  static bool isFractional(String? market) => market == 'crypto' || market == commodity;
+
   /// Market key used for Pakistan Stock Exchange (PSX).
   static const String pakistanStock = 'pakistan_stock';
 
@@ -131,6 +137,16 @@ class MarketHours {
       if (et.weekday == DateTime.saturday || et.weekday == DateTime.sunday) return false;
       final minutes = et.hour * 60 + et.minute;
       return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
+    }
+
+    if (market == commodity) {
+      // Sun 18:00 ET → Fri 17:00 ET, with a daily 17:00–18:00 ET break.
+      final et = usEastern(at);
+      final m = et.hour * 60 + et.minute;
+      if (et.weekday == DateTime.saturday) return false;
+      if (et.weekday == DateTime.sunday) return m >= 18 * 60;
+      if (et.weekday == DateTime.friday) return m < 17 * 60;
+      return m < 17 * 60 || m >= 18 * 60;
     }
 
     if (market == pakistanStock) {
@@ -255,6 +271,13 @@ class MarketHours {
       return 'Opens at ${_usOpenIst(at)} IST';
     }
 
+    if (market == commodity) {
+      final et = usEastern(at);
+      final weekend = et.weekday == DateTime.saturday || et.weekday == DateTime.sunday ||
+          (et.weekday == DateTime.friday && et.hour >= 17);
+      return weekend ? 'Weekend Closed' : 'Opens at ${_commodityOpenIst(at)} IST';
+    }
+
     if (market == pakistanStock) {
       final pkt = (at ?? DateTime.now()).toUtc().add(const Duration(hours: 5));
       if (pkt.weekday == DateTime.saturday || pkt.weekday == DateTime.sunday) {
@@ -290,6 +313,13 @@ class MarketHours {
       return 'Opens at $open IST';
     }
 
+    if (market == commodity) {
+      final et = usEastern(at);
+      final weekend = et.weekday == DateTime.saturday || et.weekday == DateTime.sunday ||
+          (et.weekday == DateTime.friday && et.hour >= 17);
+      return weekend ? 'Opens Monday ${_commodityOpenIst(at)} IST' : 'Opens at ${_commodityOpenIst(at)} IST';
+    }
+
     if (market == pakistanStock) {
       return 'Opens at 9:15 AM PKT';
     }
@@ -307,6 +337,9 @@ class MarketHours {
 
   /// The US open expressed in IST: 7:00 PM under EDT, 8:00 PM under EST.
   static String _usOpenIst([DateTime? at]) => isUsDst(at) ? '7:00 PM' : '8:00 PM';
+
+  /// 18:00 US Eastern (the Globex reopen) in IST: 3:30 AM under EDT, 4:30 AM under EST.
+  static String _commodityOpenIst([DateTime? at]) => isUsDst(at) ? '3:30 AM' : '4:30 AM';
 
   // ── IST calendar days ──────────────────────────────────────────────────────
 
@@ -340,6 +373,7 @@ class MarketHours {
     if (market == usStock) {
       return isUsDst(at) ? '7:00 PM - 1:30 AM IST' : '8:00 PM - 2:30 AM IST';
     }
+    if (market == commodity) return 'Nearly 24h, Mon-Sat IST';
     return '9:15 AM - 3:30 PM IST';
   }
 }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import {
+  COMMODITY_MARKET,
   US_MARKET,
   fromUsYahooSymbol,
   getUsdInrRate,
@@ -163,6 +164,10 @@ async function handleRequest(req: Request): Promise<Response> {
       quote ??= await attempt(() => fetchCoinGeckoQuote(symbol), errors, "coingecko");
     } else if (market === US_MARKET) {
       quote = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
+    } else if (market === COMMODITY_MARKET) {
+      // Yahoo continuous futures (GC=F) come through the US quote path unchanged, in USD.
+      const q = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
+      quote = q && { ...q, market: COMMODITY_MARKET };
     } else if (market === "pakistan_stock") {
       quote = await attempt(() => fetchPakistanStockQuote(symbol), errors, "yahoo");
     } else if (market === "italy_stock") {

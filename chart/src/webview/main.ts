@@ -121,7 +121,8 @@ function queueLegend(): void {
  * Same rule as `Money.sourceFor` in the app and `currencyFor` in the web app.
  */
 function nativeCurrency(): Currency {
-  return market === 'us_stock' ? 'USD' : 'INR'
+  // Commodity futures (GC=F…) are quoted in dollars, like US stocks.
+  return market === 'us_stock' || market === 'commodity' ? 'USD' : 'INR'
 }
 
 /** Multiplier from the instrument's own currency into the one being displayed. */
@@ -428,7 +429,7 @@ window.ttChart = {
 
   load(nextSymbol, nextMarket, nextPeriod) {
     symbol = String(nextSymbol ?? '').trim().toUpperCase()
-    market = (['stock', 'us_stock', 'crypto'] as const).includes(nextMarket as Market)
+    market = (['stock', 'us_stock', 'crypto', 'commodity'] as const).includes(nextMarket as Market)
       ? (nextMarket as Market)
       : 'stock'
     // Falls back to the CURRENT period, not to the default. Flutter calls this

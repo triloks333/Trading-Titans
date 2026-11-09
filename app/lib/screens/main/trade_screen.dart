@@ -34,6 +34,7 @@ const Map<String, List<(String, String)>> kMarketIndices = {
   'fo': [('NIFTY', 'NIFTY 50'), ('BANKNIFTY', 'BANKNIFTY')],
   'us_stock': [('^GSPC', 'S&P 500'), ('^IXIC', 'NASDAQ')],
   'crypto': [('BTC', 'BTC'), ('ETH', 'ETH')],
+  'commodity': [('GC=F', 'GOLD'), ('CL=F', 'CRUDE')],
   'pakistan_stock': [('^KSE', 'KSE 100')],
   'italy_stock': [('FTSEMIB.MI', 'FTSE MIB')],
 };
@@ -72,6 +73,11 @@ final Map<String, List<MoverSymbol>> kMoverUniverse = {
     ])
       _s(s, n),
   ],
+  // Mirrors COMMODITIES in supabase/functions/_shared/us_market.ts.
+  'commodity': [
+    _s('GC=F', 'Gold', 'GOLD'), _s('SI=F', 'Silver', 'SILVER'), _s('CL=F', 'Crude Oil', 'CRUDE'),
+    _s('NG=F', 'Natural Gas', 'NATGAS'), _s('HG=F', 'Copper', 'COPPER'),
+  ],
   'pakistan_stock': [
     _s('OGDC.KA', 'Oil & Gas Development Company', 'OGDC'), _s('LUCK.KA', 'Lucky Cement Ltd', 'LUCK'),
     _s('MCB.KA', 'MCB Bank Ltd', 'MCB'), _s('SYS.KA', 'Systems Ltd', 'SYS'), _s('HBL.KA', 'Habib Bank Ltd', 'HBL'),
@@ -90,6 +96,7 @@ const _marketPillIds = {
   'stock': 'trade_market_pill_nse_stock',
   'us_stock': 'trade_market_pill_us_stock',
   'crypto': 'trade_market_pill_crypto',
+  'commodity': 'trade_market_pill_commodity',
   'pakistan_stock': 'trade_market_pill_pakistan_psx',
   'italy_stock': 'trade_market_pill_italy_borsa',
   'fo': 'trade_market_pill_nse_fo',
@@ -143,6 +150,9 @@ class _TradeScreenState extends State<TradeScreen> {
   String get _orderMarket => _market == 'fo' ? 'stock' : _market;
   bool get _searching => _searchQuery.trim().isNotEmpty;
 
+  /// Focused-but-empty search shows the Browse tiles: every market, one tap away.
+  late final FocusNode _searchFocus = FocusNode()..addListener(() => setState(() {}));
+
   @override
   void initState() {
     super.initState();
@@ -157,6 +167,7 @@ class _TradeScreenState extends State<TradeScreen> {
   void dispose() {
     _debounce?.cancel();
     _priceTimer?.cancel();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -300,6 +311,7 @@ class _TradeScreenState extends State<TradeScreen> {
             child: Column(children: [
               if (!_isComingSoon) ...[
                 TextField(
+                  focusNode: _searchFocus,
                   onTap: () => ChurnTelemetryService.instance.recordButtonTap('trade_search_input_box'),
                   onChanged: _onSearchChanged,
                   textInputAction: TextInputAction.search,
@@ -317,7 +329,7 @@ class _TradeScreenState extends State<TradeScreen> {
                 comingSoonKeys: _comingSoonMarkets,
                 preferredKeys: preferred,
                 filterToPreferred: true,
-                showFo: preferred.isEmpty || preferred.contains('stock'),
+                onEditPreferred: _showMarketPreferencesDialog,
                 onSelected: _selectMarket,
               ),
             ]),
@@ -340,6 +352,7 @@ class _TradeScreenState extends State<TradeScreen> {
                   padding: const EdgeInsets.only(bottom: AppSpacing.xl),
                   children: [
                     if (!_searching && (_market == 'stock' || _market == 'fo')) _muhuratBanner(),
+                    if (_searchFocus.hasFocus && !_searching) _browseTiles(),
                     if (!_searching) _indexCards(),
                     ...(_searching ? _searchRows() : _market == 'fo' ? _foRows() : _moverRows()),
                     if (!_searching && _market == 'stock') _chainCard(),
@@ -400,6 +413,50 @@ class _TradeScreenState extends State<TradeScreen> {
       ),
     );
   }
+
+  Widget _browseTiles() => Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('BROWSE', style: AppText.sectionLabel),
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.8,
+            children: [
+              for (final t in [...MarketTab.all, MarketTab.fo])
+                Material(
+                  color: AppColors.pureWhite,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.birch)),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    onTap: () {
+                      _searchFocus.unfocus();
+                      _selectMarket(t.key);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(children: [
+                        Icon(t.icon, size: 20, color: AppColors.goldMid),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(t.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ]),
+      );
 
   Widget _indexCards() {
     final cards = kMarketIndices[_market] ?? const <(String, String)>[];
@@ -607,6 +664,7 @@ class _TradeScreenState extends State<TradeScreen> {
       {'key': 'stock', 'title': 'Indian stock market', 'desc': 'NSE & BSE Equities, F&O'},
       {'key': 'us_stock', 'title': 'US stocks', 'desc': 'NYSE & NASDAQ Equities'},
       {'key': 'crypto', 'title': 'Cryptocurrency', 'desc': 'Major crypto pairs & perpetuals'},
+      {'key': 'commodity', 'title': 'Commodities', 'desc': 'Gold, silver, crude oil, gas, copper'},
       {'key': 'pakistan_stock', 'title': 'Pakistan stocks', 'desc': 'Pakistan Stock Exchange (PSX)'},
       {'key': 'italy_stock', 'title': 'Italy stocks', 'desc': 'Borsa Italiana (Milan)'},
     ];

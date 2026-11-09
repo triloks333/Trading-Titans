@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { searchUsStocks, searchPakistanStocks, searchItalyStocks } from "../_shared/yahoo.ts";
+import { COMMODITIES, COMMODITY_MARKET } from "../_shared/us_market.ts";
 
 // Inline CORS helpers
 export const corsHeaders = {
@@ -246,6 +247,11 @@ async function handleRequest(req: Request): Promise<Response> {
           instrument_type: "EQUITY",
         }));
       }
+    } else if (market === COMMODITY_MARKET) {
+      // Five fixed instruments: filter locally, no provider call.
+      results = COMMODITIES
+        .filter((c) => (c.name + " " + c.symbol).toLowerCase().includes(q))
+        .map((c) => ({ symbol: c.symbol, display_symbol: c.name, name: c.name, market: COMMODITY_MARKET, instrument_type: "EQUITY" }));
     } else if (market === "pakistan_stock") {
       if (q.length > 0) {
         const hits = await searchPakistanStocks(query);

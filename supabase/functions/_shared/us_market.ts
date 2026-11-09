@@ -70,6 +70,32 @@ export function isUsMarketOpen(at: Date = new Date()): boolean {
   return minutes >= 9 * 60 + 30 && minutes < 16 * 60;
 }
 
+/** Market value for commodity futures (GC=F, CL=F…): priced in USD off Yahoo, like US stocks. */
+export const COMMODITY_MARKET = "commodity";
+
+/** The whole commodity universe. Mirrors kMoverUniverse['commodity'] in trade_screen.dart. */
+export const COMMODITIES: { symbol: string; name: string }[] = [
+  { symbol: "GC=F", name: "Gold" },
+  { symbol: "SI=F", name: "Silver" },
+  { symbol: "CL=F", name: "Crude Oil" },
+  { symbol: "NG=F", name: "Natural Gas" },
+  { symbol: "HG=F", name: "Copper" },
+];
+
+/**
+ * True during the CME Globex session: Sun 18:00 ET → Fri 17:00 ET, with a daily
+ * 17:00–18:00 ET break. Mirrored in app/lib/core/market_hours.dart.
+ */
+export function isCommodityOpen(at: Date = new Date()): boolean {
+  const et = usEasternNow(at);
+  const day = et.getUTCDay();
+  const m = et.getUTCHours() * 60 + et.getUTCMinutes();
+  if (day === 6) return false;
+  if (day === 0) return m >= 18 * 60;
+  if (day === 5) return m < 17 * 60;
+  return m < 17 * 60 || m >= 18 * 60;
+}
+
 /** Human-readable session label, for the market-status endpoint. */
 export function usSessionLabel(at: Date = new Date()): string {
   if (isUsMarketOpen(at)) return "Market Open";

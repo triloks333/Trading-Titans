@@ -528,6 +528,7 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
   static String _exchange(String symbol, String market) => switch (market) {
         'crypto' => 'CRYPTO',
         'us_stock' => 'US',
+        'commodity' => 'COMMODITY',
         'pakistan_stock' => 'PSX',
         'italy_stock' => 'MIL',
         _ => RegExp(r'FUT|\d+(CE|PE)$|-(CE|PE)$').hasMatch(symbol) ? 'NFO' : 'NSE',

@@ -63,6 +63,7 @@ class _FullscreenChartScreenState extends State<FullscreenChartScreen> {
   String get _exchange => switch (widget.market) {
         'crypto' => 'CRYPTO',
         'us_stock' => 'US',
+        'commodity' => 'COMMODITY',
         _ => 'NSE',
       };
 

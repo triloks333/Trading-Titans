@@ -3,7 +3,7 @@ import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchHistory as yfHistory, CandleData } from "../_shared/yahoo.ts";
 import { fetchHistory as cgHistory } from "../_shared/coingecko.ts";
 import { fetchHistory as dcxHistory } from "../_shared/coindcx.ts";
-import { US_MARKET, toUsYahooSymbol } from "../_shared/us_market.ts";
+import { COMMODITY_MARKET, US_MARKET, toUsYahooSymbol } from "../_shared/us_market.ts";
 import {
   parseDerivativeSymbol,
   blackScholes,
@@ -61,7 +61,7 @@ async function handleRequest(req: Request): Promise<Response> {
         console.log(`[market-history] CoinDCX failed for ${symbol}, falling back to CG: ${dcxErr.message}`);
         data = await cgHistory(symbol, range, interval || undefined);
       }
-    } else if (effectiveMarket === US_MARKET) {
+    } else if (effectiveMarket === US_MARKET || effectiveMarket === COMMODITY_MARKET) {
       data = await yfHistory(symbol, range, interval || undefined, {
         yfSymbol: toUsYahooSymbol(symbol),
         strict,

@@ -10,6 +10,7 @@
 import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   fromUsYahooSymbol,
+  isCommodityOpen,
   isUsDst,
   isUsMarketOpen,
   toUsYahooSymbol,
@@ -89,4 +90,16 @@ Deno.test("class shares round-trip between storage and Yahoo form", () => {
   assertEquals(toUsYahooSymbol(fromUsYahooSymbol("BRK.B")), "BRK.B");
   // Plain tickers are unaffected by the round trip.
   assertEquals(fromUsYahooSymbol(toUsYahooSymbol("AAPL")), "AAPL");
+});
+
+Deno.test("commodity session follows CME Globex: Sun 18:00 ET to Fri 17:00 ET, daily 17:00-18:00 break", () => {
+  // November 2026 is EST (UTC-5): 18:00 ET = 23:00 UTC.
+  assertFalse(isCommodityOpen(utc(2026, 11, 8, 22, 59))); // Sun 17:59 ET
+  assert(isCommodityOpen(utc(2026, 11, 8, 23, 0))); // Sun 18:00 ET opens
+  assert(isCommodityOpen(utc(2026, 11, 9, 15, 0))); // Mon 10:00 ET
+  assertFalse(isCommodityOpen(utc(2026, 11, 9, 22, 30))); // Mon 17:30 ET, daily break
+  assert(isCommodityOpen(utc(2026, 11, 9, 23, 0))); // Mon 18:00 ET reopens
+  assert(isCommodityOpen(utc(2026, 11, 13, 21, 59))); // Fri 16:59 ET
+  assertFalse(isCommodityOpen(utc(2026, 11, 13, 22, 0))); // Fri 17:00 ET closes
+  assertFalse(isCommodityOpen(utc(2026, 11, 14, 15, 0))); // Saturday
 });

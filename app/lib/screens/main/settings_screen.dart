@@ -32,6 +32,7 @@ const List<(String, String)> kPreferenceMarkets = [
   ('stock', 'Indian stocks'),
   ('us_stock', 'US stocks'),
   ('crypto', 'Crypto'),
+  ('commodity', 'Commodities'),
   ('italy_stock', 'Italy stocks'),
   ('pakistan_stock', 'Pakistan stocks'),
 ];

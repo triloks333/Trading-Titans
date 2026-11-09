@@ -31,7 +31,7 @@ export interface Sample {
 }
 
 /** Markets, matching the `market` column and every edge function's parameter. */
-export type Market = 'stock' | 'us_stock' | 'crypto'
+export type Market = 'stock' | 'us_stock' | 'crypto' | 'commodity'
 
 /**
  * Timeframes the chart offers.

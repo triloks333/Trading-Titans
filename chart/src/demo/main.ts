@@ -90,7 +90,7 @@ let results: IndicatorResult[] = []
 let appliedTemplate: string | null = null
 
 /** US listings are quoted in dollars; everything else our backend hands us is rupees. */
-const currencyFor = (m: Market): Currency => (m === 'us_stock' ? 'USD' : 'INR')
+const currencyFor = (m: Market): Currency => (m === 'us_stock' || m === 'commodity' ? 'USD' : 'INR')
 const market = () => el.market.value as Market
 const symbol = () => el.symbol.value.trim().toUpperCase()
 

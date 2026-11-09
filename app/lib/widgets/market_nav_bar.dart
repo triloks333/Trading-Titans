@@ -46,6 +46,14 @@ class MarketTab {
     popularHeading: 'POPULAR CRYPTO',
   );
 
+  static const commodity = MarketTab(
+    key: 'commodity',
+    label: 'Commodities',
+    icon: Icons.diamond_outlined,
+    searchHint: 'Search gold, silver, crude...',
+    popularHeading: 'COMMODITIES',
+  );
+
   static const pakistanStock = MarketTab(
     key: 'pakistan_stock',
     label: 'Pakistan',
@@ -66,6 +74,7 @@ class MarketTab {
     stock,
     usStock,
     crypto,
+    commodity,
     pakistanStock,
     italyStock,
   ];
@@ -94,11 +103,11 @@ class MarketNavBar extends StatelessWidget {
     this.comingSoonKeys = const {},
     this.preferredKeys = const [],
     this.filterToPreferred = false,
-    this.showFo = false,
+    this.onEditPreferred,
   });
 
-  /// Adds the F&O segment after the markets.
-  final bool showFo;
+  /// Opens the "pick your 3 markets" editor; offered at the top of the More sheet.
+  final VoidCallback? onEditPreferred;
 
   final String selectedKey;
   final ValueChanged<String> onSelected;
@@ -109,8 +118,8 @@ class MarketNavBar extends StatelessWidget {
   /// Markets the user chose in their preferences (maximum 3).
   final List<String> preferredKeys;
 
-  /// When true, limits visible tabs to only the user's preferred markets (max 3),
-  /// keeping the trade screen clean and uncluttered.
+  /// When true, the bar shows only the user's preferred markets (max 3) plus a
+  /// More segment; every other market, F&O included, lives in the More sheet.
   final bool filterToPreferred;
 
   static const Duration _animation = Duration(milliseconds: 200);
@@ -129,17 +138,77 @@ class MarketNavBar extends StatelessWidget {
     return [...preferred, ...rest];
   }
 
+  /// Markets behind the More segment: everything not on the bar, then F&O.
+  List<MarketTab> get overflowTabs {
+    if (!filterToPreferred) return const [];
+    final shown = orderedTabs.map((t) => t.key).toSet();
+    return [...MarketTab.all.where((t) => !shown.contains(t.key)), MarketTab.fo];
+  }
+
   /// Titan Terminal segmented control: equal segments, every label visible.
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
-        child: Row(children: [
-          for (final tab in [...orderedTabs, if (showFo) MarketTab.fo]) Expanded(child: _buildTab(tab, tab.key == selectedKey)),
-        ]),
+  Widget build(BuildContext context) {
+    final overflow = overflowTabs;
+    // An overflow market that is open takes the More segment's label, so the bar
+    // always says where you are.
+    final pickedOverflow = overflow.where((t) => t.key == selectedKey).firstOrNull;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Row(children: [
+        for (final tab in orderedTabs) Expanded(child: _buildTab(tab, tab.key == selectedKey)),
+        if (overflow.isNotEmpty)
+          Expanded(
+            child: _buildTab(
+              MarketTab(
+                key: 'more',
+                label: '${pickedOverflow?.label ?? 'More'} ▾',
+                icon: Icons.expand_more_rounded,
+                searchHint: '',
+                popularHeading: '',
+              ),
+              pickedOverflow != null,
+              onTap: () => _openMore(context, overflow),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Future<void> _openMore(BuildContext context, List<MarketTab> overflow) => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        backgroundColor: AppColors.pureWhite,
+        builder: (sheet) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              title: Text('More markets', style: AppFonts.sans(size: 16, weight: FontWeight.w600, color: AppColors.ink)),
+              trailing: onEditPreferred == null
+                  ? null
+                  : TextButton(
+                      onPressed: () {
+                        Navigator.pop(sheet);
+                        onEditPreferred!();
+                      },
+                      child: const Text('Edit my 3'),
+                    ),
+            ),
+            for (final tab in overflow)
+              ListTile(
+                leading: Icon(tab.icon, color: AppColors.goldMid),
+                title: Text(tab.label, style: AppFonts.sans(size: 14, weight: FontWeight.w600, color: AppColors.ink)),
+                selected: tab.key == selectedKey,
+                onTap: () {
+                  Navigator.pop(sheet);
+                  onSelected(tab.key);
+                },
+              ),
+            const SizedBox(height: 8),
+          ]),
+        ),
       );
 
-  Widget _buildTab(MarketTab tab, bool selected) {
+  Widget _buildTab(MarketTab tab, bool selected, {VoidCallback? onTap}) {
     final comingSoon = comingSoonKeys.contains(tab.key);
     final label = comingSoon ? '${tab.label}, coming soon' : tab.label;
     return Semantics(
@@ -149,7 +218,7 @@ class MarketNavBar extends StatelessWidget {
       excludeSemantics: true, // the visible label would otherwise be read twice
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => onSelected(tab.key),
+        onTap: onTap ?? () => onSelected(tab.key),
         child: AnimatedContainer(
           duration: _animation,
           height: 38,

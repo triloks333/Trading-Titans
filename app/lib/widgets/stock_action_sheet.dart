@@ -176,6 +176,8 @@ class _StockActionSheetState extends State<StockActionSheet> {
         return 'BORSA ITALIANA';
       case 'us_stock':
         return 'US';
+      case 'commodity':
+        return 'COMMODITY';
       case 'stock':
       default:
         return 'NSE';

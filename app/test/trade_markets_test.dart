@@ -94,10 +94,12 @@ void main() {
     expect(find.byType(OptionChainScreen), findsOneWidget);
   });
 
-  testWidgets('F&O segment lists option chains and opens one', (tester) async {
+  testWidgets('F&O, reached through More, lists option chains and opens one', (tester) async {
     await _pump(tester);
+    await tester.tap(find.text('More ▾'));
+    await _settle(tester);
     await tester.tap(find.text('F&O'));
-    await tester.pump();
+    await _settle(tester);
     expect(find.text('OPTION CHAINS · FUTURES'), findsOneWidget);
     expect(find.text('BANKNIFTY'), findsWidgets);
     await tester.tap(find.text('RELIANCE'));
