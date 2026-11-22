@@ -20,19 +20,55 @@ export type Parsed = {
   marketTime: number | null;
 };
 
-export function fromMeta(meta: any, closes: unknown[] = []): Parsed | null {
+/** Exchange-local calendar day of an epoch-seconds timestamp. */
+function localDay(epochS: number, gmtOffsetS: number): number {
+  return Math.floor((epochS + gmtOffsetS) / 86400);
+}
+
+/**
+ * Builds a quote from a chart/spark `meta` block plus the series beside it.
+ *
+ * The previous close comes from the DAILY bars, not from `chartPreviousClose`:
+ * that field is the close before the requested window starts, so its meaning
+ * shifts with `range`, and for indices Yahoo's spark even returns the close from
+ * two sessions back (checked 2026-11-22: ^NSEI gave the 18 Nov close on a
+ * Saturday, when the previous close was 19 Nov's). With daily bars the previous
+ * close is simply the last close on a day before the latest trading day.
+ * `chartPreviousClose` is used only when no bars came back.
+ */
+export function fromMeta(meta: any, closes: unknown[] = [], timestamps: unknown[] = []): Parsed | null {
   if (!meta) return null;
   const last = [...closes].reverse().find((c) => num(c) !== null);
   const price = num(meta.regularMarketPrice) ?? num(last);
   if (!price) return null;
+
+  const offset = Number(meta.gmtoffset) || 0;
+  const marketTime = num(meta.regularMarketTime);
+  let previousClose: number | null = null;
+  if (timestamps.length === closes.length && timestamps.length > 0) {
+    let lastIdx = -1;
+    for (let i = closes.length - 1; i >= 0; i--) {
+      if (num(closes[i]) !== null && num(timestamps[i]) !== null) { lastIdx = i; break; }
+    }
+    if (lastIdx >= 0) {
+      const sessionDay = localDay(marketTime ?? (timestamps[lastIdx] as number), offset);
+      for (let i = closes.length - 1; i >= 0; i--) {
+        const c = num(closes[i]);
+        const t = num(timestamps[i]);
+        if (c !== null && t !== null && localDay(t, offset) < sessionDay) { previousClose = c; break; }
+      }
+    }
+  }
+  previousClose ??= num(meta.previousClose) ?? num(meta.regularMarketPreviousClose) ?? num(meta.chartPreviousClose);
+
   return {
     price,
-    previousClose: num(meta.chartPreviousClose) ?? num(meta.previousClose) ?? num(meta.regularMarketPreviousClose),
+    previousClose,
     dayLow: num(meta.regularMarketDayLow),
     dayHigh: num(meta.regularMarketDayHigh),
     open: num(meta.regularMarketOpen),
     name: meta.longName ?? meta.shortName ?? null,
-    marketTime: num(meta.regularMarketTime),
+    marketTime,
   };
 }
 
@@ -47,7 +83,7 @@ export function parseSpark(body: any): Map<string, Parsed> {
   if (Array.isArray(results)) {
     for (const r of results) {
       const resp = r?.response?.[0];
-      const parsed = fromMeta(resp?.meta, resp?.indicators?.quote?.[0]?.close ?? []);
+      const parsed = fromMeta(resp?.meta, resp?.indicators?.quote?.[0]?.close ?? [], resp?.timestamp ?? []);
       if (r?.symbol && parsed) out.set(String(r.symbol).toUpperCase(), parsed);
     }
     return out;
@@ -61,8 +97,10 @@ export function parseSpark(body: any): Map<string, Parsed> {
           regularMarketPrice: v.regularMarketPrice,
           chartPreviousClose: v.chartPreviousClose,
           previousClose: v.previousClose,
+          gmtoffset: v.gmtoffset,
         },
         closes,
+        Array.isArray(v.timestamp) ? v.timestamp : [],
       );
       if (parsed) out.set(sym.toUpperCase(), parsed);
     }

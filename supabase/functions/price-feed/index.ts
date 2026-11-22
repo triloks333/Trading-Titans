@@ -128,7 +128,9 @@ let sparkPath = "/v7/finance/spark";
 let hostIdx = 0;
 
 async function sparkChunk(symbols: string[]): Promise<Map<string, Parsed>> {
-  const qs = `symbols=${symbols.map(encodeURIComponent).join(",")}&range=1d&interval=5m`;
+  // Daily bars over 5 days: enough to find the previous session's close even
+  // after a long weekend (see fromMeta for why chartPreviousClose is not used).
+  const qs = `symbols=${symbols.map(encodeURIComponent).join(",")}&range=5d&interval=1d`;
   const paths = sparkPath === "/v7/finance/spark"
     ? ["/v7/finance/spark", "/v8/finance/spark"]
     : ["/v8/finance/spark", "/v7/finance/spark"];
@@ -153,10 +155,10 @@ async function sparkChunk(symbols: string[]): Promise<Map<string, Parsed>> {
 
 async function chartOne(yf: string): Promise<Parsed | null> {
   const body = await getJson(
-    `${YAHOO_HOSTS[hostIdx]}/v8/finance/chart/${encodeURIComponent(yf)}?range=1d&interval=5m`,
+    `${YAHOO_HOSTS[hostIdx]}/v8/finance/chart/${encodeURIComponent(yf)}?range=5d&interval=1d`,
   );
   const r = body?.chart?.result?.[0];
-  return fromMeta(r?.meta, r?.indicators?.quote?.[0]?.close ?? []);
+  return fromMeta(r?.meta, r?.indicators?.quote?.[0]?.close ?? [], r?.timestamp ?? []);
 }
 
 async function inPool<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
