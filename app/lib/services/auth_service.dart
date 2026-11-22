@@ -461,7 +461,39 @@ class AuthService extends ChangeNotifier {
         }
         notifyListeners();
       }
-    });
+    }, onError: _onAuthCallbackError);
+  }
+
+  /// Why the last Google upgrade failed, for the upgrade screen. The result of
+  /// [convertWithGoogle] arrives on the deep link, so linkIdentity() itself
+  /// never throws for it.
+  String? conversionError;
+
+  /// OAuth callback errors reach the app only as errors on the auth stream.
+  /// Unhandled, a failed Google upgrade dropped the guest back on the gate
+  /// with no message.
+  Future<void> _onAuthCallbackError(Object e, [StackTrace? st]) async {
+    unawaited(DiagnosticsService.logLoginFailure('auth_callback', e, st));
+    bool converting = false;
+    try {
+      converting = (await SharedPreferences.getInstance()).getBool('pending_conversion') == true;
+    } catch (_) {}
+    if (!converting) return;
+    await _setConversionPending(false);
+    final message = e is AuthException ? e.message : e.toString();
+    if (message.toLowerCase().contains('already linked')) {
+      // That Google account already has its own Trading Titans account.
+      // Accounts are never merged, so leave the guest session and sign in to
+      // the account the user just picked.
+      unawaited(DiagnosticsService.logStep('convert_google_existing_account'));
+      await logout();
+      try {
+        await signInWithGoogle();
+      } catch (_) {} // logged inside; the login screen is showing by now
+      return;
+    }
+    conversionError = mapConversionException(e);
+    notifyListeners();
   }
 
   Future<void> login(String email, String password) async {
@@ -717,6 +749,7 @@ class AuthService extends ChangeNotifier {
   /// finalised when the app comes back and the auth listener fires.
   Future<void> convertWithGoogle() async {
     unawaited(DiagnosticsService.logStep('convert_google_attempt'));
+    conversionError = null;
     try {
       await _setConversionPending(true);
       await _supabase.client.auth.linkIdentity(

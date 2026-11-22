@@ -241,7 +241,7 @@ class _ConvertAccountScreenState extends State<ConvertAccountScreen> {
                     child: TextButton(onPressed: _busy ? null : _sendLink, child: const Text('Resend link')),
                   ),
                 ],
-                if (_error != null) ...[const SizedBox(height: 12), AuthError(_error!)],
+                if ((_error ?? auth.conversionError) != null) ...[const SizedBox(height: 12), AuthError((_error ?? auth.conversionError)!)],
               ],
             ]),
           ),
