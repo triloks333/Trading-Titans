@@ -25,6 +25,11 @@ class AppFlagsService extends ChangeNotifier {
 
   bool isEnabled(String key) => _flags[key] ?? _defaults[key] ?? false;
 
+  /// Like [isEnabled], but for a kill switch that is on unless an `app_flags`
+  /// row turns it off (e.g. `realtime_prices_enabled`).
+  bool isEnabledOr(String key, {required bool defaultValue}) =>
+      _flags[key] ?? _defaults[key] ?? defaultValue;
+
   /// True when wallet top-ups, the Subscribe screen and plan badges should be
   /// visible. The app is free while this is false.
   bool get monetizationEnabled => isEnabled('monetization_enabled');

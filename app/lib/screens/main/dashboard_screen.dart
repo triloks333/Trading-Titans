@@ -23,6 +23,7 @@ import '../../services/plan_service.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
+import '../../widgets/price_freshness_note.dart';
 import '../../widgets/home_news_section.dart';
 import '../../widgets/muhurat_card.dart';
 import '../../widgets/skeleton.dart';
@@ -309,6 +310,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
                       children: [
                         if (_overview.isNotEmpty) _indexStrip(),
+                        if (_overview.isNotEmpty)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 4),
+                            child: PriceFreshnessNote(),
+                          ),
                         _valueSection(user?.walletBalance ?? 0, user?.totalRealizedPnl ?? 0),
                         _quickActions(),
                         const MuhuratCard(),

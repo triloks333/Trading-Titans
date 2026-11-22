@@ -12,6 +12,8 @@ import '../../models/price_alert.dart';
 import '../../models/quote.dart';
 import '../../services/fo_instruments_service.dart';
 import '../../services/market_service.dart';
+import '../../services/price_store.dart';
+import '../../widgets/price_freshness_note.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
@@ -71,10 +73,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     _loadHistory(_range);
     _loadExtras();
     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshQuote());
+    PriceStore.instance.addListener(_onPricePush);
   }
+
+  void _onPricePush() => _refreshQuote();
 
   @override
   void dispose() {
+    PriceStore.instance.removeListener(_onPricePush);
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -318,10 +324,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             style: AppFonts.mono(size: 14, color: _changeColor),
           ),
           TextSpan(
-            text: open ? '  today · live' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
+            text: open ? '  today' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
             style: AppFonts.sans(size: 14, color: AppColors.ink4),
           ),
         ])),
+        const SizedBox(height: 4),
+        const PriceFreshnessNote(),
       ]),
     );
   }

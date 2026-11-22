@@ -9,6 +9,7 @@ import '../../core/option_pricing.dart';
 import '../../models/portfolio.dart';
 import '../../models/position_model.dart';
 import '../../services/market_service.dart';
+import '../../services/price_store.dart';
 import '../../services/supabase_service.dart';
 import '../../services/auth_service.dart';
 import 'stock_detail_screen.dart';
@@ -50,6 +51,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   Map<String, Quote> _quotes = {};
   bool _loading = true;
   Timer? _pollTimer;
+  /// Symbols the last refresh priced; re-priced on every live push.
+  Set<String> _priced = {};
   int _view = 0; // 0 holdings, 1 F&O positions, 2 closed
   ({int open, int done})? _orderCounts;
 
@@ -59,6 +62,22 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
     _load();
     _loadOrderCounts();
     _pollTimer = Timer.periodic(AppConstants.portfolioPoll, (_) => _refresh());
+    PriceStore.instance.addListener(_onPricePush);
+  }
+
+  /// A live push re-prices what is already on screen, from memory, without
+  /// reloading holdings.
+  void _onPricePush() async {
+    if (_priced.isEmpty) return;
+    try {
+      final quoteMap = await _fetchQuoteMap(_priced);
+      if (mounted && quoteMap.isNotEmpty) {
+        setState(() {
+          _quotes = {..._quotes, ...quoteMap};
+          _recordPositions();
+        });
+      }
+    } catch (_) {}
   }
 
   /// "1 open · 14 executed" on the Orders card.
@@ -75,6 +94,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
 
   @override
   void dispose() {
+    PriceStore.instance.removeListener(_onPricePush);
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -120,6 +140,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         }
       }
 
+      _priced = uniqueSymbols;
       final quoteMap = await _fetchQuoteMap(uniqueSymbols);
 
       if (mounted) {
@@ -188,6 +209,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         }
       }
 
+      _priced = uniqueSymbols;
       final quoteMap = await _fetchQuoteMap(uniqueSymbols);
 
       if (mounted) {
