@@ -400,6 +400,25 @@ class AuthService extends ChangeNotifier {
             : result.maintenanceMessage;
   }
 
+  /// One-time sign-out so everyone signs in again on this update and meets
+  /// the ₹1 Pro week offer. Guests are left alone: an anonymous account can't
+  /// be signed back into. Bump the key to force another round.
+  static const _reloginKey = 'forced_relogin_2026_11';
+
+  Future<void> _forceReloginOnce() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_reloginKey) == true) return;
+      await prefs.setBool(_reloginKey, true);
+      final current = _supabase.client.auth.currentUser;
+      if (current == null || current.isAnonymous) return;
+      unawaited(DiagnosticsService.logStep('forced_relogin'));
+      await _supabase.signOut();
+    } catch (e) {
+      debugPrint('Forced re-login skipped: $e');
+    }
+  }
+
   Future<void> initialize() async {
     // Fetch remote config (10s timeout) & apply the pure evaluation.
     // Fail open: on any failure/timeout, all gating states are cleared and the
@@ -416,6 +435,7 @@ class AuthService extends ChangeNotifier {
       _refreshFailed = true;
     }
 
+    await _forceReloginOnce();
     _user = await _supabase.getUserProfile();
     _isInitializing = false;
     notifyListeners();
