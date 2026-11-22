@@ -12,6 +12,8 @@ import '../../models/quote.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/currency_service.dart';
 import '../../services/market_service.dart';
+import '../../services/price_store.dart';
+import '../../widgets/price_freshness_note.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
@@ -158,14 +160,18 @@ class _TradeScreenState extends State<TradeScreen> {
     super.initState();
     _checkFirstRunPreferences();
     _refreshPrices();
-    // shortcut: 15 s, not the 4 s home poll, because this prices ~30 symbols a tick
-    // to rank movers. Move to a realtime quotes_cache subscription if it must be faster.
-    _priceTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshPrices());
+    // Live pushes redraw the list as prices move. The timer is the fallback for
+    // when the socket is down: one batched cache read per market, so 5s is cheap.
+    _priceTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshPrices());
+    PriceStore.instance.addListener(_onPricePush);
   }
+
+  void _onPricePush() => _refreshPrices();
 
   @override
   void dispose() {
     _debounce?.cancel();
+    PriceStore.instance.removeListener(_onPricePush);
     _priceTimer?.cancel();
     _searchFocus.dispose();
     super.dispose();
@@ -354,6 +360,10 @@ class _TradeScreenState extends State<TradeScreen> {
                     if (!_searching && (_market == 'stock' || _market == 'fo')) _muhuratBanner(),
                     if (_searchFocus.hasFocus && !_searching) _browseTiles(),
                     if (!_searching) _indexCards(),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(AppSpacing.lg, 2, AppSpacing.lg, 6),
+                      child: PriceFreshnessNote(),
+                    ),
                     ...(_searching ? _searchRows() : _market == 'fo' ? _foRows() : _moverRows()),
                     if (!_searching && _market == 'stock') _chainCard(),
                   ],

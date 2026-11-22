@@ -9,6 +9,7 @@ import '../models/candle.dart';
 import 'churn_telemetry_service.dart';
 import 'currency_service.dart';
 import 'diagnostics_service.dart';
+import 'price_store.dart';
 
 class MarketService {
   static final String _functionsBase =
@@ -21,7 +22,54 @@ class MarketService {
     'apikey': supabaseAnonKey,
   };
 
+  /// The home screen's index and crypto strip.
+  ///
+  /// Served from pushed prices / `quotes_cache` (all six are always in the
+  /// feed's universe), so the 4s dashboard poll no longer runs an edge function
+  /// that made six sequential upstream calls. Falls back to `market-overview`
+  /// only if the cache cannot price them.
+  static const List<(String, String, String, String)> _overviewSymbols = [
+    ('NIFTY', 'stock', 'NIFTY 50', 'index'),
+    ('SENSEX', 'stock', 'SENSEX', 'index'),
+    ('BANKNIFTY', 'stock', 'BANK NIFTY', 'index'),
+    ('BTC', 'crypto', 'Bitcoin', 'crypto'),
+    ('ETH', 'crypto', 'Ethereum', 'crypto'),
+    ('SOL', 'crypto', 'Solana', 'crypto'),
+  ];
+
+  static Future<Map<String, Quote>> _cachedOnly(
+          List<({String symbol, String market})> pairs) =>
+      quotes(pairs, liveFallback: false);
+
   static Future<List<Quote>> getMarketOverview() async {
+    try {
+      final got = await _cachedOnly([
+        for (final (s, m, _, _) in _overviewSymbols) (symbol: s, market: m),
+      ]);
+      final out = <Quote>[];
+      for (final (s, m, display, category) in _overviewSymbols) {
+        final q = got['$s\x1F$m'];
+        if (q == null) continue;
+        out.add(Quote(
+          symbol: q.symbol,
+          yfSymbol: q.yfSymbol,
+          name: category == 'crypto' ? display : q.name,
+          price: q.price,
+          previousClose: q.previousClose,
+          change: q.change,
+          changePct: q.changePct,
+          currency: q.currency,
+          market: q.market,
+          source: q.source,
+          displayName: display,
+          category: category,
+          dayLow: q.dayLow,
+          dayHigh: q.dayHigh,
+          open: q.open,
+        ));
+      }
+      if (out.length == _overviewSymbols.length) return out;
+    } catch (_) {}
     try {
       final response = await http
           .get(Uri.parse('$_functionsBase/market-overview'), headers: _headers)
@@ -39,18 +87,30 @@ class MarketService {
   /// How old a `quotes_cache` row may be and still be used instead of a live
   /// fetch.
   ///
-  /// Was 45s, which is more than twice the ~20s cadence `refresh-quotes` writes
-  /// at, so a row was effectively *always* accepted and the client never went
-  /// live. Prices then only stepped when the job happened to write, which read
-  /// as a frozen list even though the 4s poll was firing. At 10s a row the job
-  /// has not just refreshed falls through to a live fetch, so movement tracks
-  /// the poll instead of the job.
-  ///
-  /// ponytail: the ceiling is cost — every row the job misses becomes one edge
-  /// function call per client per poll. If that bites, the upgrade path is a
-  /// realtime subscription on `quotes_cache` rather than a longer window, since
-  /// a longer window is what caused this.
-  static const Duration _serverCacheMaxAge = Duration(seconds: 10);
+  /// `price-feed` now rewrites every row every ~3s, and `refresh-quotes` picks
+  /// up anything older than 30s one symbol at a time. So a row inside this
+  /// window is as fresh as a live call would be, and a phone falling through to
+  /// `market-quote` (one edge call plus two Yahoo requests) only happens for a
+  /// symbol the server is not tracking yet. Was 10s when the cache was written
+  /// once a minute, which sent most reads to the live path.
+  static const Duration _serverCacheMaxAge = Duration(seconds: 30);
+
+  /// Symbols already reported to the server as browsed, with when, so each is
+  /// sent at most once every few minutes.
+  static final Map<String, DateTime> _hotNoted = {};
+
+  /// Tells `price-feed` to track a symbol nobody holds or watches, so it moves
+  /// live from the next tick instead of costing a live fetch on every poll.
+  static void _noteHotSymbol(String symbol, String market) {
+    final key = cacheKeyFor(symbol, market);
+    final k = '$key\x1F$market';
+    final last = _hotNoted[k];
+    if (last != null && DateTime.now().difference(last) < const Duration(minutes: 5)) return;
+    _hotNoted[k] = DateTime.now();
+    Supabase.instance.client
+        .rpc('note_hot_symbol', params: {'p_symbol': key, 'p_market': market})
+        .then((_) {}, onError: (_) {});
+  }
 
   static ({bool isDerivative, String type, String underlying, String? expiryDate, double? strikePrice, String? optionType})? parseDerivative(String rawSymbol) {
     var s = rawSymbol.trim();
@@ -195,6 +255,16 @@ class MarketService {
       }
     }
 
+    // Pushed price (Realtime): no network at all.
+    if (!forceRefresh) {
+      final pushed = PriceStore.instance
+          .get(cacheKeyFor(symbol, market), market, requestedSymbol: symbol);
+      if (pushed != null) {
+        _quoteCache[cacheKey] = {'timestamp': now, 'quote': pushed};
+        return pushed;
+      }
+    }
+
     // Server-side price cache: read the centrally-refreshed quote when it is
     // fresh. This collapses thousands of per-client upstream calls into one
     // server job and gives every user the SAME price. On a miss/stale entry we
@@ -271,6 +341,7 @@ class MarketService {
       }
     }
 
+    if (parseDerivative(symbol) == null) _noteHotSymbol(symbol, market);
     try {
       final response = await http
           .get(
@@ -348,8 +419,9 @@ class MarketService {
   /// cache. Result is identical to calling [quote] on each pair — just fewer
   /// round-trips. Returns a map keyed by `symbol\x1Fmarket`. Never throws.
   static Future<Map<String, Quote>> quotes(
-    List<({String symbol, String market})> pairs,
-  ) async {
+    List<({String symbol, String market})> pairs, {
+    bool liveFallback = true,
+  }) async {
     final result = <String, Quote>{};
     if (pairs.isEmpty) return result;
 
@@ -374,9 +446,24 @@ class MarketService {
     }
 
     final resolved = <String>{};
+    // Pushed prices first: anything the Realtime feed delivered recently needs
+    // no query at all.
+    for (final ps in byMarket.values) {
+      for (final p in ps) {
+        final reqKey = '${p.symbol}\x1F${p.market}';
+        final pushed = PriceStore.instance
+            .get(cacheKeyFor(p.symbol, p.market), p.market, requestedSymbol: p.symbol);
+        if (pushed != null) {
+          result[reqKey] = pushed;
+          resolved.add(reqKey);
+        }
+      }
+    }
     for (final entry in byMarket.entries) {
       final market = entry.key;
-      final ps = entry.value;
+      final ps = entry.value
+          .where((p) => !resolved.contains('${p.symbol}\x1F${p.market}'))
+          .toList();
       final cacheKeys =
           ps.map((p) => cacheKeyFor(p.symbol, market)).toSet().toList();
       if (cacheKeys.isEmpty) continue;
@@ -488,6 +575,8 @@ class MarketService {
         resolved.add(reqKey);
       }
     }
+
+    if (!liveFallback) return result;
 
     // Live fallback for anything not served fresh from cache (parallel — the
     // same behaviour as the previous per-symbol code path).
