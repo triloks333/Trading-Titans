@@ -79,6 +79,13 @@ class PlanService extends ChangeNotifier {
   DateTime? get passEndsAt => _passEndsAt;
   bool get isTitan => _tier == 'titan';
 
+  /// Titan-only tools (strategy basket orders, the Greeks risk panel). Open to
+  /// everyone while limits are off, matching the server.
+  bool get hasTitanTools => !_limitsEnforced || _tier == 'titan';
+
+  /// Pro-or-better tools (coach report, follow traders, paid league).
+  bool get hasProTools => !_limitsEnforced || isPaid;
+
   /// Account history visible in days, or null for all of it.
   int? get historyDays => limitFor(PlanFeature.historyDays);
 
