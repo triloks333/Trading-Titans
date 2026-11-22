@@ -16,6 +16,7 @@ import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../services/plan_service.dart';
 
 class OrdersScreen extends StatefulWidget {
   /// When true, the screen renders only its body (no Scaffold/AppBar) so it can
@@ -56,7 +57,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
   DateTime get _firstSelectableDate {
     final createdAt = _supabase.client.auth.currentUser?.createdAt;
     final parsed = DateTime.tryParse(createdAt ?? '');
-    return MarketHours.istDate(parsed ?? DateTime.utc(2026, 1, 1));
+    final created = MarketHours.istDate(parsed ?? DateTime.utc(2026, 1, 1));
+    // Free accounts see the last 7 days of history (plan_limit 'history_days').
+    final days = PlanService.instance.historyDays;
+    if (days == null) return created;
+    final today = MarketHours.istDate();
+    final floor = DateTime.utc(today.year, today.month, today.day - (days - 1));
+    return floor.isAfter(created) ? floor : created;
   }
 
   String get _dateLabel {

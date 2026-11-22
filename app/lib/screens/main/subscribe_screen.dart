@@ -33,10 +33,14 @@ class SubscribeScreen extends StatefulWidget {
   /// The catalogue to show instead of fetching it (tests).
   final List<PlanOption>? catalogue;
 
+  /// A plan to preselect, e.g. `pro_trial_week` from the upgrade sheet.
+  final String? initialSku;
+
   const SubscribeScreen({
     super.key,
     this.initialTabIndex = 0,
     this.catalogue,
+    this.initialSku,
   });
 
   @override
@@ -77,6 +81,9 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTabIndex.clamp(0, 1);
+    _selectedSku = widget.initialSku;
+    if (widget.initialSku?.startsWith('topup') == true) _selectedTab = 1;
+    if (widget.initialSku?.endsWith('_annual') == true) _billingInterval = 'annual';
     _plans = widget.catalogue != null ? Future.value(widget.catalogue!) : (SupabaseService().getPlanCatalogue()..ignore());
     _initRazorpay();
     _loadSavedPhone();
@@ -229,9 +236,16 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                 final all = snapshot.data ?? const <PlanOption>[];
                 final hasAnnual = all.any((p) => p.isSubscription && p.billingInterval == 'annual');
                 final interval = hasAnnual && _billingInterval == 'annual' ? 'annual' : 'monthly';
+                // The 7-day pass leads the list: the ₹1 first week while the account
+                // qualifies, the ₹29 week after. Only one of the two is ever shown.
+                final passSku = plan.trialEligible ? 'pro_trial_week' : 'pro_week';
+                final pass = all.where((p) => p.sku == passSku).firstOrNull;
                 final options = _selectedTab == 0
-                    ? (all.where((p) => p.isSubscription && p.billingInterval == interval).toList()
-                      ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)))
+                    ? [
+                        ?pass,
+                        ...(all.where((p) => p.isSubscription && !p.isWeekPass && p.billingInterval == interval).toList()
+                          ..sort((a, b) => a.pricePaise.compareTo(b.pricePaise))),
+                      ]
                     : (all.where((p) => !p.isSubscription).toList()..sort((a, b) => a.pricePaise.compareTo(b.pricePaise)));
                 // Default pick: the cheapest paid subscription the user does not have, or the first top-up.
                 final selected = options.where((p) => p.sku == _selectedSku).firstOrNull ??
@@ -250,10 +264,10 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
                           padding: const EdgeInsets.all(AppSpacing.xl),
                           child: Text('Nothing on sale here right now.', textAlign: TextAlign.center, style: AppText.body),
                         ),
-                      for (final p in options) _planCard(p, billing, selected: p.sku == selected?.sku, current: p.isSubscription && plan.tier == p.tier),
+                      for (final p in options) _planCard(p, billing, selected: p.sku == selected?.sku, current: _isCurrent(p, plan)),
                       const SizedBox(height: 4),
                       Text(
-                        'Demo cash is virtual and cannot be withdrawn. Subscriptions renew monthly; cancel anytime. '
+                        'Demo cash is virtual and cannot be withdrawn. The 7-day pass is a one-time payment and does not renew. '
                         'Operated by Kashivwealth Management LLP.',
                         style: AppFonts.sans(size: 11, color: AppColors.ink4, height: 1.45),
                       ),
@@ -468,7 +482,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         selected: false,
         price: Money.wallet(0, decimals: 0),
         per: 'free',
-        features: const ['Starter simulation plan', 'Stocks, US and crypto paper trading'],
+        features: const ['Stocks, US, crypto and commodities paper trading', '3 F&O trades a month', '3 trade autopsies a month and 1 What-If a day', '7 days of history, 3 alerts, 1 watchlist of 10'],
       );
 
   /// Analytics ids for the plan cards; other skus (e.g. USD variants) record nothing.
@@ -478,6 +492,8 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     'titan_monthly': 'titan_monthly_799',
     'titan_annual': 'titan_annual_5999',
     'topup_mini': 'topup_mini_29',
+    'pro_trial_week': 'pro_trial_week_1',
+    'pro_week': 'pro_week_29',
     'topup_boost': 'topup_boost_199',
     'topup_plus': 'topup_plus_599',
     'topup_max': 'topup_max_999',
@@ -485,17 +501,31 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
 
   Widget _planCard(PlanOption p, Currency billing, {required bool selected, required bool current}) {
     final titan = p.tier == 'titan' || p.pricePaise >= 79900;
-    final features = p.isSubscription
-        ? [
-            if (titan) 'Twice-weekly live 1-on-1 mentorship with founders (Wed & Sat)',
-            '${Money.wallet(p.monthlyStipend)} virtual capital added every month',
-            'Unrestricted Futures & Options (F&O) trading',
-            '${p.tier.toUpperCase()} VIP badge across chat & leaderboards',
-            if (titan) 'Unlimited trade autopsies with tailored risk diagnosis',
+    final features = p.isWeekPass
+        ? const [
+            'Everything in Pro for 7 days',
+            '25 F&O trades a month instead of 3',
+            'Unlimited trade autopsies and What-If',
+            'Full P&L history, all chart ranges, unlimited alerts and watchlists',
+            'Weekly coach report, Pro league and follow top traders',
           ]
-        : ['${Money.wallet(p.cashGrant)} demo cash added instantly', 'Never expires · usable for F&O trading'];
+        : p.isSubscription
+            ? [
+                if (titan) 'Twice-weekly live 1-on-1 mentorship with founders (Wed & Sat)',
+                titan ? 'Unlimited F&O trades' : '25 F&O trades a month (free: 3)',
+                if (titan) 'Options strategy builder with payoff chart and one-tap basket orders',
+                if (titan) 'Greeks and "what if NIFTY moves" risk panel',
+                'Unlimited trade autopsies and What-If simulations',
+                'Full P&L history, all chart ranges, unlimited alerts and watchlists',
+                'Weekly coach report, ${titan ? 'Titan' : 'Pro'} league and follow top traders',
+                if (p.monthlyStipend > 0) '${Money.wallet(p.monthlyStipend)} virtual capital added every month',
+                '${p.tier.toUpperCase()} VIP badge across chat & leaderboards',
+              ]
+            : ['${Money.wallet(p.cashGrant)} demo cash added instantly', 'Never expires · usable for F&O trading'];
     final tag = current
         ? 'CURRENT'
+        : p.isWeekPass
+            ? (p.sku == 'pro_trial_week' ? 'FIRST WEEK ₹1' : '7 DAYS')
         : p.isSubscription
             ? (titan ? 'FLAGSHIP' : 'POPULAR')
             : p.pricePaise >= 99900
@@ -511,7 +541,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       goldTag: !current && (titan || tag == 'POPULAR' || tag == 'BEST VALUE'),
       selected: selected,
       price: _offerMinor(p, billing) == null ? p.priceLabel(billing) : _fmtMinor(_offerMinor(p, billing)!, p.chargedIn(billing)),
-      per: p.isSubscription ? (p.billingInterval == 'annual' ? 'per year' : 'per month') : 'one-time',
+      per: _per(p),
       was: _offerMinor(p, billing) != null
           ? Text(p.priceLabel(billing),
               style: AppFonts.mono(size: 13, color: AppColors.ink4).copyWith(decoration: TextDecoration.lineThrough))
@@ -528,10 +558,25 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
     );
   }
 
+  String _per(PlanOption p) => p.isWeekPass
+      ? 'for 7 days'
+      : p.isSubscription
+          ? (p.billingInterval == 'annual' ? 'per year' : 'per month')
+          : 'one-time';
+
+  /// Whether [p] is what the account already has. A running 7-day pass makes the
+  /// pass "current" but never the monthly or annual plans, which stay buyable as
+  /// the upgrade.
+  bool _isCurrent(PlanOption p, PlanService plan) {
+    if (!p.isSubscription) return false;
+    if (p.isWeekPass) return plan.passEndsAt != null;
+    return plan.tier == p.tier && plan.passEndsAt == null;
+  }
+
   /// Selected plan and its price, then the pay button.
   Widget _footer(PlanOption? p, Currency billing, PlanService plan) {
     final busy = p != null && _busySku == p.sku;
-    final current = p != null && p.isSubscription && plan.tier == p.tier;
+    final current = p != null && _isCurrent(p, plan);
     return Container(
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 16),
       decoration: BoxDecoration(color: AppColors.pureWhite, border: Border(top: BorderSide(color: AppColors.birch))),
@@ -539,7 +584,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         Row(children: [
           Expanded(
             child: Text(
-              p == null ? 'Pick a plan' : '${p.title} · ${p.isSubscription ? (p.billingInterval == 'annual' ? 'per year' : 'per month') : 'one-time'}',
+              p == null ? 'Pick a plan' : '${p.title} · ${_per(p)}',
               style: AppFonts.sans(size: 13, color: AppColors.ink3),
             ),
           ),

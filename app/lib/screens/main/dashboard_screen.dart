@@ -40,6 +40,7 @@ import 'stock_detail_screen.dart';
 import 'subscribe_screen.dart';
 import 'watchlist_screen.dart';
 import 'whatif_screen.dart';
+import '../../widgets/upgrade_sheet.dart';
 
 /// Chart range buttons mapped to the `market-history` range they fetch.
 // Index strip symbol -> analytics id; SENSEX, ETH, SOL have none.
@@ -510,6 +511,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   on: r == _range,
                   onTap: () {
                     ChurnTelemetryService.instance.recordButtonTap('home_chart_range_${r.toLowerCase()}_btn');
+                    if (PlanService.instance.chartDays != null && (r == '1Y' || r == 'ALL')) {
+                      showUpgradeSheet(context,
+                          title: 'Longer charts are a Pro feature',
+                          message: 'Free accounts see charts up to 1 month. Pro unlocks 1-year and all-time charts.',
+                          source: 'home_chart_range');
+                      return;
+                    }
                     setState(() => _range = r);
                   },
                   child: Text(r, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: r == _range ? AppColors.goldMid : AppColors.ink3)),

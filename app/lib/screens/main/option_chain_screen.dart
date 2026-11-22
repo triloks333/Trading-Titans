@@ -19,6 +19,7 @@ import '../../services/supabase_service.dart';
 import 'dart:async';
 import '../../services/action_reaction_engine.dart';
 import 'glossary_screen.dart';
+import 'strategy_builder_screen.dart';
 
 /// Black-Scholes delta from implied volatility in percent (r = 6.5%, as the
 /// strike detail uses). Calls are 0..1, puts -1..0.
@@ -220,6 +221,32 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
       final pos = _strikesScroll.position;
       _strikesScroll.jumpTo((below * _rowHeight - pos.viewportDimension / 2).clamp(0.0, pos.maxScrollExtent));
     });
+  }
+
+  /// Multi-leg strategy builder on this chain's strikes and expiry (Titan).
+  Future<void> _openStrategyBuilder() async {
+    ChurnTelemetryService.instance.recordButtonTap('option_chain_strategy_builder_btn', extra: {'sym': widget.underlyingSymbol});
+    var lot = _lotSize;
+    if (lot == null || lot <= 1) {
+      try {
+        lot = await FoInstrumentsService().getLotSize(widget.underlyingSymbol);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StrategyBuilderScreen(
+          underlying: widget.underlyingSymbol,
+          spot: _spotPrice,
+          expiry: _selectedExpiry!,
+          lotSize: (lot == null || lot < 1) ? 1 : lot,
+          chain: [for (final r in _currentStrikes) Map<String, dynamic>.from(r as Map)],
+          market: widget.market,
+        ),
+      ),
+    );
+    _loadOptionChain();
   }
 
   void _openOptionDetail(Map<String, dynamic> option, bool isCall) async {
@@ -449,6 +476,10 @@ class _OptionChainScreenState extends State<OptionChainScreen> {
             ),
           ]),
         ),
+        if (_derivativeType == 'options' && _currentStrikes.isNotEmpty && _selectedExpiry != null) ...[
+          AuthIconButton(icon: Icons.auto_graph_rounded, label: 'Strategy builder', onTap: _openStrategyBuilder),
+          const SizedBox(width: 8),
+        ],
         AuthIconButton(icon: Icons.refresh_rounded, label: 'Refresh chain', onTap: _loadOptionChain),
         const SizedBox(width: 8),
         ListenableBuilder(

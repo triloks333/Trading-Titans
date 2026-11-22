@@ -96,6 +96,39 @@ class OptionPricing {
     }
   }
 
+  /// Standard normal density.
+  static double _normalPDF(double x) => 0.3989422804014327 * math.exp(-x * x / 2);
+
+  /// Delta, gamma, theta (per calendar day) and vega (per 1 point of IV) for ONE
+  /// unit of the option, from the same Black-Scholes inputs as [optionPremium].
+  ///
+  /// Theta is per day so a user reads "you lose ₹12 a day to time"; vega per 1%
+  /// IV so "IV up 1 point adds ₹8". At or past expiry every Greek but delta is 0.
+  static Greeks greeks({
+    required String optionType,
+    required double spot,
+    required double strike,
+    required double daysToExpiry,
+    String? symbol,
+    double? sigma,
+  }) {
+    final isCall = optionType.toUpperCase() == 'CE';
+    final d = delta(optionType: optionType, spot: spot, strike: strike, daysToExpiry: daysToExpiry, symbol: symbol, sigma: sigma);
+    if (spot <= 0 || strike <= 0 || daysToExpiry <= 0) return Greeks(delta: d, gamma: 0, theta: 0, vega: 0);
+    final t = math.max(0.0001, daysToExpiry) / 365.0;
+    final sig = sigma ?? sigmaFor(symbol);
+    final sqrtT = math.sqrt(t);
+    final d1 = (math.log(spot / strike) + (_r + 0.5 * sig * sig) * t) / (sig * sqrtT);
+    final d2 = d1 - sig * sqrtT;
+    final pdf = _normalPDF(d1);
+    final gamma = pdf / (spot * sig * sqrtT);
+    final vega = spot * pdf * sqrtT / 100;
+    final common = -(spot * pdf * sig) / (2 * sqrtT);
+    final carry = _r * strike * math.exp(-_r * t);
+    final thetaYear = isCall ? common - carry * _normalCDF(d2) : common + carry * _normalCDF(-d2);
+    return Greeks(delta: d, gamma: gamma, theta: thetaYear / 365, vega: vega);
+  }
+
   /// Estimated option premium for the given [spot], [strike] and [optionType]
   /// at [daysToExpiry] days from now.
   static double optionPremium({
@@ -120,4 +153,15 @@ class OptionPricing {
     if (daysToExpiry <= 0) return spot;
     return spot * (1.0 + _r * (daysToExpiry / 365.0));
   }
+}
+
+/// Option sensitivities for one unit. Multiply by signed quantity for a position.
+class Greeks {
+  final double delta, gamma, theta, vega;
+  const Greeks({required this.delta, required this.gamma, required this.theta, required this.vega});
+
+  static const zero = Greeks(delta: 0, gamma: 0, theta: 0, vega: 0);
+
+  Greeks operator +(Greeks o) => Greeks(delta: delta + o.delta, gamma: gamma + o.gamma, theta: theta + o.theta, vega: vega + o.vega);
+  Greeks scale(double k) => Greeks(delta: delta * k, gamma: gamma * k, theta: theta * k, vega: vega * k);
 }

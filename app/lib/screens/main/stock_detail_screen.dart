@@ -19,6 +19,8 @@ import 'fullscreen_chart_screen.dart';
 import 'option_chain_screen.dart';
 import 'order_entry_screen.dart';
 import '../../services/churn_telemetry_service.dart';
+import '../../widgets/upgrade_sheet.dart';
+import '../../services/plan_service.dart';
 
 /// Chart range buttons and the `market-history` range each one fetches.
 const Map<String, String> kStockRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', '5Y': '5y'};
@@ -153,8 +155,9 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       } else {
         await SupabaseService().removeFromWatchlist(widget.symbol, widget.market);
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) setState(() => _isWatched = !_isWatched);
+      if (mounted) await handlePlanLimitError(context, e, source: 'watchlist_symbol');
     }
   }
 
@@ -370,13 +373,26 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ),
       );
 
+  /// Ranges beyond the plan's chart allowance (free: 1 month).
+  bool _rangeLocked(String r) {
+    final days = PlanService.instance.chartDays;
+    return days != null && (r == '1Y' || r == '5Y' || r == 'ALL');
+  }
+
   Widget _rangeRow() => Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 8),
         child: Row(children: [
           for (final r in kStockRanges.keys) ...[
             Expanded(
-              child: _chip(r, r == _range, () {
+              child: _chip(_rangeLocked(r) ? '$r 🔒' : r, r == _range, () {
                 ChurnTelemetryService.instance.recordButtonTap('stock_detail_range_${r.toLowerCase()}_btn');
+                if (_rangeLocked(r)) {
+                  showUpgradeSheet(context,
+                      title: 'Longer charts are a Pro feature',
+                      message: 'Free accounts see charts up to 1 month. Pro unlocks 1-year and 5-year charts.',
+                      source: 'chart_range');
+                  return;
+                }
                 setState(() => _range = r);
                 _loadHistory(r);
               }),
@@ -722,6 +738,7 @@ class _PriceAlertSheetState extends State<_PriceAlertSheet> {
         );
       }
     } catch (e) {
+      if (mounted && await handlePlanLimitError(context, e, source: 'price_alert')) return;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to set alert: $e'), backgroundColor: AppColors.bear),

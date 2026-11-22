@@ -28,6 +28,7 @@ import '../../services/action_reaction_engine.dart';
 import '../../services/nav_tab_service.dart';
 import '../../services/theme_service.dart';
 import 'package:provider/provider.dart';
+import 'options_risk_screen.dart';
 
 /// Today's move of the last traded price against the previous close, in %.
 double ltpDayChangePct(Holding h) {
@@ -217,6 +218,17 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
       }
     }
     return quoteMap;
+  }
+
+  /// Spot price per underlying of the open F&O positions, for the risk screen.
+  Map<String, double> _spotMap() {
+    final out = <String, double>{};
+    for (final p in _foPositions) {
+      final u = underlyingOf(p);
+      final q = _quotes[MarketService.normalizeSymbol(u, 'stock')] ?? _quotes[u];
+      if (q != null && q.price > 0) out[u] = q.price;
+    }
+    return out;
   }
 
   // Helper to estimate F&O position price
@@ -993,6 +1005,11 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
         const SizedBox(width: 8),
         card('portfolio_orders_status_bar_card', Icons.format_list_bulleted_rounded, 'Orders', o == null ? 'Open and executed' : '${o.open} open · ${o.done} executed',
             const OrdersScreen()),
+        if (_foPositions.any((p) => p.netQty != 0)) ...[
+          const SizedBox(width: 8),
+          card('portfolio_options_risk_card', Icons.speed_rounded, 'Risk & Greeks', 'What if the market moves',
+              OptionsRiskScreen(positions: _foPositions, spots: _spotMap())),
+        ],
       ]),
     );
   }

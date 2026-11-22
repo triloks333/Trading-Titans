@@ -11,6 +11,7 @@ import '../../services/churn_telemetry_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
+import '../../widgets/upgrade_sheet.dart';
 import 'stock_detail_screen.dart';
 
 /// Execution grade from a trade's return in percent.
@@ -157,6 +158,10 @@ class _AutopsyScreenState extends State<AutopsyScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     alignment: Alignment.center,
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (t['locked'] == true) ...[
+                        Icon(Icons.lock_rounded, size: 12, color: AppColors.ink4),
+                        const SizedBox(width: 4),
+                      ],
                       Text('${t['symbol']}',
                           style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: i == pick ? AppColors.goldMid : AppColors.ink3)),
                       const SizedBox(width: 6),
@@ -268,16 +273,27 @@ class _AutopsyScreenState extends State<AutopsyScreen> {
             Expanded(child: Text(text, style: AppFonts.sans(size: 13, color: AppColors.ink))),
           ]),
         ),
-      Container(
-        margin: const EdgeInsets.only(top: 16),
-        padding: const EdgeInsets.all(14),
-        decoration: _card(fill: AppColors.goldPale, border: AppColors.goldMid),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('LESSON', style: AppText.sectionLabel.copyWith(color: AppColors.goldMid)),
-          const SizedBox(height: 4),
-          Text(t['advice'] as String? ?? 'Plan the exit before you enter.', style: AppFonts.sans(size: 14, color: AppColors.ink)),
-        ]),
-      ),
+      // The server blanks the advice on trades past the free monthly allowance.
+      if (t['locked'] == true)
+        const Padding(
+          padding: EdgeInsets.only(top: 16),
+          child: LockedFeatureCard(
+            title: 'Lesson for this trade is locked',
+            message: 'Free accounts get the full autopsy lesson on 3 trades a month. Pro unlocks every trade, every month.',
+            source: 'autopsy_lesson',
+          ),
+        )
+      else
+        Container(
+          margin: const EdgeInsets.only(top: 16),
+          padding: const EdgeInsets.all(14),
+          decoration: _card(fill: AppColors.goldPale, border: AppColors.goldMid),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('LESSON', style: AppText.sectionLabel.copyWith(color: AppColors.goldMid)),
+            const SizedBox(height: 4),
+            Text(t['advice'] as String? ?? 'Plan the exit before you enter.', style: AppFonts.sans(size: 14, color: AppColors.ink)),
+          ]),
+        ),
       const SizedBox(height: 16),
       Row(children: [
         Expanded(

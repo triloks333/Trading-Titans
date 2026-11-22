@@ -237,7 +237,8 @@ Deno.serve(async (req: Request) => {
     // price of a prepaid order. The recurring mandate path keeps the plan price,
     // since Razorpay plans have a fixed amount. A lookup failure charges full price.
     let offerGrantId: string | null = null;
-    if (!useRecurringMandate) {
+    const isPass = plan.billing_interval === "weekly";
+    if (!useRecurringMandate && !isPass) {
       try {
         const { data: offer } = await supabase.rpc("intel_offer_for_checkout", { p_user: user.id, p_sku: plan.sku });
         const o = Array.isArray(offer) ? offer[0] : offer;
@@ -260,14 +261,24 @@ Deno.serve(async (req: Request) => {
       // user out of retrying, and Pro users can upgrade to Titan.
       const { data: live } = await supabase
         .from("subscriptions")
-        .select("id, tier, status, current_period_end")
+        .select("id, sku, tier, status, current_period_end")
         .eq("user_id", user.id)
         .in("status", ["active", "pending"])
         .order("created_at", { ascending: false });
 
+      // The ₹1 first week is once per account, for people who have never paid
+      // for a plan. pro_trial_eligible() is the single definition of that.
+      if (plan.sku === "pro_trial_week") {
+        const { data: eligible, error: eligErr } = await supabase.rpc("pro_trial_eligible", { p_user: user.id });
+        if (eligErr || eligible !== true) {
+          return json({ error: "The ₹1 trial week is only for your first Pro week. The 7-day pass is ₹29." }, 409);
+        }
+      }
+
       const nowMs = Date.now();
       const targetRank = TIER_RANK[plan.tier] ?? 1;
       const blocking = (live ?? []).find((s: {
+        sku?: string;
         tier: string;
         status: string;
         current_period_end: string | null;
@@ -275,6 +286,11 @@ Deno.serve(async (req: Request) => {
         const notExpired = !s.current_period_end ||
           new Date(s.current_period_end).getTime() > nowMs;
         const rank = TIER_RANK[s.tier] ?? 0;
+        // A running 7-day pass must not stop someone buying a monthly or annual
+        // plan; that is the upgrade the pass exists to lead to. It does stop a
+        // second pass on top of the first.
+        const sIsPass = s.sku === "pro_trial_week" || s.sku === "pro_week";
+        if (sIsPass && !isPass) return false;
         return notExpired && rank >= targetRank;
       });
 

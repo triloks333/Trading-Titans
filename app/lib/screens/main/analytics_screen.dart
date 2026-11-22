@@ -10,7 +10,10 @@ import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import 'autopsy_screen.dart';
+import 'coach_report_screen.dart';
 import '../../services/action_reaction_engine.dart';
+import '../../services/plan_service.dart';
+import '../../widgets/upgrade_sheet.dart';
 
 /// Period chips and how far back each looks.
 const Map<String, Duration?> kAnalyticsPeriods = {'1W': Duration(days: 7), '1M': Duration(days: 30), '3M': Duration(days: 90), 'All': null};
@@ -122,7 +125,7 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   late Future<List<Order>> _orders = _fetch();
-  String _period = '1M';
+  late String _period = PlanService.instance.historyDays == null ? '1M' : '1W';
 
   Future<List<Order>> _fetch() async => widget.orders ?? SupabaseService().getOrders(limit: 1000);
 
@@ -185,6 +188,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 20),
                     children: [
                       _kpis(s),
+                      _coachCard(),
                       if (s.trades == 0)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
@@ -208,6 +212,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
+  /// A period longer than the plan's history allowance (free: 7 days).
+  bool _locked(String p) {
+    final days = PlanService.instance.historyDays;
+    if (days == null) return false;
+    final d = kAnalyticsPeriods[p];
+    return d == null || d.inDays > days;
+  }
+
   Widget _chip(String p) => Material(
         color: p == _period ? AppColors.goldPale : Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -216,12 +228,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           borderRadius: BorderRadius.circular(AppRadius.sm),
           onTap: () {
             ChurnTelemetryService.instance.recordButtonTap('analytics_period_1w_1m_3m_all_chip');
+            if (_locked(p)) {
+              showUpgradeSheet(context,
+                  title: 'Full history is a Pro feature',
+                  message: 'Free accounts see the last 7 days of analytics. Pro unlocks your full P&L history.',
+                  source: 'analytics_period');
+              return;
+            }
             setState(() => _period = p);
           },
           child: Container(
             height: 32,
             alignment: Alignment.center,
-            child: Text(p, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p == _period ? AppColors.goldMid : AppColors.ink3)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (_locked(p)) ...[Icon(Icons.lock_rounded, size: 11, color: AppColors.ink4), const SizedBox(width: 3)],
+              Text(p, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p == _period ? AppColors.goldMid : AppColors.ink3)),
+            ]),
           ),
         ),
       );
@@ -336,6 +358,35 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       ]),
     );
   }
+
+  Widget _coachCard() => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Material(
+          color: AppColors.titanGoldSoft,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.titanGold.withValues(alpha: 0.5))),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('analytics_open_coach_report');
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoachReportScreen()));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Icon(Icons.school_rounded, color: AppColors.titanGold),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Weekly coach report', style: AppText.bodyBold),
+                    Text('What went well and what to fix next week', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+        ),
+      );
 
   Widget _autopsyCard(TradeStats s) {
     final i = s.insight;

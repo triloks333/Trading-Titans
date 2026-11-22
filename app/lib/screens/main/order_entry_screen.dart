@@ -17,6 +17,8 @@ import '../../services/action_reaction_engine.dart';
 import '../../widgets/swipe_button.dart';
 import '../../widgets/info_tooltip.dart';
 import 'subscribe_screen.dart';
+import '../../services/plan_service.dart';
+import '../../widgets/upgrade_sheet.dart';
 import '../../core/market_hours.dart';
 
 class OrderEntryScreen extends StatefulWidget {
@@ -336,6 +338,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
           symbol: widget.quote.symbol, side: _isBuy ? 'buy' : 'sell',
           qty: _isFractional ? _quantityValue : (_quantityValue * _lotSize), segment: widget.instrumentType);
       await authProvider.refreshUser(); // Update wallet balance
+      if (widget.instrumentType != 'EQUITY') PlanService.instance.refreshUsage();
 
       // Funnel: record the user's first-ever trade (fires once per install).
       await AnalyticsService.logFirstTradeOnce(widget.quote.market);
@@ -372,6 +375,11 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
       Navigator.pop(context); // Close screen
     } catch (e) {
       if (!mounted) return;
+      if (e is PlanLimitException) {
+        ChurnTelemetryService.instance.recordActionError('plan_limit_fo');
+        await handlePlanLimitError(context, e, source: 'order_fo_limit');
+        return;
+      }
       final errText = e.toString().replaceFirst(RegExp(r'^(Exception|_Exception):\s*'), '');
       final isInsufficient = errText.toLowerCase().contains('insufficient');
       ChurnTelemetryService.instance.recordActionError(isInsufficient ? 'insufficient_funds' : 'order_failed');
@@ -1263,7 +1271,13 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               ),
             ]),
           )
-        else
+        else ...[
+          // F&O allowance, so a free user sees "2 of 3 left" before the trade, not after.
+          if (widget.instrumentType != 'EQUITY' && !widget.isExitOrder)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Align(alignment: Alignment.centerLeft, child: UsageChip(feature: PlanFeature.foTrades, noun: 'F&O trades')),
+            ),
           SwipeButton(
             text: _isBuy ? 'Swipe to buy' : 'Swipe to sell',
             color: color,
@@ -1274,6 +1288,7 @@ class _OrderEntryScreenState extends State<OrderEntryScreen> {
               _submitOrder();
             },
           ),
+        ],
       ]),
     );
   }

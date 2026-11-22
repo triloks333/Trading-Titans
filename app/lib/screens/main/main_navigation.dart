@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../widgets/pro_pass_offer_dialog.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -77,6 +78,12 @@ class _MainNavigationState extends State<MainNavigation> {
       CountryCurrencyUpdateDialog.checkAndShow(context);
       _maybeAskForRating();
       SupabaseService().evaluatePriceAlerts();
+    });
+    // The 7-day Pro pass offer, after the launch prompts have had their turn.
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted || _showingReward || context.read<AuthService>().needsSoftUpdate) return;
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+      ProPassOffer.maybeShow(context);
     });
   }
 

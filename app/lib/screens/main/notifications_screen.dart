@@ -13,6 +13,8 @@ import '../../services/nav_tab_service.dart';
 import 'stock_detail_screen.dart';
 import 'subscribe_screen.dart';
 import 'orders_screen.dart';
+import 'coach_report_screen.dart';
+import 'following_screen.dart';
 import 'refer_earn_screen.dart';
 import '../../widgets/request_feature_sheet.dart';
 
@@ -45,7 +47,7 @@ Map<String, dynamic>? parseActionData(Object? raw) {
 const Set<String> kNotificationCtaRoutes = {
   'plans', 'topup', 'subscribe', 'wallet', 'league', 'leaderboard',
   'feature', 'wishlist', 'portfolio', 'orders', 'referral',
-  'trade', 'notifications', 'chat', 'blog',
+  'trade', 'notifications', 'chat', 'blog', 'coach', 'following',
 };
 
 /// `cta_route` without case, padding or a leading slash: the chat trigger and the
@@ -587,6 +589,16 @@ Future<void> openNotificationCta(
     case 'orders':
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OrdersScreen()),
+      );
+      return;
+    case 'coach':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const CoachReportScreen()),
+      );
+      return;
+    case 'following':
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const FollowingScreen()),
       );
       return;
     case 'referral':

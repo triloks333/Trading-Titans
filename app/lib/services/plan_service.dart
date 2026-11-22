@@ -46,6 +46,98 @@ class PlanService extends ChangeNotifier {
   bool get isLoaded => _loaded;
   String get checkoutUrl => _checkoutUrl;
 
+  // ── Plan limits ─────────────────────────────────────────────────────────
+  // From `my_plan_usage()`. The server enforces every metered or stored limit
+  // (F&O trades, autopsies, alerts, watchlists); the app reads this to show
+  // "2 of 3 used" and to lock screens before a user runs into a wall. History and
+  // chart ranges are only limited here, in the app.
+  //
+  // Starts empty, which reads as "no limits". Failing closed on a network blip
+  // would lock a paying user out of things they paid for; the server still says
+  // no where it matters.
+  Map<String, ({int? limit, int used})> _limits = const {};
+  bool _limitsEnforced = false;
+  bool _trialEligible = false;
+  DateTime? _passEndsAt;
+
+  /// The cap for [feature] on this account, or null when unlimited.
+  int? limitFor(String feature) => _limitsEnforced ? _limits[feature]?.limit : null;
+  int usedFor(String feature) => _limits[feature]?.used ?? 0;
+
+  /// Uses left this period, or null when unlimited.
+  int? remaining(String feature) {
+    final l = limitFor(feature);
+    return l == null ? null : (l - usedFor(feature)).clamp(0, l);
+  }
+
+  bool isExhausted(String feature) => remaining(feature) == 0;
+
+  /// True for a signed-in account that has never paid for a plan: offered the ₹1 week.
+  bool get trialEligible => _trialEligible;
+
+  /// When the current 7-day pass runs out, or null without one.
+  DateTime? get passEndsAt => _passEndsAt;
+  bool get isTitan => _tier == 'titan';
+
+  /// Titan-only tools (strategy basket orders, the Greeks risk panel). Open to
+  /// everyone while limits are off, matching the server.
+  bool get hasTitanTools => !_limitsEnforced || _tier == 'titan';
+
+  /// Pro-or-better tools (coach report, follow traders, paid league).
+  bool get hasProTools => !_limitsEnforced || isPaid;
+
+  /// Account history visible in days, or null for all of it.
+  int? get historyDays => limitFor(PlanFeature.historyDays);
+
+  /// Longest chart range in days, or null for every range.
+  int? get chartDays => limitFor(PlanFeature.chartDays);
+
+  /// Re-reads usage, e.g. after a trade, so counters stay honest.
+  /// "Continue free" on the first-week offer: gives up the ₹1 week for good, so
+  /// the 7-day pass is ₹29 from now on. Server-side, so reinstalling doesn't reset it.
+  Future<void> declineTrial() async {
+    try {
+      await Supabase.instance.client.rpc('decline_pro_trial');
+      _trialEligible = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('declineTrial failed: $e');
+    }
+  }
+
+  Future<void> refreshUsage() async {
+    final client = Supabase.instance.client;
+    if (client.auth.currentUser == null) {
+      _limits = const {};
+      _trialEligible = false;
+      _passEndsAt = null;
+      notifyListeners();
+      return;
+    }
+    try {
+      final res = await client.rpc('my_plan_usage');
+      if (res is! Map) return;
+      final raw = res['limits'];
+      final next = <String, ({int? limit, int used})>{};
+      if (raw is Map) {
+        raw.forEach((k, v) {
+          if (v is Map) {
+            next['$k'] = (limit: (v['limit'] as num?)?.toInt(), used: (v['used'] as num?)?.toInt() ?? 0);
+          }
+        });
+      }
+      _limits = next;
+      _limitsEnforced = res['enforced'] == true;
+      _trialEligible = res['trial_eligible'] == true;
+      _passEndsAt = DateTime.tryParse('${res['pass_ends_at'] ?? ''}')?.toLocal();
+      final t = res['tier'];
+      if (t is String) _tier = t;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('PlanService: could not read usage: $e');
+    }
+  }
+
   bool _saleActive = false;
   DateTime? _saleEndsAt;
 
@@ -101,6 +193,7 @@ class PlanService extends ChangeNotifier {
         notifyListeners();
       }
       _loaded = true;
+      await refreshUsage();
     } catch (e) {
       // Keep whatever we had. Never fail open.
       debugPrint('PlanService: could not read tier, keeping "$_tier": $e');
@@ -123,6 +216,55 @@ class PlanService extends ChangeNotifier {
       debugPrint('PlanService: using built-in checkout URL: $e');
     }
   }
+}
+
+/// Feature keys shared with `public.plan_limit()` in the database.
+abstract final class PlanFeature {
+  static const foTrades = 'fo_trades_month';
+  static const autopsy = 'autopsy_month';
+  static const whatIf = 'whatif_day';
+  static const priceAlerts = 'price_alerts';
+  static const watchlists = 'watchlists';
+  static const watchlistSymbols = 'watchlist_symbols';
+  static const historyDays = 'history_days';
+  static const chartDays = 'chart_days';
+  static const followTraders = 'follow_traders';
+}
+
+/// A request the server refused because the plan's allowance is used up.
+///
+/// Raised from place-order's `code: plan_limit` reply and from database
+/// triggers whose message starts `PLAN_LIMIT:<feature>:<limit>`.
+class PlanLimitException implements Exception {
+  final String feature;
+  final String message;
+  final int? limit;
+  const PlanLimitException(this.feature, this.message, {this.limit});
+
+  /// Recognises a plan-limit refusal inside any error, or returns null.
+  static PlanLimitException? from(Object error) {
+    if (error is PlanLimitException) return error;
+    final text = error is PostgrestException ? error.message : '$error';
+    final m = RegExp(r'PLAN_LIMIT:([a-z_]+):(\d+)').firstMatch(text);
+    if (m == null) return null;
+    final feature = m.group(1)!;
+    final limit = int.tryParse(m.group(2)!);
+    return PlanLimitException(feature, defaultMessage(feature, limit), limit: limit);
+  }
+
+  static String defaultMessage(String feature, int? limit) => switch (feature) {
+        PlanFeature.priceAlerts => 'Free accounts can keep $limit active price alerts. Upgrade to Pro for unlimited alerts.',
+        PlanFeature.watchlists => 'Free accounts get $limit watchlist. Upgrade to Pro for as many lists as you like.',
+        PlanFeature.watchlistSymbols => 'Free watchlists hold $limit symbols. Upgrade to Pro for unlimited symbols.',
+        PlanFeature.foTrades => 'You have used all $limit F&O trades this month. Upgrade for more.',
+        PlanFeature.autopsy => 'Free accounts get $limit trade autopsies a month. Upgrade to Pro for unlimited.',
+        PlanFeature.whatIf => 'Free accounts get $limit What-If simulation a day. Upgrade to Pro for unlimited.',
+        PlanFeature.followTraders => 'Following traders is a Pro feature. Upgrade to see their trades as they happen.',
+        _ => 'This is a Pro feature. Upgrade to unlock it.',
+      };
+
+  @override
+  String toString() => message;
 }
 
 /// One purchasable thing, straight from the `plan_catalogue` table.
@@ -168,6 +310,9 @@ class PlanOption {
   });
 
   bool get isSubscription => kind == 'subscription';
+
+  /// A prepaid 7-day Pro pass (₹1 trial week or ₹29 week), not a running plan.
+  bool get isWeekPass => billingInterval == 'weekly';
 
   bool get onSale => compareAtPaise != null;
 
