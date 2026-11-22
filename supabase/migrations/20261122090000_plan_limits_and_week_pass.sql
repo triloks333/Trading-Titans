@@ -26,12 +26,12 @@
 -- drop trigger trg_watchlist_symbol_limit on public.watchlist;
 -- drop function public.my_plan_usage(), public.use_feature(text,text),
 --   public.consume_feature(uuid,text,text), public.refund_feature(bigint),
---   public.autopsy_unlock(uuid,uuid[]), public.pro_trial_eligible(uuid),
+--   public.autopsy_unlock(uuid,uuid[]), public.pro_trial_eligible(uuid), public.decline_pro_trial(),
 --   public.feature_used(uuid,text), public.feature_window_start(text),
 --   public.limits_enforced(), public.user_limit(uuid,text), public.plan_limit(text,text),
 --   public.enforce_price_alert_limit(), public.enforce_watchlists_limit(),
 --   public.enforce_watchlist_symbol_limit();
--- drop table public.feature_usage;
+-- drop table public.feature_usage, public.pro_trial_declines;
 -- update public.plan_catalogue set is_active = false where sku in ('pro_trial_week','pro_week');
 
 -- ── 1. The numbers ──────────────────────────────────────────────────────────
@@ -217,6 +217,17 @@ grant execute on function public.autopsy_unlock(uuid, uuid[]) to service_role;
 
 -- ── 4. Trial eligibility and the app's usage summary ────────────────────────
 -- The ₹1 week is for accounts that have never paid for a plan or a pass.
+-- A user who picks "Continue free" on the first-week offer gives up the ₹1 week;
+-- from then on the 7-day pass is ₹29.
+create table if not exists public.pro_trial_declines (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+  declined_at timestamptz not null default now()
+);
+alter table public.pro_trial_declines enable row level security;
+drop policy if exists pro_trial_declines_own_read on public.pro_trial_declines;
+create policy pro_trial_declines_own_read on public.pro_trial_declines
+  for select to authenticated using (user_id = auth.uid());
+
 create or replace function public.pro_trial_eligible(p_user uuid default auth.uid())
 returns boolean
 language sql
@@ -228,10 +239,23 @@ as $$
      and not exists (select 1 from public.subscriptions s
                       where s.user_id = p_user and s.status <> 'created')
      and not exists (select 1 from public.payment_orders o
-                      where o.user_id = p_user and o.sku = 'pro_trial_week' and o.status = 'paid');
+                      where o.user_id = p_user and o.sku = 'pro_trial_week' and o.status = 'paid')
+     and not exists (select 1 from public.pro_trial_declines d where d.user_id = p_user);
 $$;
 revoke execute on function public.pro_trial_eligible(uuid) from public, anon;
 grant execute on function public.pro_trial_eligible(uuid) to authenticated, service_role;
+
+create or replace function public.decline_pro_trial()
+returns boolean
+language sql
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+  insert into public.pro_trial_declines (user_id) values (auth.uid()) on conflict do nothing;
+  select true;
+$$;
+revoke execute on function public.decline_pro_trial() from public, anon;
+grant execute on function public.decline_pro_trial() to authenticated;
 
 create or replace function public.my_plan_usage()
 returns jsonb

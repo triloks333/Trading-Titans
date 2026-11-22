@@ -93,6 +93,18 @@ class PlanService extends ChangeNotifier {
   int? get chartDays => limitFor(PlanFeature.chartDays);
 
   /// Re-reads usage, e.g. after a trade, so counters stay honest.
+  /// "Continue free" on the first-week offer: gives up the ₹1 week for good, so
+  /// the 7-day pass is ₹29 from now on. Server-side, so reinstalling doesn't reset it.
+  Future<void> declineTrial() async {
+    try {
+      await Supabase.instance.client.rpc('decline_pro_trial');
+      _trialEligible = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('declineTrial failed: $e');
+    }
+  }
+
   Future<void> refreshUsage() async {
     final client = Supabase.instance.client;
     if (client.auth.currentUser == null) {
