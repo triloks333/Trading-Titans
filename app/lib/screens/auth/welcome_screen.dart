@@ -1,19 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/theme.dart';
 import '../../services/analytics_service.dart';
-import '../../services/auth_service.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../widgets/auth_kit.dart';
-import '../../widgets/legal_consent.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
-/// First screen for signed-out users. Value first: one tap starts a guest
-/// session and onboarding walks them to a first trade; the account is asked for
-/// later as "Save your portfolio". Sign in and Create account are still here for
-/// people who want them.
+/// First screen for signed-out users: start leads to sign-up, the other button
+/// to sign-in.
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
 
@@ -22,11 +17,6 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
-  bool _accepted = false;
-  bool _showLegalError = false;
-  bool _busy = false;
-  String? _error;
-
   @override
   void initState() {
     super.initState();
@@ -36,27 +26,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _push(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
 
-  Future<void> _start() async {
-    // Starting creates a guest account, so it needs the same consent as Login.
-    if (!_accepted) {
-      setState(() => _showLegalError = true);
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final auth = context.read<AuthService>();
-    try {
-      await AnalyticsService.logSignupMethodSelected('guest');
-      await auth.continueAsGuest();
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -64,7 +33,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: Column(children: [
           AuthTopBar(
             trailing: TextButton(
-              onPressed: _busy ? null : () => _push(const LoginScreen()),
+              onPressed: () => _push(const LoginScreen()),
               style: TextButton.styleFrom(foregroundColor: AppColors.ink2),
               child: const Text('Sign in'),
             ),
@@ -102,21 +71,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, AppSpacing.sm, 20, AppSpacing.lg),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              LegalConsentCheckbox(
-                value: _accepted,
-                showError: _showLegalError,
-                onChanged: (v) => setState(() {
-                  _accepted = v;
-                  if (v) _showLegalError = false;
-                }),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (_error != null) ...[AuthError(_error!), const SizedBox(height: AppSpacing.sm)],
-              AuthPrimaryButton(label: 'Start practising — free', busy: _busy, onPressed: _start),
+              // No silent guest session: a guest was stuck at the sign-up gate,
+              // and its Google upgrade failed for anyone with an account.
+              AuthPrimaryButton(label: 'Start practising — free', onPressed: () => _push(const RegisterScreen())),
               TextButton(
-                onPressed: _busy ? null : () => _push(const RegisterScreen()),
+                onPressed: () => _push(const LoginScreen()),
                 style: TextButton.styleFrom(foregroundColor: AppColors.ink3, minimumSize: const Size.fromHeight(44)),
-                child: const Text('Create an account instead'),
+                child: const Text('I already have an account'),
               ),
             ]),
           ),
