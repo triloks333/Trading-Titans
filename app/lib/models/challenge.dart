@@ -21,6 +21,12 @@ class Challenge {
   final double? progress;
   final double? target;
 
+  /// 'pro' or 'titan' for a paid-only challenge, else null.
+  final String? minTier;
+
+  /// Paid-only and this account's plan doesn't include it.
+  final bool locked;
+
   const Challenge({
     required this.key,
     required this.title,
@@ -35,6 +41,8 @@ class Challenge {
     this.lastEarnedAt,
     this.progress,
     this.target,
+    this.minTier,
+    this.locked = false,
   });
 
   /// 0..1 toward [target]; 1 once complete; null when there is no measure.
@@ -81,6 +89,8 @@ class Challenge {
             : DateTime.tryParse('${json['last_earned_at']}'),
         progress: json['progress'] == null ? null : _toDouble(json['progress']),
         target: json['target'] == null ? null : _toDouble(json['target']),
+        minTier: json['min_tier'] as String?,
+        locked: json['locked'] == true,
       );
 }
 

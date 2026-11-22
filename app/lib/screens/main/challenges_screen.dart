@@ -9,6 +9,7 @@ import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/skeleton.dart';
+import '../../widgets/upgrade_sheet.dart';
 import 'glossary_quiz_screen.dart';
 
 /// "2 of 3", "₹1,240 of ₹2,200", or what is left when there is no measure.
@@ -281,11 +282,33 @@ onTap: () {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
+          if (c.locked) ...[Icon(Icons.lock_rounded, size: 15, color: AppColors.ink4), const SizedBox(width: 6)],
           Expanded(child: Text(c.title, style: AppText.bodyBold)),
+          if (c.minTier != null) ...[
+            _tag(c.minTier == 'titan' ? 'TITAN' : 'PRO', AppColors.violet, AppColors.violetLight),
+            const SizedBox(width: 6),
+          ],
           _tag(reward, AppColors.titanGold, AppColors.titanGoldSoft),
         ]),
         const SizedBox(height: 2),
         Text(c.description, style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+        if (c.locked) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+              onPressed: () => showUpgradeSheet(context,
+                  title: 'A Pro challenge',
+                  message: 'Pro members compete for extra weekly challenges and the Pro League. Upgrade to start earning them.',
+                  needsTitan: c.minTier == 'titan',
+                  source: 'challenge_${c.key}'),
+              icon: Icon(Icons.lock_open_rounded, size: 16, color: AppColors.titanGold),
+              label: Text('Unlock with ${c.minTier == 'titan' ? 'Titan' : 'Pro'}',
+                  style: AppFonts.sans(size: 13, weight: FontWeight.w600, color: AppColors.titanGold)),
+            ),
+          ),
+        ],
         if (f != null) ...[
           const SizedBox(height: 10),
           ClipRRect(

@@ -228,6 +228,7 @@ abstract final class PlanFeature {
   static const watchlistSymbols = 'watchlist_symbols';
   static const historyDays = 'history_days';
   static const chartDays = 'chart_days';
+  static const followTraders = 'follow_traders';
 }
 
 /// A request the server refused because the plan's allowance is used up.
@@ -258,6 +259,7 @@ class PlanLimitException implements Exception {
         PlanFeature.foTrades => 'You have used all $limit F&O trades this month. Upgrade for more.',
         PlanFeature.autopsy => 'Free accounts get $limit trade autopsies a month. Upgrade to Pro for unlimited.',
         PlanFeature.whatIf => 'Free accounts get $limit What-If simulation a day. Upgrade to Pro for unlimited.',
+        PlanFeature.followTraders => 'Following traders is a Pro feature. Upgrade to see their trades as they happen.',
         _ => 'This is a Pro feature. Upgrade to unlock it.',
       };
 

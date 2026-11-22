@@ -11,6 +11,10 @@ import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/skeleton.dart';
 import 'challenges_screen.dart';
+import 'following_screen.dart';
+import '../../services/plan_service.dart';
+import '../../widgets/trader_sheet.dart';
+import '../../widgets/upgrade_sheet.dart';
 import '../../services/action_reaction_engine.dart';
 
 /// The letter in a row's avatar. Names are user input, so blank, whitespace-only
@@ -70,7 +74,7 @@ class CompeteScreen extends StatefulWidget {
 }
 
 class _CompeteScreenState extends State<CompeteScreen> {
-  static const _scopes = {'This week': 'week', 'All-time': 'all', 'Friends': 'friends'};
+  static const _scopes = {'This week': 'week', 'Pro': 'paid', 'All-time': 'all', 'Friends': 'friends'};
   String _scope = 'week';
   late Future<List<Map<String, dynamic>>> _future = _load();
   late final Timer _tick = Timer.periodic(const Duration(minutes: 1), (_) => setState(() {}));
@@ -112,6 +116,15 @@ class _CompeteScreenState extends State<CompeteScreen> {
                 ]),
               ),
               AuthIconButton(
+                icon: Icons.people_alt_outlined,
+                label: 'Following',
+                onTap: () {
+                  ChurnTelemetryService.instance.recordButtonTap('compete_header_following_icon_btn');
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FollowingScreen()));
+                },
+              ),
+              const SizedBox(width: 8),
+              AuthIconButton(
                 icon: Icons.track_changes_rounded,
                 label: 'Challenges',
                 onTap: () {
@@ -150,11 +163,20 @@ onTap: () {
                     child: RefreshIndicator(
                       onRefresh: _refresh,
                       child: ListView(physics: const AlwaysScrollableScrollPhysics(), children: [
+                        if (_scope == 'paid' && !PlanService.instance.hasProTools)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 12),
+                            child: LockedFeatureCard(
+                              title: 'Join the Pro League',
+                              message: 'A weekly league for Pro and Titan members only. The top 3 win up to ₹25,000 demo cash and a champion badge every Monday.',
+                              source: 'pro_league',
+                            ),
+                          ),
                         if (ranked.isEmpty)
                           _empty()
                         else ...[
                           _podium(ranked.take(3).toList()),
-                          if (_scope != 'all') _prizeCard(),
+                          if (_scope == 'paid') _proPrizeCard() else if (_scope != 'all') _prizeCard(),
                           for (final r in ranked.skip(3)) _row(r),
                         ],
                       ]),
@@ -184,7 +206,7 @@ onTap: () {
                 excludeSemantics: true,
                 child: GestureDetector(
                   onTap: () {
-                    final id = const {'week': 'compete_scope_this_week_pill', 'all': 'compete_scope_all_time_pill', 'friends': 'compete_scope_friends_pill'}[scope];
+                    final id = const {'week': 'compete_scope_this_week_pill', 'paid': 'compete_scope_pro_pill', 'all': 'compete_scope_all_time_pill', 'friends': 'compete_scope_friends_pill'}[scope];
                     if (id != null) ChurnTelemetryService.instance.recordButtonTap(id);
                     if (_scope == scope) return;
                     _scope = scope;
@@ -230,7 +252,9 @@ onTap: () {
       final bronze = AppColors.isDark ? const Color(0xFFD99A6C) : const Color(0xFF8C4B1F);
       final color = first ? AppColors.titanGold : place == 2 ? silver : bronze;
       return Expanded(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+        child: GestureDetector(
+          onTap: r == null || r['is_me'] == true || r['user_id'] == null ? null : () => showTraderSheet(context, r['user_id'] as String),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (first) Icon(Icons.emoji_events_rounded, color: AppColors.titanGold, size: 20),
           _avatar(r?['name'] as String?, size: first ? 48 : 36, border: first ? AppColors.titanGold : null),
           const SizedBox(height: 6),
@@ -251,6 +275,7 @@ onTap: () {
             child: Text('$place', style: AppFonts.mono(size: 22, weight: FontWeight.w700, color: color)),
           ),
         ]),
+        ),
       );
     }
 
@@ -285,7 +310,33 @@ onTap: () {
         ]),
       );
 
-  Widget _row(Map<String, dynamic> r) => Container(
+  Widget _proPrizeCard() => Container(
+        margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 12, AppSpacing.lg, 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.violetLight,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.violet),
+        ),
+        child: Row(children: [
+          Icon(Icons.workspace_premium_rounded, color: AppColors.violet),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(TextSpan(style: AppFonts.sans(size: 13, color: AppColors.ink), children: [
+              const TextSpan(text: 'Pro and Titan members only. Top 3 win demo cash and a champion badge: '),
+              TextSpan(text: '₹25,000 · ₹15,000 · ₹10,000', style: AppFonts.mono(size: 13, weight: FontWeight.w600, color: AppColors.ink)),
+              const TextSpan(text: '. Paid Monday. Tap anyone to follow them.'),
+            ])),
+          ),
+        ]),
+      );
+
+  Widget _row(Map<String, dynamic> r) => InkWell(
+        onTap: r['is_me'] == true || r['user_id'] == null ? null : () => showTraderSheet(context, r['user_id'] as String),
+        child: _rowBody(r),
+      );
+
+  Widget _rowBody(Map<String, dynamic> r) => Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
         decoration: BoxDecoration(
           color: r['is_me'] == true ? AppColors.goldPale : null,

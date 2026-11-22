@@ -27,6 +27,8 @@ const Map<String, String> kAdminCtaDestinations = {
   'plans': 'Plans & top-ups (paywall)',
   'chat': 'Titans Room (chat)',
   'blog': 'Blog',
+  'coach': 'Weekly coach report',
+  'following': 'Following (traders)',
   '_custom': 'A web link…',
 };
 

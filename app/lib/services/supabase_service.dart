@@ -4649,4 +4649,43 @@ class SupabaseService {
   Future<void> deleteFeatureRequest(String featureId) async {
     await client.from('feature_requests').delete().eq('id', featureId);
   }
+
+  // ── Weekly coach report and following traders (20261122100000) ──────────
+
+  /// `{locked, tier, week, report}`; free accounts get tips without their text.
+  Future<Map<String, dynamic>> getCoachReport() async {
+    final res = await client.rpc('my_coach_report');
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// Whether the signed-in user lets Pro members follow their trades.
+  Future<bool> getShareTrades() async {
+    final user = client.auth.currentUser;
+    if (user == null) return false;
+    final row = await client.from('profiles').select('share_trades').eq('id', user.id).maybeSingle();
+    return row?['share_trades'] == true;
+  }
+
+  Future<void> setShareTrades(bool on) => client.rpc('set_share_trades', params: {'p_on': on});
+
+  Future<Map<String, dynamic>?> getTraderProfile(String traderId) async {
+    final res = await client.rpc('trader_profile', params: {'p_trader': traderId});
+    return res == null ? null : Map<String, dynamic>.from(res as Map);
+  }
+
+  /// Throws a PLAN_LIMIT error for free accounts; see [PlanLimitException.from].
+  Future<void> followTrader(String traderId) => client.rpc('follow_trader', params: {'p_trader': traderId});
+
+  Future<void> unfollowTrader(String traderId) => client.rpc('unfollow_trader', params: {'p_trader': traderId});
+
+  Future<List<Map<String, dynamic>>> getFollowedTraders() async {
+    final data = await client.rpc('followed_traders');
+    return [for (final e in data as List<dynamic>) Map<String, dynamic>.from(e as Map)];
+  }
+
+  /// Recent trades of the people you follow (no quantities). Pro only.
+  Future<List<Map<String, dynamic>>> getFollowedFeed({int limit = 50}) async {
+    final data = await client.rpc('followed_feed', params: {'p_limit': limit});
+    return [for (final e in data as List<dynamic>) Map<String, dynamic>.from(e as Map)];
+  }
 }

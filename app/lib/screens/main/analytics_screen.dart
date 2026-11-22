@@ -10,6 +10,7 @@ import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import 'autopsy_screen.dart';
+import 'coach_report_screen.dart';
 import '../../services/action_reaction_engine.dart';
 import '../../services/plan_service.dart';
 import '../../widgets/upgrade_sheet.dart';
@@ -187,6 +188,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 20),
                     children: [
                       _kpis(s),
+                      _coachCard(),
                       if (s.trades == 0)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
@@ -356,6 +358,35 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       ]),
     );
   }
+
+  Widget _coachCard() => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Material(
+          color: AppColors.titanGoldSoft,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md), side: BorderSide(color: AppColors.titanGold.withValues(alpha: 0.5))),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () {
+              ChurnTelemetryService.instance.recordButtonTap('analytics_open_coach_report');
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CoachReportScreen()));
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Icon(Icons.school_rounded, color: AppColors.titanGold),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Weekly coach report', style: AppText.bodyBold),
+                    Text('What went well and what to fix next week', style: AppFonts.sans(size: 12, color: AppColors.ink4)),
+                  ]),
+                ),
+                Icon(Icons.chevron_right_rounded, color: AppColors.ink4),
+              ]),
+            ),
+          ),
+        ),
+      );
 
   Widget _autopsyCard(TradeStats s) {
     final i = s.insight;
