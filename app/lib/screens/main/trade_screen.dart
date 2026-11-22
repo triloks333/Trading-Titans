@@ -34,7 +34,7 @@ const Map<String, List<(String, String)>> kMarketIndices = {
   'fo': [('NIFTY', 'NIFTY 50'), ('BANKNIFTY', 'BANKNIFTY')],
   'us_stock': [('^GSPC', 'S&P 500'), ('^IXIC', 'NASDAQ')],
   'crypto': [('BTC', 'BTC'), ('ETH', 'ETH')],
-  'commodity': [('GC=F', 'GOLD'), ('CL=F', 'CRUDE')],
+  'commodity': [('GC=F', 'GOLD (1g)'), ('CL=F', 'CRUDE')],
   'pakistan_stock': [('^KSE', 'KSE 100')],
   'italy_stock': [('FTSEMIB.MI', 'FTSE MIB')],
 };
@@ -75,7 +75,7 @@ final Map<String, List<MoverSymbol>> kMoverUniverse = {
   ],
   // Mirrors COMMODITIES in supabase/functions/_shared/us_market.ts.
   'commodity': [
-    _s('GC=F', 'Gold', 'GOLD'), _s('SI=F', 'Silver', 'SILVER'), _s('CL=F', 'Crude Oil', 'CRUDE'),
+    _s('GC=F', 'Gold (1g)', 'GOLD'), _s('SI=F', 'Silver (1g)', 'SILVER'), _s('CL=F', 'Crude Oil', 'CRUDE'),
     _s('NG=F', 'Natural Gas', 'NATGAS'), _s('HG=F', 'Copper', 'COPPER'),
   ],
   'pakistan_stock': [
@@ -731,7 +731,10 @@ class _TradeScreenState extends State<TradeScreen> {
                             width: isChecked ? 1.5 : 1.0,
                           ),
                         ),
-                        child: CheckboxListTile(
+                        // Own Material so the tick's ink isn't hidden under the tinted box.
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: CheckboxListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
                           dense: true,
                           activeColor: AppColors.imperialGold,
@@ -777,6 +780,7 @@ class _TradeScreenState extends State<TradeScreen> {
                               }
                             });
                           },
+                        ),
                         ),
                       );
                     }).toList(),

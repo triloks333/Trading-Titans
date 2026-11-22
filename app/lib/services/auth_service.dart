@@ -295,6 +295,14 @@ class AuthService extends ChangeNotifier {
   /// Empty until that first fetch; only used to scope the snooze key.
   String _latestVersion = '';
 
+  /// The version on offer, for the update prompt's version chip.
+  String get latestVersion => _latestVersion;
+
+  /// The installed version name (from [PackageInfo]), empty until the first
+  /// config fetch. Shown as the "from" side of the update prompt's chip.
+  String _installedVersion = '';
+  String get installedVersion => _installedVersion;
+
   /// Snooze key for the soft-update prompt, scoped to the version on offer.
   ///
   /// This used to be a single global key, which meant dismissing one release's
@@ -337,6 +345,7 @@ class AuthService extends ChangeNotifier {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       localVersionStr = packageInfo.version;
+      _installedVersion = localVersionStr;
     } catch (_) {}
     try {
       return Version.parse(localVersionStr);
