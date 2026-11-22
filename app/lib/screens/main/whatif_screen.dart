@@ -13,6 +13,8 @@ import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/upgrade_sheet.dart';
+import '../../services/plan_service.dart';
 import 'stock_detail_screen.dart';
 
 /// Compound annual growth rate in percent.
@@ -42,6 +44,7 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
   String _market = 'stock';
   int _yearsAgo = 5;
   bool _busy = false;
+  bool _lockedOut = false;
   Map<String, dynamic>? _result;
   List<double> _growth = const [];
   Timer? _debounce;
@@ -70,6 +73,25 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
       return;
     }
     setState(() => _busy = true);
+    // Free accounts get one What-If a day. A "use" is one stock and period on one
+    // day; changing only the amount re-scales the same answer, so it is free.
+    if (widget.simulate == null && PlanService.instance.limitFor(PlanFeature.whatIf) != null) {
+      final day = DateTime.now().toIso8601String().substring(0, 10);
+      try {
+        final res = await SupabaseService().client.rpc('use_feature', params: {'p_feature': PlanFeature.whatIf, 'p_ref': '$day:$market:$symbol:$years'});
+        if (res is Map && res['allowed'] == false) {
+          if (!mounted) return;
+          setState(() {
+            _busy = false;
+            _lockedOut = true;
+            _result = null;
+          });
+          return;
+        }
+      } catch (_) {/* fail open: a metering hiccup must not break the screen */}
+      PlanService.instance.refreshUsage();
+    }
+    if (mounted && _lockedOut) setState(() => _lockedOut = false);
     final sim = widget.simulate ?? MarketService.simulateWhatIf;
     final result = await sim(symbol, market, amount, years);
     if (!mounted || symbol != _symbol || years != _yearsAgo || amount != _amount) return;
@@ -175,7 +197,16 @@ class _WhatIfScreenState extends State<WhatIfScreen> {
                 ],
               ]),
               const SizedBox(height: 14),
-              _resultCard(r, value, invested, gain, up, cagr),
+              const UsageChip(feature: PlanFeature.whatIf, noun: 'simulations', period: 'today'),
+              const SizedBox(height: 10),
+              if (_lockedOut)
+                const LockedFeatureCard(
+                  title: 'Today\'s free simulation is used',
+                  message: 'Free accounts get one What-If a day (changing the amount is free). Pro runs as many as you like.',
+                  source: 'whatif_daily',
+                )
+              else
+                _resultCard(r, value, invested, gain, up, cagr),
               if (r != null) ...[
                 const SizedBox(height: 14),
                 Container(

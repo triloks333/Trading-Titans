@@ -419,7 +419,7 @@ async function creditSubscriptionOrder(
   }
 
   const now = new Date();
-  const durationDays = plan.billing_interval === "annual" ? 365 : 30;
+  const durationDays = plan.billing_interval === "annual" ? 365 : plan.billing_interval === "weekly" ? 7 : 30;
   const periodEnd = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
   const { error: chargeErr } = await supabase.rpc("apply_subscription_charge", {

@@ -17,7 +17,7 @@ import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
 import 'diagnostics_service.dart';
-import 'plan_service.dart' show PlanOption, PaymentSession;
+import 'plan_service.dart' show PlanOption, PaymentSession, PlanLimitException, PlanFeature;
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -2052,6 +2052,17 @@ class SupabaseService {
     } on FunctionException catch (e) {
       // Surface the server's validation/auth error message to the UI.
       final details = e.details;
+      Map? detailMap;
+      try {
+        detailMap = details is Map ? details : (details is String && details.startsWith('{') ? jsonDecode(details) as Map? : null);
+      } catch (_) {}
+      if (detailMap != null && detailMap['code'] == 'plan_limit') {
+        throw PlanLimitException(
+          '${detailMap['feature'] ?? PlanFeature.foTrades}',
+          '${detailMap['error'] ?? 'Plan limit reached.'}',
+          limit: (detailMap['limit'] as num?)?.toInt(),
+        );
+      }
       String msg = 'Order failed. Please try again.';
       if (details is Map && details['error'] != null) {
         msg = details['error'].toString();

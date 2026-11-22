@@ -103,6 +103,7 @@ serve(async (req) => {
       const cached = autopsyMap.get(trade.id);
       if (cached) {
         finalInsights.push({
+          order_id: trade.id,
           symbol: trade.symbol,
           name: trade.name ?? trade.symbol,
           market: trade.market,
@@ -212,6 +213,7 @@ serve(async (req) => {
       });
 
       finalInsights.push({
+        order_id: trade.id,
         symbol: symbol,
         name: trade.name ?? symbol,
         market: trade.market,
@@ -239,6 +241,32 @@ serve(async (req) => {
       }
     }
 
+    // 6. Plan allowance: free accounts read the full advice on 3 trades a month
+    // (public.plan_limit 'autopsy_month'). Newest trades unlock first, and an
+    // unlocked trade stays unlocked. Locked ones keep the headline (symbol, P&L,
+    // reason) so the list still teaches something and shows what Pro adds.
+    // Fails open: if the allowance can't be read, everyone sees everything.
+    let lockedCount = 0;
+    let autopsyLimit: number | null = null;
+    try {
+      const ids = finalInsights.map((i) => i.order_id);
+      const { data: unlocked, error: unlockErr } = await serviceClient.rpc("autopsy_unlock", { p_user: user.id, p_order_ids: ids });
+      if (!unlockErr && Array.isArray(unlocked)) {
+        const open = new Set(unlocked as string[]);
+        for (const ins of finalInsights as Record<string, unknown>[]) {
+          if (!open.has(ins.order_id as string)) {
+            ins.locked = true;
+            ins.advice = "";
+            lockedCount++;
+          }
+        }
+        if (lockedCount > 0) {
+          const { data: lim } = await serviceClient.rpc("user_limit", { p_user: user.id, p_feature: "autopsy_month" });
+          autopsyLimit = typeof lim === "number" ? lim : null;
+        }
+      }
+    } catch (_) { /* fail open */ }
+
     const winCount = realizedTrades.filter((o) => Number(o.realized_pnl) > 0).length;
     const lossCount = realizedTrades.filter((o) => Number(o.realized_pnl) < 0).length;
 
@@ -246,6 +274,8 @@ serve(async (req) => {
       JSON.stringify({
         summary: `Analyzed your recent trades: ${winCount} wins and ${lossCount} losses. Review these lessons to refine your edge.`,
         insights: finalInsights,
+        locked_count: lockedCount,
+        autopsy_limit: autopsyLimit,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

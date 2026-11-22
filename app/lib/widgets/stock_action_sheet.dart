@@ -13,6 +13,7 @@ import '../screens/main/order_entry_screen.dart';
 import '../screens/main/option_chain_screen.dart';
 import '../services/supabase_service.dart';
 import '../services/churn_telemetry_service.dart';
+import 'upgrade_sheet.dart';
 
 class StockActionSheet extends StatefulWidget {
   final String symbol;
@@ -122,8 +123,10 @@ class _StockActionSheetState extends State<StockActionSheet> {
       } else {
         await SupabaseService().removeFromWatchlist(widget.symbol, widget.market);
       }
-    } catch (_) {
+    } catch (e) {
+      if (!mounted) return;
       setState(() => _isWatched = !_isWatched);
+      await handlePlanLimitError(context, e, source: 'watchlist_symbol');
     }
   }
 

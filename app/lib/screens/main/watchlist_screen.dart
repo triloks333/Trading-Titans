@@ -12,6 +12,7 @@ import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/skeleton.dart';
 import '../../widgets/stock_action_sheet.dart';
+import '../../widgets/upgrade_sheet.dart';
 
 /// Several named, coloured watchlists, each grouped into sections.
 ///
@@ -93,6 +94,8 @@ class _WatchlistScreenState extends State<WatchlistScreen> {
       await action();
       await _load();
     } catch (e) {
+      if (!mounted) return;
+      if (await handlePlanLimitError(context, e, source: 'watchlist')) return;
       if (mounted) _tell(failure);
     }
   }

@@ -144,19 +144,36 @@ serve(async (req) => {
       }
     }
 
-    // --- Derivatives are free for everyone ----------------------------------
-    // A plan check used to sit here, refusing F&O to the free tier once
-    // `monetization_enabled` was on. Removed deliberately: futures and options are
-    // part of the product for every account now.
-    //
-    // Removed rather than made conditional, because a dormant gate is worse than
-    // none. It fired only when a flag flipped, so nobody would notice it had come
-    // back until a user hit it — which is exactly how it surprised us.
-    //
-    // Only this check is gone. `monetization_enabled` still governs the wallet
-    // top-up card, the Subscribe screen and the plan badges, so top-ups and plans
-    // keep selling. If F&O is ever gated again it needs a fresh decision, not an
-    // uncommented block.
+    // --- F&O plan allowance -------------------------------------------------
+    // Opening F&O orders are metered per calendar month (IST): free 3, Pro 25,
+    // Titan unlimited. The numbers live in public.plan_limit(); this only asks.
+    // Exit orders are never metered or blocked, so nobody is trapped in a position.
+    // Off entirely while app_flags.monetization_enabled is false (user_limit
+    // returns null then). A metering failure fails OPEN: a database hiccup must
+    // not stop people trading.
+    let foUsageId: number | null = null;
+    if (!isExitOrder && (instrumentType === "FUTURE" || instrumentType === "OPTION")) {
+      try {
+        const { data: use, error: useErr } = await supabase.rpc("consume_feature", { p_user: userId, p_feature: "fo_trades_month", p_ref: null });
+        if (!useErr && use && use.allowed === false) {
+          const next = use.tier === "pro" ? "Titan for unlimited" : "Pro for 25 a month or Titan for unlimited";
+          return json({
+            error: `You've used all ${use.limit} F&O trades on your ${String(use.tier).toUpperCase()} plan this month. Upgrade to ${next}. You can still exit your open positions.`,
+            code: "plan_limit",
+            feature: "fo_trades_month",
+            used: use.used,
+            limit: use.limit,
+            tier: use.tier,
+          }, 403);
+        }
+        if (use && typeof use.usage_id === "number") foUsageId = use.usage_id;
+      } catch (_) { /* fail open */ }
+    }
+    const refundFo = async () => {
+      if (foUsageId == null) return;
+      try { await supabase.rpc("refund_feature", { p_usage_id: foUsageId }); } catch (_) { /* ignore */ }
+      foUsageId = null;
+    };
 
     // --- Warm a trusted price into quotes_cache so the engine can price immediately ---
     // US tickers are already bare (AAPL), so extractUnderlying would only ever
@@ -201,6 +218,7 @@ serve(async (req) => {
     }
 
     if (!Number.isFinite(storedPrice) || storedPrice <= 0) {
+      await refundFo();
       return json({ error: "Could not determine a price; quote unavailable. Please try again." }, 422);
     }
 
@@ -231,6 +249,7 @@ serve(async (req) => {
       }
 
       if (currentWallet < requiredCapital) {
+        await refundFo();
         return json({
           error: `Insufficient wallet balance. Required: ₹${requiredCapital.toFixed(2)}, Available: ₹${currentWallet.toFixed(2)}`,
         }, 400);
@@ -264,7 +283,7 @@ serve(async (req) => {
       expiry_date: instrumentType === "EQUITY" ? null : expiryDate, execution_price_source: "SERVER_PLACE_ORDER",
       execution_reference_price: refPrice > 0 ? refPrice : storedPrice, nse_contract_date: nseContractDate, is_exit: isExitOrder,
     }).select().maybeSingle();
-    if (ins.error || !ins.data) return json({ error: ins.error?.message ?? "Could not place order" }, 500);
+    if (ins.error || !ins.data) { await refundFo(); return json({ error: ins.error?.message ?? "Could not place order" }, 500); }
     const orderId = ins.data.id;
 
     // --- Hand off to the audited execution engine (all money math lives there) ---
@@ -280,6 +299,8 @@ serve(async (req) => {
     const after = await supabase.from("orders").select("id, status").eq("id", orderId).maybeSingle();
     if (!after.data) resultStatus = "executed"; // FO executed path deletes the pending row and inserts a fresh executed order
     else resultStatus = after.data.status;
+    // The engine turned it down: it was never a trade, so give the slot back.
+    if (resultStatus === "rejected" || resultStatus === "failed") await refundFo();
 
     // Pending-notification parity with the client placeOrder.
     if (resultStatus === "pending") {

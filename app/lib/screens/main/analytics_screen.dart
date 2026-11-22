@@ -11,6 +11,8 @@ import '../../widgets/auth_kit.dart';
 import '../../widgets/error_state.dart';
 import 'autopsy_screen.dart';
 import '../../services/action_reaction_engine.dart';
+import '../../services/plan_service.dart';
+import '../../widgets/upgrade_sheet.dart';
 
 /// Period chips and how far back each looks.
 const Map<String, Duration?> kAnalyticsPeriods = {'1W': Duration(days: 7), '1M': Duration(days: 30), '3M': Duration(days: 90), 'All': null};
@@ -122,7 +124,7 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   late Future<List<Order>> _orders = _fetch();
-  String _period = '1M';
+  late String _period = PlanService.instance.historyDays == null ? '1M' : '1W';
 
   Future<List<Order>> _fetch() async => widget.orders ?? SupabaseService().getOrders(limit: 1000);
 
@@ -208,6 +210,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
+  /// A period longer than the plan's history allowance (free: 7 days).
+  bool _locked(String p) {
+    final days = PlanService.instance.historyDays;
+    if (days == null) return false;
+    final d = kAnalyticsPeriods[p];
+    return d == null || d.inDays > days;
+  }
+
   Widget _chip(String p) => Material(
         color: p == _period ? AppColors.goldPale : Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -216,12 +226,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           borderRadius: BorderRadius.circular(AppRadius.sm),
           onTap: () {
             ChurnTelemetryService.instance.recordButtonTap('analytics_period_1w_1m_3m_all_chip');
+            if (_locked(p)) {
+              showUpgradeSheet(context,
+                  title: 'Full history is a Pro feature',
+                  message: 'Free accounts see the last 7 days of analytics. Pro unlocks your full P&L history.',
+                  source: 'analytics_period');
+              return;
+            }
             setState(() => _period = p);
           },
           child: Container(
             height: 32,
             alignment: Alignment.center,
-            child: Text(p, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p == _period ? AppColors.goldMid : AppColors.ink3)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (_locked(p)) ...[Icon(Icons.lock_rounded, size: 11, color: AppColors.ink4), const SizedBox(width: 3)],
+              Text(p, style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: p == _period ? AppColors.goldMid : AppColors.ink3)),
+            ]),
           ),
         ),
       );
