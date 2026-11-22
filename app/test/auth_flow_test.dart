@@ -18,7 +18,6 @@ import 'package:mobile/screens/auth/register_screen.dart';
 import 'package:mobile/screens/auth/welcome_screen.dart';
 import 'package:mobile/services/auth_service.dart';
 import 'package:mobile/services/theme_service.dart';
-import 'package:mobile/widgets/legal_consent.dart';
 
 Future<void> _pump(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(390, 844);

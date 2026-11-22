@@ -740,12 +740,8 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       return;
     }
 
-    // Ensure we have the user's mobile number before creating the payment order
-    String? phone = _savedPhone;
-    if (phone == null || phone.trim().length < 10) {
-      phone = await _promptForMobileNumber(product);
-      if (phone == null || !mounted) return;
-    }
+    // No phone prompt: Razorpay collects it if it needs one. A saved number still pre-fills.
+    final phone = _savedPhone;
 
     setState(() => _busySku = product.sku);
     ChurnTelemetryService.instance.recordPaywallStep('checkout_start', sku: product.sku);
@@ -763,7 +759,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
       if (_razorpay != null) {
         final userEmail = session.prefillEmail ?? auth.user?.email ?? '';
         final userName = session.prefillName ?? auth.user?.name ?? '';
-        final userContact = session.prefillContact ?? phone;
+        final userContact = session.prefillContact ?? phone ?? '';
 
         final options = <String, dynamic>{
           'key': session.keyId,
@@ -962,130 +958,6 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
   void _handleExternalWallet(ExternalWalletResponse response) {
     if (!mounted) return;
     _tell('Continuing payment in ${response.walletName ?? "external wallet"}...');
-  }
-
-  Future<String?> _promptForMobileNumber(PlanOption product) async {
-    final controller = TextEditingController(text: _savedPhone ?? '');
-    String? errorText;
-    ChurnTelemetryService.instance.recordPaywallStep('phone_sheet_shown', sku: product.sku);
-
-    return showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.pureWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.lg,
-                right: AppSpacing.lg,
-                top: AppSpacing.lg,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.lg,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.goldPale,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(Icons.phone_iphone_rounded, color: AppColors.goldDeep, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mobile Number for Instant UPI & Receipt',
-                              style: GoogleFonts.ibmPlexSans(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.ink,
-                              ),
-                            ),
-                            Text(
-                              'Pre-fills Razorpay for 1-tap GPay / PhonePe / Paytm checkout',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 11.5, color: AppColors.ink4),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    keyboardType: TextInputType.phone,
-                    style: GoogleFonts.ibmPlexSans(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
-                    decoration: InputDecoration(
-                      labelText: 'Mobile / WhatsApp Number',
-                      hintText: '+91 98765 43210',
-                      errorText: errorText,
-                      prefixIcon: const Icon(Icons.call_outlined, size: 18),
-                      filled: true,
-                      fillColor: AppColors.parchment,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: BorderSide(color: AppColors.birch),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        ChurnTelemetryService.instance.recordButtonTap('subscribe_phone_sheet_continue_btn');
-                        final raw = controller.text.replaceAll(RegExp(r'[^\d+]'), '').trim();
-                        final digits = raw.replaceAll('+', '');
-                        if (digits.length < 10 || digits.length > 15) {
-                          setSheetState(() {
-                            errorText = 'Please enter a valid 10-digit mobile number';
-                          });
-                          return;
-                        }
-                        final formatted = digits.length == 10 ? '+91$digits' : (raw.startsWith('+') ? raw : '+$raw');
-                        try {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setString(_phonePrefKey, formatted);
-                        } catch (_) {}
-                        if (mounted) {
-                          setState(() => _savedPhone = formatted);
-                        }
-                        if (ctx.mounted) {
-                          Navigator.of(ctx).pop(formatted);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.ink,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-                      ),
-                      child: Text(
-                        'Continue to Checkout · ${product.title}',
-                        style: GoogleFonts.ibmPlexSans(fontSize: 14, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   String _readable(Object e) =>
