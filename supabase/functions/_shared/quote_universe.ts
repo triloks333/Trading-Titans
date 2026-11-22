@@ -59,6 +59,13 @@ export const POPULAR: UniverseEntry[] = [
   ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
 ];
 
+/**
+ * Symbol/market pairs no provider prices, so they are never fetched even when a
+ * watchlist, alert or order names them (XAU was saved as a crypto; CoinDCX has
+ * no LTC market).
+ */
+const EXCLUDED = new Set(["XAU\u001fcrypto", "LTC\u001fcrypto"]);
+
 /** How far back a symbol someone merely opened stays in the universe. */
 const HOT_SYMBOL_WINDOW_MS = 10 * 60 * 1000;
 /** Cap on browsed symbols, so a burst of searching cannot balloon each tick. */
@@ -81,6 +88,7 @@ export async function buildUniverse(supabase: any): Promise<UniverseEntry[]> {
     const sym = mkt === "crypto" ? cryptoUnderlying(symbol) : extractUnderlying(symbol);
     if (!sym) return null;
     const key = `${sym}\u001f${mkt}`;
+    if (EXCLUDED.has(key)) return null;
     universe.set(key, { symbol: sym, market: mkt });
     return key;
   };
