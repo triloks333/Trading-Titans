@@ -11,6 +11,23 @@ entry here, at the top, before arming.
 
 ---
 
+## 2.0.6 (versionCode 66)
+
+Paid features (plan limits, F&O monthly allowance, 7-day Pro pass, ₹1 Pro week welcome offer, options strategy builder with payoff/Greeks/risk, weekly coach report, Pro League, paid challenges, following traders), batched price feed over Realtime, guest sign-in fixes (Start opens sign-up, no hidden guest; one-time sign-out for everyone), checkout without the phone sheet. Built from the test-apk branch (paidmoderations + faster-prices + plan-features-full + claude/project-thread-0vkved).
+
+### Play Store "What's new" (paste this)
+
+```
+• New Pro tools: options strategy builder with payoff chart, Greeks and risk
+• Weekly coach report, Pro League, paid challenges and follow top traders
+• Try Pro for a week for just ₹1
+• Faster live prices across the app
+• Smoother sign-in with Google
+• Pay for plans and top-ups in fewer taps
+```
+
+---
+
 ## 2.0.5 (versionCode 65)
 
 Commodities (gold, silver, crude, natural gas, copper) as a market, priced off Yahoo futures in USD and shown in the display currency; bought by amount in fractions. Trade bar becomes 3 preferred markets + More sheet (F&O moved there); search shows Browse tiles. Charts follow light/dark everywhere. Built from 4848e19 + version bump.
