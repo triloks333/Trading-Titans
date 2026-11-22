@@ -71,7 +71,7 @@ final Map<String, List<MoverSymbol>> kMoverUniverse = {
     for (final (s, n) in const [
       ('BTC', 'Bitcoin'), ('ETH', 'Ethereum'), ('SOL', 'Solana'), ('BNB', 'BNB'), ('XRP', 'Ripple'), ('ADA', 'Cardano'),
       ('DOGE', 'Dogecoin'), ('POL', 'Polygon'), ('AVAX', 'Avalanche'), ('DOT', 'Polkadot'), ('LINK', 'Chainlink'),
-      ('LTC', 'Litecoin'), ('TRX', 'Tron'),
+      ('TRX', 'Tron'),
     ])
       _s(s, n),
   ],

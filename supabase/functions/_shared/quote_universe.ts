@@ -51,7 +51,7 @@ export const POPULAR: UniverseEntry[] = [
       "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
     .map((symbol) => ({ symbol, market: "stock" })),
   ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
-      "LINK", "LTC", "TRX"]
+      "LINK", "TRX"]
     .map((symbol) => ({ symbol, market: "crypto" })),
   ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
       "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
