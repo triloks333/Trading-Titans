@@ -13,6 +13,7 @@ import '../models/challenge.dart';
 import '../core/market_hours.dart';
 import '../core/option_pricing.dart';
 import '../core/app_constants.dart';
+import 'currency_service.dart';
 import 'market_service.dart';
 import 'fo_instruments_service.dart';
 import 'firebase_service.dart';
@@ -1056,7 +1057,7 @@ class SupabaseService {
         final currentQuote = quotesMap[key] ?? quotesMap[normKey];
         nativeCurrentPrice = currentQuote?.price;
         nativePreviousClose = currentQuote?.previousClose ?? nativeCurrentPrice;
-        final fx = currentQuote?.fxRate;
+        final fx = currentQuote?.fxRate ?? CurrencyService.instance.usdInr;
         if (nativeCurrentPrice != null && fx != null && fx > 0) {
           currentPrice = nativeCurrentPrice * fx;
           previousClose = (nativePreviousClose ?? nativeCurrentPrice) * fx;

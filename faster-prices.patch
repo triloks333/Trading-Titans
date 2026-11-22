@@ -1,0 +1,1916 @@
+From 5223e0b3ea7c0afed217a12a885ca04b49c5b1bc Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 22 Nov 2026 08:45:02 +0000
+Subject: [PATCH] feat(prices): batched price feed with Realtime push
+
+Server
+- New price-feed edge function: started by pg_cron once a minute, loops
+  ~58s fetching every open market every 3s in batched Yahoo spark requests
+  (20 symbols each) plus one CoinDCX ticker call for all crypto, upserts
+  quotes_cache, and broadcasts changed prices every 5s on the public
+  Realtime topic "prices". Lease + heartbeat in price_feed_state, Yahoo
+  429/403 backoff, per-symbol chart fallback for skipped symbols.
+- refresh-quotes becomes a safety net: only refreshes rows older than 30s
+  (?all=1 restores the old behaviour).
+- Symbol universe moved to _shared/quote_universe.ts, now also includes
+  symbols users opened recently (hot_symbols).
+- Migrations: price_feed_state, hot_symbols + note_hot_symbol(), price-feed
+  cron, cron history cleanup.
+
+App
+- PriceStore: subscribes to the Realtime "prices" topic while in the
+  foreground; kill switch via app_flags.realtime_prices_enabled.
+- MarketService answers from pushed prices first, accepts cache rows up to
+  30s, batches watchlist/holdings lookups, serves the home index strip from
+  the cache instead of the market-overview function, and reports browsed
+  symbols to the feed.
+- Trade, portfolio and stock screens redraw on each push.
+- "Prices may be delayed" note (with a Live dot) on home, trade and stock.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01GvD8QZYLrZpo92tezRvj9R
+---
+ app/lib/main.dart                             |   4 +
+ app/lib/screens/main/dashboard_screen.dart    |   6 +
+ app/lib/screens/main/portfolio_screen.dart    |  22 +
+ app/lib/screens/main/stock_detail_screen.dart |  10 +-
+ app/lib/screens/main/trade_screen.dart        |  16 +-
+ app/lib/services/app_flags_service.dart       |   5 +
+ app/lib/services/market_service.dart          | 119 +++-
+ app/lib/services/price_store.dart             | 199 +++++++
+ app/lib/services/supabase_service.dart        |  31 +-
+ app/lib/widgets/price_freshness_note.dart     |  43 ++
+ app/test/popular_symbols_sync_test.dart       |  11 +-
+ app/test/price_store_test.dart                |  61 +++
+ supabase/functions/_shared/quote_universe.ts  | 113 ++++
+ supabase/functions/_shared/yahoo_spark.ts     |  71 +++
+ .../functions/_shared/yahoo_spark_test.ts     |  25 +
+ supabase/functions/price-feed/index.ts        | 516 ++++++++++++++++++
+ supabase/functions/refresh-quotes/index.ts    | 132 +----
+ .../20261122090000_price_feed_tables.sql      |  59 ++
+ .../20261122090100_price_feed_cron.sql        |  45 ++
+ 19 files changed, 1350 insertions(+), 138 deletions(-)
+ create mode 100644 app/lib/services/price_store.dart
+ create mode 100644 app/lib/widgets/price_freshness_note.dart
+ create mode 100644 app/test/price_store_test.dart
+ create mode 100644 supabase/functions/_shared/quote_universe.ts
+ create mode 100644 supabase/functions/_shared/yahoo_spark.ts
+ create mode 100644 supabase/functions/_shared/yahoo_spark_test.ts
+ create mode 100644 supabase/functions/price-feed/index.ts
+ create mode 100644 supabase/migrations/20261122090000_price_feed_tables.sql
+ create mode 100644 supabase/migrations/20261122090100_price_feed_cron.sql
+
+diff --git a/app/lib/main.dart b/app/lib/main.dart
+index 7c48b46..255b9da 100644
+--- a/app/lib/main.dart
++++ b/app/lib/main.dart
+@@ -22,6 +22,7 @@ import 'services/churn_telemetry_service.dart';
+ import 'screens/auth/onboarding_screen.dart';
+ import 'screens/main/convert_account_screen.dart';
+ import 'package:firebase_analytics/firebase_analytics.dart';
++import 'services/price_store.dart';
+ 
+ Future<void> main() async {
+   ChurnTelemetryService.processStart = DateTime.now();
+@@ -38,6 +39,9 @@ Future<void> main() async {
+   await ChurnTelemetryService.instance.init();
+   ChurnTelemetryService.instance.recordAppLaunch(source: 'app_launch');
+   await ChurnTelemetryService.instance.recordSessionStart();
++  // Live prices over Realtime; off while backgrounded or when the
++  // `realtime_prices_enabled` flag is false.
++  PriceStore.instance.start();
+   runApp(const TradingTitansApp());
+ }
+ 
+diff --git a/app/lib/screens/main/dashboard_screen.dart b/app/lib/screens/main/dashboard_screen.dart
+index 50cf23b..5c0b257 100644
+--- a/app/lib/screens/main/dashboard_screen.dart
++++ b/app/lib/screens/main/dashboard_screen.dart
+@@ -23,6 +23,7 @@ import '../../services/plan_service.dart';
+ import '../../services/supabase_service.dart';
+ import '../../services/theme_service.dart';
+ import '../../widgets/auth_kit.dart';
++import '../../widgets/price_freshness_note.dart';
+ import '../../widgets/home_news_section.dart';
+ import '../../widgets/muhurat_card.dart';
+ import '../../widgets/skeleton.dart';
+@@ -308,6 +309,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
+                       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+                       children: [
+                         if (_overview.isNotEmpty) _indexStrip(),
++                        if (_overview.isNotEmpty)
++                          const Padding(
++                            padding: EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, 4),
++                            child: PriceFreshnessNote(),
++                          ),
+                         _valueSection(user?.walletBalance ?? 0, user?.totalRealizedPnl ?? 0),
+                         _quickActions(),
+                         const MuhuratCard(),
+diff --git a/app/lib/screens/main/portfolio_screen.dart b/app/lib/screens/main/portfolio_screen.dart
+index 773ec7e..1d042c9 100644
+--- a/app/lib/screens/main/portfolio_screen.dart
++++ b/app/lib/screens/main/portfolio_screen.dart
+@@ -9,6 +9,7 @@ import '../../core/option_pricing.dart';
+ import '../../models/portfolio.dart';
+ import '../../models/position_model.dart';
+ import '../../services/market_service.dart';
++import '../../services/price_store.dart';
+ import '../../services/supabase_service.dart';
+ import '../../services/auth_service.dart';
+ import 'stock_detail_screen.dart';
+@@ -49,6 +50,8 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
+   Map<String, Quote> _quotes = {};
+   bool _loading = true;
+   Timer? _pollTimer;
++  /// Symbols the last refresh priced; re-priced on every live push.
++  Set<String> _priced = {};
+   int _view = 0; // 0 holdings, 1 F&O positions, 2 closed
+   ({int open, int done})? _orderCounts;
+ 
+@@ -58,6 +61,22 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
+     _load();
+     _loadOrderCounts();
+     _pollTimer = Timer.periodic(AppConstants.portfolioPoll, (_) => _refresh());
++    PriceStore.instance.addListener(_onPricePush);
++  }
++
++  /// A live push re-prices what is already on screen, from memory, without
++  /// reloading holdings.
++  void _onPricePush() async {
++    if (_priced.isEmpty) return;
++    try {
++      final quoteMap = await _fetchQuoteMap(_priced);
++      if (mounted && quoteMap.isNotEmpty) {
++        setState(() {
++          _quotes = {..._quotes, ...quoteMap};
++          _recordPositions();
++        });
++      }
++    } catch (_) {}
+   }
+ 
+   /// "1 open · 14 executed" on the Orders card.
+@@ -74,6 +93,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
+ 
+   @override
+   void dispose() {
++    PriceStore.instance.removeListener(_onPricePush);
+     _pollTimer?.cancel();
+     super.dispose();
+   }
+@@ -119,6 +139,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
+         }
+       }
+ 
++      _priced = uniqueSymbols;
+       final quoteMap = await _fetchQuoteMap(uniqueSymbols);
+ 
+       if (mounted) {
+@@ -187,6 +208,7 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
+         }
+       }
+ 
++      _priced = uniqueSymbols;
+       final quoteMap = await _fetchQuoteMap(uniqueSymbols);
+ 
+       if (mounted) {
+diff --git a/app/lib/screens/main/stock_detail_screen.dart b/app/lib/screens/main/stock_detail_screen.dart
+index 0e0e54f..3652eee 100644
+--- a/app/lib/screens/main/stock_detail_screen.dart
++++ b/app/lib/screens/main/stock_detail_screen.dart
+@@ -12,6 +12,8 @@ import '../../models/price_alert.dart';
+ import '../../models/quote.dart';
+ import '../../services/fo_instruments_service.dart';
+ import '../../services/market_service.dart';
++import '../../services/price_store.dart';
++import '../../widgets/price_freshness_note.dart';
+ import '../../services/supabase_service.dart';
+ import '../../services/theme_service.dart';
+ import '../../widgets/auth_kit.dart';
+@@ -69,10 +71,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
+     _loadHistory(_range);
+     _loadExtras();
+     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshQuote());
++    PriceStore.instance.addListener(_onPricePush);
+   }
+ 
++  void _onPricePush() => _refreshQuote();
++
+   @override
+   void dispose() {
++    PriceStore.instance.removeListener(_onPricePush);
+     _pollTimer?.cancel();
+     super.dispose();
+   }
+@@ -315,10 +321,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
+             style: AppFonts.mono(size: 14, color: _changeColor),
+           ),
+           TextSpan(
+-            text: open ? '  today · live' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
++            text: open ? '  today' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
+             style: AppFonts.sans(size: 14, color: AppColors.ink4),
+           ),
+         ])),
++        const SizedBox(height: 4),
++        const PriceFreshnessNote(),
+       ]),
+     );
+   }
+diff --git a/app/lib/screens/main/trade_screen.dart b/app/lib/screens/main/trade_screen.dart
+index 4b85e2a..fa63e75 100644
+--- a/app/lib/screens/main/trade_screen.dart
++++ b/app/lib/screens/main/trade_screen.dart
+@@ -12,6 +12,8 @@ import '../../models/quote.dart';
+ import '../../services/app_flags_service.dart';
+ import '../../services/currency_service.dart';
+ import '../../services/market_service.dart';
++import '../../services/price_store.dart';
++import '../../widgets/price_freshness_note.dart';
+ import '../../services/theme_service.dart';
+ import '../../widgets/auth_kit.dart';
+ import '../../widgets/empty_state.dart';
+@@ -158,14 +160,18 @@ class _TradeScreenState extends State<TradeScreen> {
+     super.initState();
+     _checkFirstRunPreferences();
+     _refreshPrices();
+-    // shortcut: 15 s, not the 4 s home poll, because this prices ~30 symbols a tick
+-    // to rank movers. Move to a realtime quotes_cache subscription if it must be faster.
+-    _priceTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshPrices());
++    // Live pushes redraw the list as prices move. The timer is the fallback for
++    // when the socket is down: one batched cache read per market, so 5s is cheap.
++    _priceTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshPrices());
++    PriceStore.instance.addListener(_onPricePush);
+   }
+ 
++  void _onPricePush() => _refreshPrices();
++
+   @override
+   void dispose() {
+     _debounce?.cancel();
++    PriceStore.instance.removeListener(_onPricePush);
+     _priceTimer?.cancel();
+     _searchFocus.dispose();
+     super.dispose();
+@@ -354,6 +360,10 @@ class _TradeScreenState extends State<TradeScreen> {
+                     if (!_searching && (_market == 'stock' || _market == 'fo')) _muhuratBanner(),
+                     if (_searchFocus.hasFocus && !_searching) _browseTiles(),
+                     if (!_searching) _indexCards(),
++                    const Padding(
++                      padding: EdgeInsets.fromLTRB(AppSpacing.lg, 2, AppSpacing.lg, 6),
++                      child: PriceFreshnessNote(),
++                    ),
+                     ...(_searching ? _searchRows() : _market == 'fo' ? _foRows() : _moverRows()),
+                     if (!_searching && _market == 'stock') _chainCard(),
+                   ],
+diff --git a/app/lib/services/app_flags_service.dart b/app/lib/services/app_flags_service.dart
+index a253e2c..8a7f16a 100644
+--- a/app/lib/services/app_flags_service.dart
++++ b/app/lib/services/app_flags_service.dart
+@@ -25,6 +25,11 @@ class AppFlagsService extends ChangeNotifier {
+ 
+   bool isEnabled(String key) => _flags[key] ?? _defaults[key] ?? false;
+ 
++  /// Like [isEnabled], but for a kill switch that is on unless an `app_flags`
++  /// row turns it off (e.g. `realtime_prices_enabled`).
++  bool isEnabledOr(String key, {required bool defaultValue}) =>
++      _flags[key] ?? _defaults[key] ?? defaultValue;
++
+   /// True when wallet top-ups, the Subscribe screen and plan badges should be
+   /// visible. The app is free while this is false.
+   bool get monetizationEnabled => isEnabled('monetization_enabled');
+diff --git a/app/lib/services/market_service.dart b/app/lib/services/market_service.dart
+index 8a952d9..77e4539 100644
+--- a/app/lib/services/market_service.dart
++++ b/app/lib/services/market_service.dart
+@@ -8,6 +8,7 @@ import '../models/quote.dart';
+ import '../models/candle.dart';
+ import 'churn_telemetry_service.dart';
+ import 'diagnostics_service.dart';
++import 'price_store.dart';
+ 
+ class MarketService {
+   static final String _functionsBase =
+@@ -20,7 +21,54 @@ class MarketService {
+     'apikey': supabaseAnonKey,
+   };
+ 
++  /// The home screen's index and crypto strip.
++  ///
++  /// Served from pushed prices / `quotes_cache` (all six are always in the
++  /// feed's universe), so the 4s dashboard poll no longer runs an edge function
++  /// that made six sequential upstream calls. Falls back to `market-overview`
++  /// only if the cache cannot price them.
++  static const List<(String, String, String, String)> _overviewSymbols = [
++    ('NIFTY', 'stock', 'NIFTY 50', 'index'),
++    ('SENSEX', 'stock', 'SENSEX', 'index'),
++    ('BANKNIFTY', 'stock', 'BANK NIFTY', 'index'),
++    ('BTC', 'crypto', 'Bitcoin', 'crypto'),
++    ('ETH', 'crypto', 'Ethereum', 'crypto'),
++    ('SOL', 'crypto', 'Solana', 'crypto'),
++  ];
++
++  static Future<Map<String, Quote>> _cachedOnly(
++          List<({String symbol, String market})> pairs) =>
++      quotes(pairs, liveFallback: false);
++
+   static Future<List<Quote>> getMarketOverview() async {
++    try {
++      final got = await _cachedOnly([
++        for (final (s, m, _, _) in _overviewSymbols) (symbol: s, market: m),
++      ]);
++      final out = <Quote>[];
++      for (final (s, m, display, category) in _overviewSymbols) {
++        final q = got['$s\x1F$m'];
++        if (q == null) continue;
++        out.add(Quote(
++          symbol: q.symbol,
++          yfSymbol: q.yfSymbol,
++          name: category == 'crypto' ? display : q.name,
++          price: q.price,
++          previousClose: q.previousClose,
++          change: q.change,
++          changePct: q.changePct,
++          currency: q.currency,
++          market: q.market,
++          source: q.source,
++          displayName: display,
++          category: category,
++          dayLow: q.dayLow,
++          dayHigh: q.dayHigh,
++          open: q.open,
++        ));
++      }
++      if (out.length == _overviewSymbols.length) return out;
++    } catch (_) {}
+     try {
+       final response = await http
+           .get(Uri.parse('$_functionsBase/market-overview'), headers: _headers)
+@@ -38,18 +86,30 @@ class MarketService {
+   /// How old a `quotes_cache` row may be and still be used instead of a live
+   /// fetch.
+   ///
+-  /// Was 45s, which is more than twice the ~20s cadence `refresh-quotes` writes
+-  /// at, so a row was effectively *always* accepted and the client never went
+-  /// live. Prices then only stepped when the job happened to write, which read
+-  /// as a frozen list even though the 4s poll was firing. At 10s a row the job
+-  /// has not just refreshed falls through to a live fetch, so movement tracks
+-  /// the poll instead of the job.
+-  ///
+-  /// ponytail: the ceiling is cost — every row the job misses becomes one edge
+-  /// function call per client per poll. If that bites, the upgrade path is a
+-  /// realtime subscription on `quotes_cache` rather than a longer window, since
+-  /// a longer window is what caused this.
+-  static const Duration _serverCacheMaxAge = Duration(seconds: 10);
++  /// `price-feed` now rewrites every row every ~3s, and `refresh-quotes` picks
++  /// up anything older than 30s one symbol at a time. So a row inside this
++  /// window is as fresh as a live call would be, and a phone falling through to
++  /// `market-quote` (one edge call plus two Yahoo requests) only happens for a
++  /// symbol the server is not tracking yet. Was 10s when the cache was written
++  /// once a minute, which sent most reads to the live path.
++  static const Duration _serverCacheMaxAge = Duration(seconds: 30);
++
++  /// Symbols already reported to the server as browsed, with when, so each is
++  /// sent at most once every few minutes.
++  static final Map<String, DateTime> _hotNoted = {};
++
++  /// Tells `price-feed` to track a symbol nobody holds or watches, so it moves
++  /// live from the next tick instead of costing a live fetch on every poll.
++  static void _noteHotSymbol(String symbol, String market) {
++    final key = cacheKeyFor(symbol, market);
++    final k = '$key\x1F$market';
++    final last = _hotNoted[k];
++    if (last != null && DateTime.now().difference(last) < const Duration(minutes: 5)) return;
++    _hotNoted[k] = DateTime.now();
++    Supabase.instance.client
++        .rpc('note_hot_symbol', params: {'p_symbol': key, 'p_market': market})
++        .then((_) {}, onError: (_) {});
++  }
+ 
+   static ({bool isDerivative, String type, String underlying, String? expiryDate, double? strikePrice, String? optionType})? parseDerivative(String rawSymbol) {
+     var s = rawSymbol.trim();
+@@ -194,6 +254,16 @@ class MarketService {
+       }
+     }
+ 
++    // Pushed price (Realtime): no network at all.
++    if (!forceRefresh) {
++      final pushed = PriceStore.instance
++          .get(cacheKeyFor(symbol, market), market, requestedSymbol: symbol);
++      if (pushed != null) {
++        _quoteCache[cacheKey] = {'timestamp': now, 'quote': pushed};
++        return pushed;
++      }
++    }
++
+     // Server-side price cache: read the centrally-refreshed quote when it is
+     // fresh. This collapses thousands of per-client upstream calls into one
+     // server job and gives every user the SAME price. On a miss/stale entry we
+@@ -270,6 +340,7 @@ class MarketService {
+       }
+     }
+ 
++    if (parseDerivative(symbol) == null) _noteHotSymbol(symbol, market);
+     try {
+       final response = await http
+           .get(
+@@ -347,8 +418,9 @@ class MarketService {
+   /// cache. Result is identical to calling [quote] on each pair — just fewer
+   /// round-trips. Returns a map keyed by `symbol\x1Fmarket`. Never throws.
+   static Future<Map<String, Quote>> quotes(
+-    List<({String symbol, String market})> pairs,
+-  ) async {
++    List<({String symbol, String market})> pairs, {
++    bool liveFallback = true,
++  }) async {
+     final result = <String, Quote>{};
+     if (pairs.isEmpty) return result;
+ 
+@@ -373,9 +445,24 @@ class MarketService {
+     }
+ 
+     final resolved = <String>{};
++    // Pushed prices first: anything the Realtime feed delivered recently needs
++    // no query at all.
++    for (final ps in byMarket.values) {
++      for (final p in ps) {
++        final reqKey = '${p.symbol}\x1F${p.market}';
++        final pushed = PriceStore.instance
++            .get(cacheKeyFor(p.symbol, p.market), p.market, requestedSymbol: p.symbol);
++        if (pushed != null) {
++          result[reqKey] = pushed;
++          resolved.add(reqKey);
++        }
++      }
++    }
+     for (final entry in byMarket.entries) {
+       final market = entry.key;
+-      final ps = entry.value;
++      final ps = entry.value
++          .where((p) => !resolved.contains('${p.symbol}\x1F${p.market}'))
++          .toList();
+       final cacheKeys =
+           ps.map((p) => cacheKeyFor(p.symbol, market)).toSet().toList();
+       if (cacheKeys.isEmpty) continue;
+@@ -486,6 +573,8 @@ class MarketService {
+       }
+     }
+ 
++    if (!liveFallback) return result;
++
+     // Live fallback for anything not served fresh from cache (parallel — the
+     // same behaviour as the previous per-symbol code path).
+     final pending = unique.values
+diff --git a/app/lib/services/price_store.dart b/app/lib/services/price_store.dart
+new file mode 100644
+index 0000000..3506dcb
+--- /dev/null
++++ b/app/lib/services/price_store.dart
+@@ -0,0 +1,199 @@
++import 'dart:async';
++
++import 'package:flutter/widgets.dart';
++import 'package:supabase_flutter/supabase_flutter.dart';
++
++import '../models/quote.dart';
++import 'app_flags_service.dart';
++
++/// Live prices pushed by the server.
++///
++/// The `price-feed` edge function fetches every symbol in batches every few
++/// seconds, writes `quotes_cache`, and broadcasts the prices that changed on the
++/// public Realtime topic `prices` (event `tick`). This store keeps the latest
++/// pushed price per symbol in memory, so [MarketService.quote] can answer from
++/// here with no network call at all, and screens can redraw the moment a price
++/// moves instead of waiting for their next poll.
++///
++/// Budget: Realtime bills per message delivered to each phone, and Supabase Pro
++/// includes 5M a month. So the socket is open only while the app is in the
++/// foreground, there is one combined message per server push (not one per
++/// symbol), and the `realtime_prices_enabled` row in `app_flags` switches the
++/// whole thing off without a release. When it is off, or the socket drops, the
++/// app falls back to reading `quotes_cache`, which the same feed keeps fresh.
++class PriceStore extends ChangeNotifier with WidgetsBindingObserver {
++  PriceStore._internal();
++  static final PriceStore instance = PriceStore._internal();
++
++  static const String topic = 'prices';
++  static const String flagKey = 'realtime_prices_enabled';
++
++  /// A pushed price is served as current for this long. The server pushes every
++  /// ~5s while prices move, so this covers a missed push or two.
++  static const Duration maxAge = Duration(seconds: 20);
++
++  final Map<String, ({Quote quote, DateTime at})> _prices = {};
++  RealtimeChannel? _channel;
++  bool _started = false;
++  bool _foreground = true;
++  DateTime? _lastPushAt;
++  Timer? _notifyDebounce;
++
++  /// When the last push arrived, or null if none has this session.
++  DateTime? get lastPushAt => _lastPushAt;
++
++  /// True while subscribed and pushes are arriving.
++  bool get isLive =>
++      _channel != null &&
++      _lastPushAt != null &&
++      DateTime.now().difference(_lastPushAt!) < const Duration(seconds: 30);
++
++  static String keyFor(String cacheSymbol, String market) => '$cacheSymbol\x1F$market';
++
++  /// Starts listening. Safe to call more than once.
++  void start() {
++    if (_started) return;
++    _started = true;
++    WidgetsBinding.instance.addObserver(this);
++    AppFlagsService.instance.addListener(_sync);
++    _sync();
++  }
++
++  bool get _enabled =>
++      AppFlagsService.instance.isEnabledOr(flagKey, defaultValue: true);
++
++  void _sync() {
++    final want = _foreground && _enabled;
++    if (want && _channel == null) {
++      _subscribe();
++    } else if (!want && _channel != null) {
++      _unsubscribe();
++    }
++  }
++
++  void _subscribe() {
++    try {
++      final client = Supabase.instance.client;
++      _channel = client
++          .channel(topic)
++          .onBroadcast(event: 'tick', callback: _onTick)
++          .subscribe((status, [error]) {
++        if (status == RealtimeSubscribeStatus.channelError ||
++            status == RealtimeSubscribeStatus.timedOut) {
++          debugPrint('PriceStore: realtime $status ${error ?? ''}');
++        }
++      });
++    } catch (e) {
++      debugPrint('PriceStore: subscribe failed: $e');
++      _channel = null;
++    }
++  }
++
++  void _unsubscribe() {
++    final ch = _channel;
++    _channel = null;
++    if (ch != null) {
++      try {
++        Supabase.instance.client.removeChannel(ch);
++      } catch (_) {}
++    }
++  }
++
++  void _onTick(Map<String, dynamic> message) {
++    // The client hands over the broadcast envelope; the server's body sits in
++    // `payload`. Accept the bare body too, in case the client ever unwraps it.
++    final body = message['payload'] is Map ? message['payload'] as Map : message;
++    final rows = body['q'];
++    if (rows is! List) return;
++    final now = DateTime.now();
++    for (final r in rows) {
++      if (r is! Map) continue;
++      final symbol = r['s'] as String?;
++      final market = r['m'] as String?;
++      final price = (r['p'] as num?)?.toDouble() ?? 0;
++      if (symbol == null || market == null || price <= 0) continue;
++      final prev = (r['pc'] as num?)?.toDouble() ?? price;
++      _prices[keyFor(symbol, market)] = (
++        quote: Quote(
++          symbol: symbol,
++          yfSymbol: symbol,
++          name: r['n'] as String? ?? symbol,
++          price: price,
++          previousClose: prev,
++          change: (r['c'] as num?)?.toDouble() ?? price - prev,
++          changePct: (r['cp'] as num?)?.toDouble() ?? 0,
++          currency: currencyFor(market),
++          market: market,
++          source: 'live',
++          dayLow: (r['l'] as num?)?.toDouble(),
++          dayHigh: (r['h'] as num?)?.toDouble(),
++          open: (r['o'] as num?)?.toDouble(),
++        ),
++        at: now,
++      );
++    }
++    _lastPushAt = now;
++    // Many listeners redraw on this; coalesce bursts into one frame's work.
++    _notifyDebounce ??= Timer(const Duration(milliseconds: 250), () {
++      _notifyDebounce = null;
++      notifyListeners();
++    });
++  }
++
++  /// Native currency per market, as `market-quote` reports it.
++  static String currencyFor(String market) {
++    switch (market) {
++      case 'us_stock':
++      case 'commodity':
++        return 'USD';
++      case 'pakistan_stock':
++        return 'PKR';
++      case 'italy_stock':
++        return 'EUR';
++      default:
++        return 'INR';
++    }
++  }
++
++  /// The pushed quote for [cacheSymbol] (the `quotes_cache` key) if it is still
++  /// current, re-labelled with the symbol the caller asked for.
++  Quote? get(String cacheSymbol, String market, {String? requestedSymbol}) {
++    final hit = _prices[keyFor(cacheSymbol, market)];
++    if (hit == null || DateTime.now().difference(hit.at) > maxAge) return null;
++    final q = hit.quote;
++    if (requestedSymbol == null || requestedSymbol == q.symbol) return q;
++    return Quote(
++      symbol: requestedSymbol,
++      yfSymbol: requestedSymbol,
++      name: q.name,
++      price: q.price,
++      previousClose: q.previousClose,
++      change: q.change,
++      changePct: q.changePct,
++      currency: q.currency,
++      market: q.market,
++      source: q.source,
++      dayLow: q.dayLow,
++      dayHigh: q.dayHigh,
++      open: q.open,
++    );
++  }
++
++  @override
++  void didChangeAppLifecycleState(AppLifecycleState state) {
++    final fg = state == AppLifecycleState.resumed;
++    if (fg == _foreground) return;
++    _foreground = fg;
++    if (!fg) _prices.clear(); // stale the moment we stop listening
++    _sync();
++  }
++
++  @visibleForTesting
++  void debugIngest(Map<String, dynamic> message) => _onTick(message);
++
++  @visibleForTesting
++  void debugReset() {
++    _prices.clear();
++    _lastPushAt = null;
++  }
++}
+diff --git a/app/lib/services/supabase_service.dart b/app/lib/services/supabase_service.dart
+index 2f9ce6d..2c45147 100644
+--- a/app/lib/services/supabase_service.dart
++++ b/app/lib/services/supabase_service.dart
+@@ -924,12 +924,11 @@ class SupabaseService {
+         })
+         .toList();
+ 
+-    final quoteFutures = keysToFetch.map((key) {
+-      final parts = key.split('\x1F');
+-      return MarketService.quote(parts[0], parts[1]);
+-    }).toList();
+-
+-    final fetchedQuotes = await Future.wait(quoteFutures);
++    final batch = await MarketService.quotes([
++      for (final key in keysToFetch)
++        (symbol: key.split('\x1F')[0], market: key.split('\x1F')[1]),
++    ]);
++    final fetchedQuotes = [for (final key in keysToFetch) batch[key]];
+     final quotesMap = <String, Quote?>{};
+     for (int i = 0; i < keysToFetch.length; i++) {
+       final key = keysToFetch[i];
+@@ -1222,13 +1221,19 @@ class SupabaseService {
+     final rowsList = (rows as List<dynamic>)
+         .map((e) => Map<String, dynamic>.from(e as Map))
+         .toList();
+-    final quoteFutures = rowsList.map((row) {
+-      final symbol = row['symbol'] as String? ?? '';
+-      final market = row['market'] as String? ?? 'stock';
+-      return MarketService.quote(symbol, market);
+-    }).toList();
+-
+-    final quotes = await Future.wait(quoteFutures);
++    // One batched price lookup (pushed prices, then a single cache query per
++    // market) instead of a separate request per row.
++    final batch = await MarketService.quotes([
++      for (final row in rowsList)
++        (
++          symbol: row['symbol'] as String? ?? '',
++          market: row['market'] as String? ?? 'stock',
++        ),
++    ]);
++    final quotes = [
++      for (final row in rowsList)
++        batch['${row['symbol'] as String? ?? ''}\x1F${row['market'] as String? ?? 'stock'}'],
++    ];
+ 
+     for (int i = 0; i < rowsList.length; i++) {
+       final row = rowsList[i];
+diff --git a/app/lib/widgets/price_freshness_note.dart b/app/lib/widgets/price_freshness_note.dart
+new file mode 100644
+index 0000000..25fd1fe
+--- /dev/null
++++ b/app/lib/widgets/price_freshness_note.dart
+@@ -0,0 +1,43 @@
++import 'package:flutter/material.dart';
++
++import '../core/colors.dart';
++import '../services/price_store.dart';
++
++/// One quiet line under prices: "● Live · Prices may be delayed" while the
++/// server is pushing, "Prices may be delayed" otherwise.
++///
++/// Prices come from Yahoo Finance, an unofficial source with no real-time
++/// guarantee, so the delay notice always shows; the green dot only says the app
++/// is receiving the server's latest numbers.
++class PriceFreshnessNote extends StatelessWidget {
++  const PriceFreshnessNote({super.key, this.align = MainAxisAlignment.start});
++
++  final MainAxisAlignment align;
++
++  @override
++  Widget build(BuildContext context) {
++    return ListenableBuilder(
++      listenable: PriceStore.instance,
++      builder: (context, _) {
++        final live = PriceStore.instance.isLive;
++        final style = TextStyle(fontSize: 11, color: AppColors.ink4, height: 1.2);
++        return Row(
++          mainAxisAlignment: align,
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            if (live) ...[
++              Container(
++                width: 6,
++                height: 6,
++                decoration: BoxDecoration(color: AppColors.bull, shape: BoxShape.circle),
++              ),
++              const SizedBox(width: 5),
++              Text('Live · ', style: style.copyWith(color: AppColors.bull)),
++            ],
++            Text('Prices may be delayed', style: style),
++          ],
++        );
++      },
++    );
++  }
++}
+diff --git a/app/test/popular_symbols_sync_test.dart b/app/test/popular_symbols_sync_test.dart
+index 08d185a..5d1f4f0 100644
+--- a/app/test/popular_symbols_sync_test.dart
++++ b/app/test/popular_symbols_sync_test.dart
+@@ -30,7 +30,7 @@ Set<String> dartPopular(String source, String market) {
+ /// the POPULAR constant.
+ Set<String> tsPopular(String source, String market) {
+   final popularStart = source.indexOf('const POPULAR');
+-  expect(popularStart, isNot(-1), reason: 'POPULAR not found in refresh-quotes');
++  expect(popularStart, isNot(-1), reason: 'POPULAR not found in quote_universe.ts');
+   final popularEnd = source.indexOf('];', popularStart);
+   final block = source.substring(popularStart, popularEnd);
+ 
+@@ -62,7 +62,9 @@ void main() {
+   setUpAll(() {
+     // Tests run with the app package as cwd.
+     dart = File('lib/screens/main/trade_screen.dart').readAsStringSync();
+-    ts = File('../supabase/functions/refresh-quotes/index.ts').readAsStringSync();
++    // The universe (POPULAR and the session gate) is shared by refresh-quotes
++    // and price-feed.
++    ts = File('../supabase/functions/_shared/quote_universe.ts').readAsStringSync();
+   });
+ 
+   test('every popular Indian stock is in the refresh universe', () {
+@@ -89,7 +91,10 @@ void main() {
+     // The other half of the same bug: US rows were refreshed while NSE was open
+     // (US shut, so a stale close was restamped fresh) and skipped once the US
+     // market opened.
+-    expect(ts, contains('isUsMarketOpen'));
+     expect(ts, contains('if (market === US_MARKET) return usOpen;'));
++    for (final fn in ['refresh-quotes', 'price-feed']) {
++      final src = File('../supabase/functions/$fn/index.ts').readAsStringSync();
++      expect(src, contains('isUsMarketOpen'), reason: fn);
++    }
+   });
+ }
+diff --git a/app/test/price_store_test.dart b/app/test/price_store_test.dart
+new file mode 100644
+index 0000000..60c313b
+--- /dev/null
++++ b/app/test/price_store_test.dart
+@@ -0,0 +1,61 @@
++// The live price feed's message format, as `price-feed` broadcasts it.
++//
++// The server and the app agree on short keys (s, m, p, pc, c, cp, l, h, o, n)
++// to keep each Realtime message small. This pins the app side of that contract.
++
++import 'package:flutter_test/flutter_test.dart';
++import 'package:mobile/services/price_store.dart';
++
++void main() {
++  final store = PriceStore.instance;
++
++  setUp(store.debugReset);
++
++  Map<String, dynamic> tick(List<dynamic> q) => {
++        'event': 'tick',
++        'payload': {'t': 0, 'q': q},
++      };
++
++  test('a pushed price is served under its cache key', () {
++    store.debugIngest(tick([
++      {'s': 'RELIANCE', 'm': 'stock', 'p': 1500.5, 'pc': 1490.0, 'c': 10.5, 'cp': 0.7, 'l': 1488.0, 'h': 1510.0, 'o': 1491.0, 'n': 'Reliance Industries'},
++    ]));
++    final q = store.get('RELIANCE', 'stock')!;
++    expect(q.price, 1500.5);
++    expect(q.previousClose, 1490.0);
++    expect(q.changePct, 0.7);
++    expect(q.dayHigh, 1510.0);
++    expect(q.name, 'Reliance Industries');
++    expect(q.currency, 'INR');
++    expect(store.lastPushAt, isNotNull);
++  });
++
++  test('the caller keeps the symbol it asked for', () {
++    store.debugIngest(tick([
++      {'s': 'NIFTY', 'm': 'stock', 'p': 24000.0, 'pc': 23900.0},
++    ]));
++    expect(store.get('NIFTY', 'stock', requestedSymbol: '^NSEI')!.symbol, '^NSEI');
++  });
++
++  test('markets do not collide and carry their own currency', () {
++    store.debugIngest(tick([
++      {'s': 'AAPL', 'm': 'us_stock', 'p': 210.0, 'pc': 205.0},
++    ]));
++    expect(store.get('AAPL', 'stock'), isNull);
++    expect(store.get('AAPL', 'us_stock')!.currency, 'USD');
++  });
++
++  test('rows without a usable price are ignored', () {
++    store.debugIngest(tick([
++      {'s': 'X', 'm': 'stock', 'p': 0},
++      {'m': 'stock', 'p': 5},
++      'garbage',
++    ]));
++    expect(store.get('X', 'stock'), isNull);
++  });
++
++  test('a bare body without the envelope is accepted too', () {
++    store.debugIngest({'q': [{'s': 'BTC', 'm': 'crypto', 'p': 8000000.0}]});
++    expect(store.get('BTC', 'crypto')!.price, 8000000.0);
++  });
++}
+diff --git a/supabase/functions/_shared/quote_universe.ts b/supabase/functions/_shared/quote_universe.ts
+new file mode 100644
+index 0000000..2bf237e
+--- /dev/null
++++ b/supabase/functions/_shared/quote_universe.ts
+@@ -0,0 +1,113 @@
++// deno-lint-ignore-file no-explicit-any
++/**
++ * The set of symbols the server keeps fresh in `quotes_cache`.
++ *
++ * Shared by `price-feed` (the batched, every-few-seconds fetcher) and
++ * `refresh-quotes` (the per-symbol safety net), so both write rows under exactly
++ * the same keys. The keys must also match `MarketService.cacheKeyFor` in the app.
++ */
++import { COMMODITIES, COMMODITY_MARKET, US_MARKET, isCommodityOpen } from "./us_market.ts";
++import { cryptoUnderlying } from "./crypto_symbol.ts";
++
++export type UniverseEntry = { symbol: string; market: string };
++
++export function extractUnderlying(symbolRaw: string): string {
++  let s = (symbolRaw || "").toUpperCase().trim();
++  if (s.startsWith("NSE:")) s = s.slice(4);
++  if (s.startsWith("BSE:")) s = s.slice(4);
++  s = s.replace("-EQ-", "-");
++  if (s.endsWith("-EQ")) s = s.slice(0, -3);
++  if (s.includes(" ")) s = s.split(" ")[0];
++  if (s.includes("-")) s = s.split("-")[0];
++  if (s === "^NSEI" || s === "NSEI" || s === "NIFTY50") return "NIFTY";
++  if (s === "^NSEBANK" || s === "NSEBANK") return "BANKNIFTY";
++  if (s === "^BSESN" || s === "SENSEX") return "SENSEX";
++  const m = s.match(/\d/);
++  if (m && (m.index ?? 0) > 0) s = s.slice(0, m.index);
++  return s;
++}
++
++/**
++ * Is this market's session live right now? Crypto trades 24/7; US equities and
++ * commodities follow their own sessions; everything else follows NSE.
++ */
++export function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): boolean {
++  if (market === "crypto") return true;
++  if (market === US_MARKET) return usOpen;
++  if (market === COMMODITY_MARKET) return isCommodityOpen();
++  return stockOpen;
++}
++
++/**
++ * Symbols the Trade screen offers before the user searches for anything.
++ *
++ * Mirrors the India, crypto and US lists in `kMoverUniverse` in
++ * `app/lib/screens/main/trade_screen.dart`; keep them in step.
++ */
++export const POPULAR: UniverseEntry[] = [
++  ...["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
++      "ITC", "LT", "HINDUNILVR", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "MARUTI",
++      "SUNPHARMA", "TITAN", "ASIANPAINT", "WIPRO", "HCLTECH", "TATASTEEL", "NTPC",
++      "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
++    .map((symbol) => ({ symbol, market: "stock" })),
++  ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
++      "LINK", "LTC", "TRX"]
++    .map((symbol) => ({ symbol, market: "crypto" })),
++  ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
++      "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
++    .map((symbol) => ({ symbol, market: US_MARKET })),
++  ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
++];
++
++/** How far back a symbol someone merely opened stays in the universe. */
++const HOT_SYMBOL_WINDOW_MS = 10 * 60 * 1000;
++/** Cap on browsed symbols, so a burst of searching cannot balloon each tick. */
++const HOT_SYMBOL_LIMIT = 100;
++
++/**
++ * Everything someone holds, watches, has an order or alert on, or opened in the
++ * last few minutes, plus the indices and the popular lists.
++ *
++ * Symbols carrying a resting order come first, so a run cut short by a deadline
++ * drops a watchlist row, never a live order.
++ */
++export async function buildUniverse(supabase: any): Promise<UniverseEntry[]> {
++  const universe = new Map<string, UniverseEntry>();
++  const add = (symbol: string | null, market: string | null): string | null => {
++    if (!symbol) return null;
++    const mkt = (market || "stock").toLowerCase();
++    // Crypto perpetuals arrive as `B-BTC_USDT` from pending F&O orders; the feed
++    // only knows `BTC`.
++    const sym = mkt === "crypto" ? cryptoUnderlying(symbol) : extractUnderlying(symbol);
++    if (!sym) return null;
++    const key = `${sym}\u001f${mkt}`;
++    universe.set(key, { symbol: sym, market: mkt });
++    return key;
++  };
++  const priority = new Set<string>();
++  const hotSince = new Date(Date.now() - HOT_SYMBOL_WINDOW_MS).toISOString();
++  const [watch, holds, fo, alerts, pend, hot] = await Promise.all([
++    supabase.from("watchlist").select("symbol, market"),
++    supabase.from("holdings").select("symbol, market"),
++    supabase.from("fo_positions").select("symbol").eq("is_settled", false),
++    supabase.from("price_alerts").select("symbol, market").eq("status", "active"),
++    supabase.from("orders").select("symbol, market").eq("status", "pending"),
++    supabase.from("hot_symbols").select("symbol, market")
++      .gte("seen_at", hotSince).order("seen_at", { ascending: false }).limit(HOT_SYMBOL_LIMIT),
++  ]);
++  for (const r of (watch.data ?? [])) add(r.symbol, r.market);
++  for (const r of (holds.data ?? [])) add(r.symbol, r.market);
++  for (const r of (fo.data ?? [])) add(r.symbol, "stock");
++  for (const r of (alerts.data ?? [])) add(r.symbol, r.market);
++  for (const r of (pend.data ?? [])) { const k = add(r.symbol, r.market); if (k) priority.add(k); }
++  // `hot_symbols` may not exist yet on a database that has not run the
++  // migration; its error is ignored and the universe is built without it.
++  for (const r of (hot.data ?? [])) add(r.symbol, r.market);
++  add("NIFTY", "stock");
++  add("BANKNIFTY", "stock");
++  add("SENSEX", "stock");
++  for (const p of POPULAR) add(p.symbol, p.market);
++  return [...universe.entries()]
++    .sort((a, b) => Number(priority.has(b[0])) - Number(priority.has(a[0])))
++    .map(([, u]) => u);
++}
+diff --git a/supabase/functions/_shared/yahoo_spark.ts b/supabase/functions/_shared/yahoo_spark.ts
+new file mode 100644
+index 0000000..c34a70c
+--- /dev/null
++++ b/supabase/functions/_shared/yahoo_spark.ts
+@@ -0,0 +1,71 @@
++// deno-lint-ignore-file no-explicit-any
++/**
++ * Parsing for Yahoo's multi-symbol "spark" endpoint and the chart meta block,
++ * used by the price-feed edge function. Kept separate so it can be unit-tested
++ * without the function's environment.
++ */
++
++export const num = (v: unknown): number | null => {
++  const n = Number(v);
++  return Number.isFinite(n) && n > 0 ? n : null;
++};
++
++export type Parsed = {
++  price: number;
++  previousClose: number | null;
++  dayLow: number | null;
++  dayHigh: number | null;
++  open: number | null;
++  name: string | null;
++  marketTime: number | null;
++};
++
++export function fromMeta(meta: any, closes: unknown[] = []): Parsed | null {
++  if (!meta) return null;
++  const last = [...closes].reverse().find((c) => num(c) !== null);
++  const price = num(meta.regularMarketPrice) ?? num(last);
++  if (!price) return null;
++  return {
++    price,
++    previousClose: num(meta.chartPreviousClose) ?? num(meta.previousClose) ?? num(meta.regularMarketPreviousClose),
++    dayLow: num(meta.regularMarketDayLow),
++    dayHigh: num(meta.regularMarketDayHigh),
++    open: num(meta.regularMarketOpen),
++    name: meta.longName ?? meta.shortName ?? null,
++    marketTime: num(meta.regularMarketTime),
++  };
++}
++
++/**
++ * Reads either spark response shape:
++ *   v7: { spark: { result: [ { symbol, response: [ { meta, indicators } ] } ] } }
++ *   v8: { "<SYM>": { symbol, close: [...], chartPreviousClose, previousClose } }
++ */
++export function parseSpark(body: any): Map<string, Parsed> {
++  const out = new Map<string, Parsed>();
++  const results = body?.spark?.result;
++  if (Array.isArray(results)) {
++    for (const r of results) {
++      const resp = r?.response?.[0];
++      const parsed = fromMeta(resp?.meta, resp?.indicators?.quote?.[0]?.close ?? []);
++      if (r?.symbol && parsed) out.set(String(r.symbol).toUpperCase(), parsed);
++    }
++    return out;
++  }
++  if (body && typeof body === "object") {
++    for (const [sym, v] of Object.entries<any>(body)) {
++      if (!v || typeof v !== "object") continue;
++      const closes: unknown[] = Array.isArray(v.close) ? v.close : [];
++      const parsed = fromMeta(
++        {
++          regularMarketPrice: v.regularMarketPrice,
++          chartPreviousClose: v.chartPreviousClose,
++          previousClose: v.previousClose,
++        },
++        closes,
++      );
++      if (parsed) out.set(sym.toUpperCase(), parsed);
++    }
++  }
++  return out;
++}
+diff --git a/supabase/functions/_shared/yahoo_spark_test.ts b/supabase/functions/_shared/yahoo_spark_test.ts
+new file mode 100644
+index 0000000..bb3dc27
+--- /dev/null
++++ b/supabase/functions/_shared/yahoo_spark_test.ts
+@@ -0,0 +1,25 @@
++import { assertEquals } from "jsr:@std/assert@1";
++import { parseSpark } from "./yahoo_spark.ts";
++
++Deno.test("parses v7 spark shape", () => {
++  const m = parseSpark({ spark: { result: [{ symbol: "RELIANCE.NS", response: [{
++    meta: { regularMarketPrice: 1500.5, chartPreviousClose: 1490, regularMarketDayHigh: 1510, regularMarketDayLow: 1488, longName: "Reliance" },
++    indicators: { quote: [{ close: [1495, null, 1500] }] } }] }] } });
++  const r = m.get("RELIANCE.NS")!;
++  assertEquals(r.price, 1500.5);
++  assertEquals(r.previousClose, 1490);
++  assertEquals(r.dayHigh, 1510);
++  assertEquals(r.name, "Reliance");
++});
++
++Deno.test("parses v8 spark shape, falling back to last close", () => {
++  const m = parseSpark({ "^NSEI": { symbol: "^NSEI", close: [24000, 24010, null], chartPreviousClose: 23900 } });
++  const r = m.get("^NSEI")!;
++  assertEquals(r.price, 24010);
++  assertEquals(r.previousClose, 23900);
++});
++
++Deno.test("skips symbols with no price", () => {
++  assertEquals(parseSpark({ spark: { result: [{ symbol: "X.NS", response: [{ meta: {} }] }] } }).size, 0);
++  assertEquals(parseSpark(null).size, 0);
++});
+diff --git a/supabase/functions/price-feed/index.ts b/supabase/functions/price-feed/index.ts
+new file mode 100644
+index 0000000..48e6a1b
+--- /dev/null
++++ b/supabase/functions/price-feed/index.ts
+@@ -0,0 +1,516 @@
++// deno-lint-ignore-file no-explicit-any
++/**
++ * price-feed: the one place that fetches live prices.
++ *
++ * pg_cron starts this once a minute. Each run builds the symbol universe once,
++ * then loops for about a minute: every TICK_MS it fetches every open market in a
++ * handful of batched requests (Yahoo for stocks, indices, US, commodities and
++ * the other Yahoo markets; one CoinDCX ticker call for all crypto), upserts
++ * `quotes_cache`, and every BROADCAST_MS pushes the prices that changed to the
++ * app over Supabase Realtime Broadcast on the public `prices` topic.
++ *
++ * Replaces the old pattern of one `market-quote` invocation (two sequential
++ * Yahoo requests) per symbol per minute. `refresh-quotes` stays on as a safety
++ * net for any row this feed leaves stale.
++ *
++ * Query parameters:
++ *   dry=1             one tick, no writes, no broadcast; returns what it parsed.
++ *   force=1           treat every market as open (testing outside hours).
++ *   tick_ms=3000      fetch interval.
++ *   broadcast_ms=5000 push interval (keeps Realtime messages inside the Pro quota).
++ *   duration_s=58     how long one run loops.
++ */
++import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
++import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
++import { buildUniverse, isMarketOpen, type UniverseEntry } from "../_shared/quote_universe.ts";
++import { COMMODITY_MARKET, US_MARKET, fromUsYahooSymbol, isUsMarketOpen, toUsYahooSymbol } from "../_shared/us_market.ts";
++import { isStockOpen } from "../_shared/market_hours.ts";
++import { type Parsed, fromMeta, num, parseSpark } from "../_shared/yahoo_spark.ts";
++
++declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
++
++const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
++const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
++
++const UA =
++  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
++const YAHOO_HOSTS = ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"];
++const COINDCX_TICKER = "https://api.coindcx.com/exchange/ticker";
++
++/** Realtime topic the app subscribes to. Public: these are public prices. */
++export const PRICE_TOPIC = "prices";
++
++/** Symbols per Yahoo spark request. Yahoo rejects much larger lists. */
++const SPARK_CHUNK = 20;
++/** Spark chunks in flight at once. */
++const SPARK_CONCURRENCY = 4;
++/** Per-request timeout, so one slow call cannot eat a whole tick. */
++const FETCH_TIMEOUT_MS = 6000;
++/** Per-symbol chart fallbacks allowed per tick, for symbols the batch skipped. */
++const FALLBACKS_PER_TICK = 8;
++/** A symbol the batch keeps skipping is retried one-by-one at most this often. */
++const FALLBACK_EVERY_MS = 60_000;
++/** Backoff ladder after Yahoo throttles or blocks us. */
++const BACKOFF_MS = [10_000, 30_000, 60_000, 120_000];
++/** A second run starting this soon after the last one is ignored (abuse guard). */
++const MIN_RUN_GAP_MS = 20_000;
++
++type Row = {
++  symbol: string;
++  market: string;
++  price: number;
++  previous_close: number | null;
++  name: string;
++  change: number | null;
++  change_pct: number | null;
++  day_low: number | null;
++  day_high: number | null;
++  open: number | null;
++  source: string;
++  updated_at: string;
++};
++
++const round2 = (n: number) => Math.round(n * 100) / 100;
++
++function json(body: unknown, status = 200) {
++  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
++}
++
++// ---------------------------------------------------------------------------
++// Symbol mapping. Must agree with market-quote, which wrote these rows before.
++// ---------------------------------------------------------------------------
++
++function toYahoo(u: UniverseEntry): string | null {
++  const s = u.symbol.toUpperCase();
++  switch (u.market) {
++    case "stock":
++      if (s === "NIFTY" || s === "NIFTY50" || s === "^NSEI") return "^NSEI";
++      if (s === "BANKNIFTY" || s === "^NSEBANK") return "^NSEBANK";
++      if (s === "SENSEX" || s === "^BSESN") return "^BSESN";
++      if (s.endsWith(".NS") || s.endsWith(".BO") || s.startsWith("^")) return s;
++      return `${s === "ZOMATO" ? "ETERNAL" : s}.NS`;
++    case US_MARKET:
++    case COMMODITY_MARKET:
++      return toUsYahooSymbol(s);
++    case "pakistan_stock":
++      return s.endsWith(".KA") ? s : `${s}.KA`;
++    case "italy_stock":
++      return s.endsWith(".MI") ? s : `${s}.MI`;
++    default:
++      return null;
++  }
++}
++
++const CRYPTO_ALIAS: Record<string, string> = { MATIC: "POL" };
++
++// ---------------------------------------------------------------------------
++// Yahoo
++// ---------------------------------------------------------------------------
++
++class YahooThrottled extends Error {
++  constructor(status: number) {
++    super(`yahoo_${status}`);
++  }
++}
++
++async function getJson(url: string): Promise<any> {
++  const res = await fetch(url, {
++    headers: { "User-Agent": UA, Accept: "application/json" },
++    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
++  });
++  if (res.status === 429 || res.status === 403) throw new YahooThrottled(res.status);
++  if (!res.ok) throw new Error(`http_${res.status}`);
++  return res.json();
++}
++
++/** Which spark flavour worked last; remembered for the rest of the run. */
++let sparkPath = "/v7/finance/spark";
++let hostIdx = 0;
++
++async function sparkChunk(symbols: string[]): Promise<Map<string, Parsed>> {
++  const qs = `symbols=${symbols.map(encodeURIComponent).join(",")}&range=1d&interval=5m`;
++  const paths = sparkPath === "/v7/finance/spark"
++    ? ["/v7/finance/spark", "/v8/finance/spark"]
++    : ["/v8/finance/spark", "/v7/finance/spark"];
++  let lastErr: unknown = null;
++  for (const path of paths) {
++    try {
++      const body = await getJson(`${YAHOO_HOSTS[hostIdx]}${path}?${qs}`);
++      const parsed = parseSpark(body);
++      if (parsed.size > 0) {
++        sparkPath = path;
++        return parsed;
++      }
++      lastErr = new Error("empty_spark");
++    } catch (e) {
++      if (e instanceof YahooThrottled) throw e;
++      lastErr = e;
++    }
++  }
++  hostIdx = (hostIdx + 1) % YAHOO_HOSTS.length;
++  throw lastErr ?? new Error("spark_failed");
++}
++
++async function chartOne(yf: string): Promise<Parsed | null> {
++  const body = await getJson(
++    `${YAHOO_HOSTS[hostIdx]}/v8/finance/chart/${encodeURIComponent(yf)}?range=1d&interval=5m`,
++  );
++  const r = body?.chart?.result?.[0];
++  return fromMeta(r?.meta, r?.indicators?.quote?.[0]?.close ?? []);
++}
++
++async function inPool<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
++  const out: R[] = [];
++  let i = 0;
++  const workers = Array.from({ length: Math.min(size, items.length) }, async () => {
++    while (i < items.length) {
++      const idx = i++;
++      out[idx] = await fn(items[idx]);
++    }
++  });
++  await Promise.all(workers);
++  return out;
++}
++
++// ---------------------------------------------------------------------------
++// CoinDCX (all crypto in one request)
++// ---------------------------------------------------------------------------
++
++async function fetchCrypto(symbols: string[]): Promise<Map<string, Parsed>> {
++  const out = new Map<string, Parsed>();
++  if (symbols.length === 0) return out;
++  const res = await fetch(COINDCX_TICKER, {
++    headers: { Accept: "application/json" },
++    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
++  });
++  if (!res.ok) throw new Error(`coindcx_${res.status}`);
++  const tickers = await res.json();
++  if (!Array.isArray(tickers)) return out;
++  const byMarket = new Map<string, any>();
++  for (const t of tickers) if (t?.market) byMarket.set(String(t.market), t);
++  for (const sym of symbols) {
++    const t = byMarket.get(`${CRYPTO_ALIAS[sym] ?? sym}INR`);
++    const price = num(t?.last_price);
++    if (!price) continue;
++    const pct = Number(t.change_24_hour);
++    out.set(sym, {
++      price,
++      previousClose: Number.isFinite(pct) && pct ? price / (1 + pct / 100) : price,
++      dayLow: num(t.low),
++      dayHigh: num(t.high),
++      open: null,
++      name: null,
++      marketTime: null,
++    });
++  }
++  return out;
++}
++
++// ---------------------------------------------------------------------------
++// The feed
++// ---------------------------------------------------------------------------
++
++type TickResult = {
++  rows: Row[];
++  missing: string[];
++  errors: string[];
++  yahooMs: number;
++  cryptoMs: number;
++  throttled: boolean;
++};
++
++class Feed {
++  private names = new Map<string, string>();
++  /** Last known day range, kept when a response omits it rather than blanked. */
++  private ranges = new Map<string, { l: number | null; h: number | null; o: number | null }>();
++  private lastFallback = new Map<string, number>();
++  private backoffLevel = -1;
++  private backoffUntil = 0;
++
++  constructor(private universe: UniverseEntry[]) {}
++
++  async loadNames(supabase: any) {
++    const { data } = await supabase.from("quotes_cache").select("symbol, market, name, day_low, day_high, open");
++    for (const r of data ?? []) {
++      const key = `${r.symbol}\u001f${r.market}`;
++      if (r.name) this.names.set(key, r.name);
++      this.ranges.set(key, { l: num(r.day_low), h: num(r.day_high), o: num(r.open) });
++    }
++  }
++
++  async tick(force: boolean): Promise<TickResult> {
++    const stockOpen = force || isStockOpen();
++    const usOpen = force || isUsMarketOpen();
++    const due = this.universe.filter((u) => force || isMarketOpen(u.market, stockOpen, usOpen));
++    const now = Date.now();
++    const nowIso = new Date(now).toISOString();
++    const rows: Row[] = [];
++    const missing: string[] = [];
++    const errors: string[] = [];
++    let throttled = false;
++
++    const yahooEntries: { u: UniverseEntry; yf: string }[] = [];
++    const cryptoEntries: UniverseEntry[] = [];
++    for (const u of due) {
++      if (u.market === "crypto") cryptoEntries.push(u);
++      else {
++        const yf = toYahoo(u);
++        if (yf) yahooEntries.push({ u, yf });
++      }
++    }
++
++    const build = (u: UniverseEntry, p: Parsed, source: string): Row => {
++      const key = `${u.symbol}\u001f${u.market}`;
++      const prev = p.previousClose ?? p.price;
++      const change = p.price - prev;
++      const known = this.ranges.get(key);
++      const range = {
++        l: p.dayLow ?? known?.l ?? null,
++        h: p.dayHigh ?? known?.h ?? null,
++        o: p.open ?? known?.o ?? null,
++      };
++      this.ranges.set(key, range);
++      return {
++        symbol: u.symbol,
++        market: u.market,
++        price: round2(p.price),
++        previous_close: round2(prev),
++        // The cached name was chosen deliberately (curated list, long name);
++        // keep it, and only fill a name for a symbol seen for the first time.
++        name: this.names.get(key) ?? p.name ?? (u.market === US_MARKET ? fromUsYahooSymbol(u.symbol) : u.symbol),
++        change: round2(change),
++        change_pct: round2(prev ? (change / prev) * 100 : 0),
++        day_low: range.l !== null ? round2(range.l) : null,
++        day_high: range.h !== null ? round2(range.h) : null,
++        open: range.o !== null ? round2(range.o) : null,
++        source,
++        updated_at: nowIso,
++      };
++    };
++
++    // Yahoo and CoinDCX in parallel.
++    const yahooStart = Date.now();
++    const yahooTask = (async () => {
++      if (yahooEntries.length === 0 || now < this.backoffUntil) return;
++      const unique = [...new Set(yahooEntries.map((e) => e.yf))];
++      const chunks: string[][] = [];
++      for (let i = 0; i < unique.length; i += SPARK_CHUNK) chunks.push(unique.slice(i, i + SPARK_CHUNK));
++      const got = new Map<string, Parsed>();
++      try {
++        const parts = await inPool(chunks, SPARK_CONCURRENCY, async (c) => {
++          try {
++            return await sparkChunk(c);
++          } catch (e) {
++            if (e instanceof YahooThrottled) throw e;
++            errors.push(`spark:${e instanceof Error ? e.message : e}`);
++            return new Map<string, Parsed>();
++          }
++        });
++        for (const m of parts) for (const [k, v] of m) got.set(k, v);
++        // A few one-by-one fallbacks for symbols the batch did not return,
++        // pending-order symbols first because the universe is sorted that way.
++        let budget = FALLBACKS_PER_TICK;
++        for (const { yf } of yahooEntries) {
++          if (got.has(yf.toUpperCase()) || budget <= 0) continue;
++          if (now - (this.lastFallback.get(yf) ?? 0) < FALLBACK_EVERY_MS) continue;
++          this.lastFallback.set(yf, now);
++          budget--;
++          try {
++            const p = await chartOne(yf);
++            if (p) got.set(yf.toUpperCase(), p);
++          } catch (e) {
++            if (e instanceof YahooThrottled) throw e;
++          }
++        }
++        this.backoffLevel = -1;
++      } catch (e) {
++        if (!(e instanceof YahooThrottled)) throw e;
++        throttled = true;
++        this.backoffLevel = Math.min(this.backoffLevel + 1, BACKOFF_MS.length - 1);
++        this.backoffUntil = Date.now() + BACKOFF_MS[this.backoffLevel];
++        errors.push(`${e.message}: backing off ${BACKOFF_MS[this.backoffLevel] / 1000}s`);
++      }
++      for (const { u, yf } of yahooEntries) {
++        const p = got.get(yf.toUpperCase());
++        if (p) rows.push(build(u, p, "yahoo_batch"));
++        else missing.push(`${u.symbol}:${u.market}`);
++      }
++    })();
++
++    const cryptoStart = Date.now();
++    let cryptoMs = 0;
++    const cryptoTask = (async () => {
++      try {
++        const got = await fetchCrypto(cryptoEntries.map((u) => u.symbol));
++        for (const u of cryptoEntries) {
++          const p = got.get(u.symbol);
++          if (p) rows.push(build(u, p, "coindcx"));
++          else missing.push(`${u.symbol}:crypto`);
++        }
++      } catch (e) {
++        errors.push(`crypto:${e instanceof Error ? e.message : e}`);
++      } finally {
++        cryptoMs = Date.now() - cryptoStart;
++      }
++    })();
++
++    let yahooMs = 0;
++    await Promise.all([
++      yahooTask.catch((e) => errors.push(`yahoo:${e instanceof Error ? e.message : e}`)).finally(() => {
++        yahooMs = Date.now() - yahooStart;
++      }),
++      cryptoTask,
++    ]);
++    return { rows, missing, errors, yahooMs, cryptoMs, throttled };
++  }
++}
++
++/** Sends one broadcast with every changed price. One message per listening phone. */
++async function broadcast(rows: Row[]): Promise<void> {
++  if (rows.length === 0) return;
++  const q = rows.map((r) => ({
++    s: r.symbol, m: r.market, p: r.price, pc: r.previous_close,
++    c: r.change, cp: r.change_pct, l: r.day_low, h: r.day_high, o: r.open, n: r.name,
++  }));
++  const res = await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
++    method: "POST",
++    headers: {
++      apikey: SERVICE_ROLE,
++      Authorization: `Bearer ${SERVICE_ROLE}`,
++      "Content-Type": "application/json",
++    },
++    body: JSON.stringify({
++      messages: [{ topic: PRICE_TOPIC, event: "tick", payload: { t: Date.now(), q }, private: false }],
++    }),
++    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
++  });
++  if (!res.ok) throw new Error(`broadcast_${res.status}`);
++}
++
++const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
++
++async function run(opts: { runId: string; force: boolean; tickMs: number; broadcastMs: number; durationMs: number }) {
++  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
++  const started = Date.now();
++  const universe = await buildUniverse(supabase);
++  const feed = new Feed(universe);
++  await feed.loadNames(supabase);
++
++  const lastSent = new Map<string, string>();
++  const pending = new Map<string, Row>();
++  let lastBroadcast = 0;
++  let ticks = 0;
++
++  while (Date.now() - started < opts.durationMs) {
++    const tickStart = Date.now();
++    const res = await feed.tick(opts.force);
++    ticks++;
++
++    if (res.rows.length > 0) {
++      const { error } = await supabase.from("quotes_cache").upsert(res.rows, { onConflict: "symbol,market" });
++      if (error) res.errors.push(`upsert:${error.message}`);
++    }
++
++    for (const r of res.rows) {
++      const key = `${r.symbol}\u001f${r.market}`;
++      const sig = `${r.price}|${r.day_low}|${r.day_high}`;
++      if (lastSent.get(key) !== sig) pending.set(key, r);
++    }
++    if (pending.size > 0 && Date.now() - lastBroadcast >= opts.broadcastMs) {
++      const batch = [...pending.values()];
++      try {
++        await broadcast(batch);
++        for (const r of batch) lastSent.set(`${r.symbol}\u001f${r.market}`, `${r.price}|${r.day_low}|${r.day_high}`);
++        pending.clear();
++        lastBroadcast = Date.now();
++      } catch (e) {
++        res.errors.push(e instanceof Error ? e.message : String(e));
++      }
++    }
++
++    // Heartbeat and lease in one write: a newer run has taken over when this
++    // update matches no row, and this loop then stops.
++    const { data: lease } = await supabase
++      .from("price_feed_state")
++      .update({
++        last_tick_at: new Date().toISOString(),
++        last_tick_ms: Date.now() - tickStart,
++        last_rows: res.rows.length,
++        last_missing: res.missing.slice(0, 50),
++        last_errors: res.errors.slice(0, 20),
++        yahoo_ms: res.yahooMs,
++        crypto_ms: res.cryptoMs,
++        ticks,
++      })
++      .eq("id", 1)
++      .eq("run_id", opts.runId)
++      .select("id");
++    if (!lease || lease.length === 0) break;
++
++    const jitter = Math.floor(Math.random() * 400) - 200;
++    await sleep(Math.max(250, opts.tickMs + jitter - (Date.now() - tickStart)));
++  }
++}
++
++serve(async (req) => {
++  const url = new URL(req.url);
++  const p = (k: string, d: number, min: number, max: number) => {
++    const v = Number(url.searchParams.get(k));
++    return Number.isFinite(v) && v > 0 ? Math.min(max, Math.max(min, v)) : d;
++  };
++  const force = url.searchParams.get("force") === "1";
++  const dry = url.searchParams.get("dry") === "1";
++  const tickMs = p("tick_ms", 3000, 1000, 30_000);
++  const broadcastMs = p("broadcast_ms", 5000, 1000, 60_000);
++  const durationMs = p("duration_s", 58, 5, 300) * 1000;
++
++  try {
++    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
++
++    if (dry) {
++      const universe = await buildUniverse(supabase);
++      const feed = new Feed(universe);
++      await feed.loadNames(supabase);
++      const t0 = Date.now();
++      const res = await feed.tick(force);
++      return json({
++        dry: true,
++        universe: universe.length,
++        rows: res.rows.length,
++        tick_ms: Date.now() - t0,
++        yahoo_ms: res.yahooMs,
++        crypto_ms: res.cryptoMs,
++        spark_path: sparkPath,
++        throttled: res.throttled,
++        missing: res.missing,
++        errors: res.errors,
++        sample: res.rows.slice(0, 40),
++      });
++    }
++
++    // Take the lease. A run that started less than MIN_RUN_GAP_MS ago keeps it,
++    // so stray extra invocations cost one cheap request each and nothing else.
++    const runId = crypto.randomUUID();
++    const { data: state } = await supabase.from("price_feed_state").select("run_started_at").eq("id", 1).maybeSingle();
++    const lastStart = state?.run_started_at ? new Date(state.run_started_at).getTime() : 0;
++    if (!force && Date.now() - lastStart < MIN_RUN_GAP_MS) {
++      return json({ skipped: "a run started moments ago" }, 202);
++    }
++    const { error } = await supabase
++      .from("price_feed_state")
++      .upsert({ id: 1, run_id: runId, run_started_at: new Date().toISOString() }, { onConflict: "id" });
++    if (error) return json({ error: error.message }, 500);
++
++    const work = run({ runId, force, tickMs, broadcastMs, durationMs }).catch((e) =>
++      console.error("[price-feed] run failed", e)
++    );
++    if (typeof EdgeRuntime !== "undefined") {
++      EdgeRuntime.waitUntil(work);
++      return json({ started: runId }, 202);
++    }
++    await work;
++    return json({ finished: runId });
++  } catch (e) {
++    return json({ error: e instanceof Error ? e.message : String(e) }, 500);
++  }
++});
+diff --git a/supabase/functions/refresh-quotes/index.ts b/supabase/functions/refresh-quotes/index.ts
+index 0bc2225..8342e06 100644
+--- a/supabase/functions/refresh-quotes/index.ts
++++ b/supabase/functions/refresh-quotes/index.ts
+@@ -1,8 +1,8 @@
+ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+ import { pooledMap } from "https://deno.land/std@0.177.0/async/pool.ts";
+ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+-import { COMMODITIES, COMMODITY_MARKET, US_MARKET, isCommodityOpen, isUsMarketOpen } from "../_shared/us_market.ts";
+-import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
++import { isUsMarketOpen } from "../_shared/us_market.ts";
++import { buildUniverse, isMarketOpen, type UniverseEntry } from "../_shared/quote_universe.ts";
+ // Shared session window: the old inline copy closed at 15:15, so quotes stopped
+ // refreshing 15 minutes before the exchange did -- which also starved the
+ // engine's stale-price guard at the end of every session.
+@@ -16,106 +16,8 @@ function json(body: unknown, status = 200) {
+   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+ }
+ 
+-function extractUnderlying(symbolRaw: string): string {
+-  let s = (symbolRaw || "").toUpperCase().trim();
+-  if (s.startsWith("NSE:")) s = s.slice(4);
+-  if (s.startsWith("BSE:")) s = s.slice(4);
+-  s = s.replace("-EQ-", "-");
+-  if (s.endsWith("-EQ")) s = s.slice(0, -3);
+-  if (s.includes(" ")) s = s.split(" ")[0];
+-  if (s.includes("-")) s = s.split("-")[0];
+-  if (s === "^NSEI" || s === "NSEI" || s === "NIFTY50") return "NIFTY";
+-  if (s === "^NSEBANK" || s === "NSEBANK") return "BANKNIFTY";
+-  if (s === "^BSESN" || s === "SENSEX") return "SENSEX";
+-  const m = s.match(/\d/);
+-  if (m && (m.index ?? 0) > 0) s = s.slice(0, m.index);
+-  return s;
+-}
+-
+ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+ 
+-/**
+- * Is this market's session live right now?
+- *
+- * Previously every non-crypto market was gated on the *Indian* session, which
+- * got US equities exactly backwards: they were refreshed while NSE was open (the
+- * US market shut, so a stale close kept being restamped as fresh) and skipped
+- * once the US market actually opened. Crypto trades 24/7.
+- */
+-function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): boolean {
+-  if (market === "crypto") return true;
+-  if (market === US_MARKET) return usOpen;
+-  if (market === COMMODITY_MARKET) return isCommodityOpen();
+-  return stockOpen;
+-}
+-
+-/**
+- * Symbols the Trade screen offers before the user searches for anything.
+- *
+- * These are not in anybody's watchlist or holdings by default, so without them
+- * the popular rows miss the cache and each client fetches them live — which is
+- * why rows in one list moved at different rates. Mirrors the India, crypto and US
+- * lists in `kMoverUniverse` in `app/lib/screens/main/trade_screen.dart`; keep them in step.
+- *
+- * ponytail: duplicated across Dart and TS rather than fetched from a table. The
+- * ceiling is that a new popular symbol needs editing in two files; if these
+- * lists ever become user-editable, move them into a `popular_symbols` table and
+- * read it here instead.
+- */
+-const POPULAR: { symbol: string; market: string }[] = [
+-  ...["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
+-      "ITC", "LT", "HINDUNILVR", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "MARUTI",
+-      "SUNPHARMA", "TITAN", "ASIANPAINT", "WIPRO", "HCLTECH", "TATASTEEL", "NTPC",
+-      "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
+-    .map((symbol) => ({ symbol, market: "stock" })),
+-  ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
+-      "LINK", "LTC", "TRX"]
+-    .map((symbol) => ({ symbol, market: "crypto" })),
+-  ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
+-      "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
+-    .map((symbol) => ({ symbol, market: US_MARKET })),
+-  ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
+-];
+-
+-async function buildUniverse(supabase: any): Promise<{ symbol: string; market: string }[]> {
+-  const universe = new Map<string, { symbol: string; market: string }>();
+-  const add = (symbol: string | null, market: string | null): string | null => {
+-    if (!symbol) return null;
+-    const mkt = (market || "stock").toLowerCase();
+-    // Crypto perpetuals arrive as `B-BTC_USDT` from pending F&O orders; the feed
+-    // only knows `BTC`, so without this the symbol was requested verbatim and
+-    // returned a permanent 404 on every pass.
+-    const sym = mkt === "crypto" ? cryptoUnderlying(symbol) : extractUnderlying(symbol);
+-    if (!sym) return null;
+-    const key = `${sym}\u001f${mkt}`;
+-    universe.set(key, { symbol: sym, market: mkt });
+-    return key;
+-  };
+-  // Symbols carrying a resting order are refreshed first. The pool below works
+-  // through the universe in order, so if a pass is cut short by the function
+-  // deadline it is a watchlist row that goes unrefreshed, never a live order.
+-  const priority = new Set<string>();
+-  const [watch, holds, fo, alerts, pend] = await Promise.all([
+-    supabase.from("watchlist").select("symbol, market"),
+-    supabase.from("holdings").select("symbol, market"),
+-    supabase.from("fo_positions").select("symbol").eq("is_settled", false),
+-    supabase.from("price_alerts").select("symbol, market").eq("status", "active"),
+-    supabase.from("orders").select("symbol, market").eq("status", "pending"),
+-  ]);
+-  for (const r of (watch.data ?? [])) add(r.symbol, r.market);
+-  for (const r of (holds.data ?? [])) add(r.symbol, r.market);
+-  for (const r of (fo.data ?? [])) add(r.symbol, "stock");
+-  for (const r of (alerts.data ?? [])) add(r.symbol, r.market);
+-  for (const r of (pend.data ?? [])) { const k = add(r.symbol, r.market); if (k) priority.add(k); }
+-  add("NIFTY", "stock");
+-  add("BANKNIFTY", "stock");
+-  add("SENSEX", "stock");
+-  for (const p of POPULAR) add(p.symbol, p.market);
+-  return [...universe.entries()]
+-    .sort((a, b) => Number(priority.has(b[0])) - Number(priority.has(a[0])))
+-    .map(([, u]) => u);
+-}
+-
+ /// How many `market-quote` calls to have in flight at once.
+ ///
+ /// This used to be "all of them": a bare `Promise.all` over the whole universe,
+@@ -158,6 +60,20 @@ async function fetchQuoteRow(u: { symbol: string; market: string }): Promise<Rec
+   };
+ }
+ 
++/// A row younger than this is the fast feed's responsibility, not ours.
++const SAFETY_NET_STALE_MS = 30_000;
++
++async function staleOnly(supabase: any, universe: UniverseEntry[]): Promise<UniverseEntry[]> {
++  const { data, error } = await supabase.from("quotes_cache").select("symbol, market, updated_at");
++  if (error || !Array.isArray(data)) return universe;
++  const cutoff = Date.now() - SAFETY_NET_STALE_MS;
++  const fresh = new Set<string>();
++  for (const r of data) {
++    if (new Date(r.updated_at).getTime() >= cutoff) fresh.add(`${r.symbol}\u001f${r.market}`);
++  }
++  return universe.filter((u) => !fresh.has(`${u.symbol}\u001f${u.market}`));
++}
++
+ async function refreshOnce(
+   supabase: any,
+   universe: { symbol: string; market: string }[],
+@@ -201,8 +117,17 @@ serve(async (req) => {
+     const stockOpen = isStockMarketOpen() || force;
+     const usOpen = isUsMarketOpen() || force;
+ 
++    const all = url.searchParams.get("all") === "1";
++
+     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
+-    const universe = await buildUniverse(supabase);
++    const fullUniverse = await buildUniverse(supabase);
++    // Safety net behind `price-feed`. While the fast feed is healthy it keeps
++    // every row only seconds old, so this pass has nothing to do and makes no
++    // `market-quote` calls. A row the feed could not price (a symbol Yahoo's
++    // batch endpoint skipped, a feed outage) goes stale and is picked up here,
++    // one symbol at a time, exactly as before. `?all=1` restores the old
++    // refresh-everything behaviour.
++    const universe = all ? fullUniverse : await staleOnly(supabase, fullUniverse);
+ 
+     // One pass per invocation.
+     //
+@@ -225,14 +150,15 @@ serve(async (req) => {
+     // Per-market counts make a silent skip (wrong session gate, symbol never
+     // added to the universe) visible without reading the function logs.
+     const byMarket: Record<string, number> = {};
+-    for (const u of universe) byMarket[u.market] = (byMarket[u.market] ?? 0) + 1;
++    for (const u of fullUniverse) byMarket[u.market] = (byMarket[u.market] ?? 0) + 1;
+ 
+     // `failed` is the diagnostic that did not exist before: the old code caught
+     // every per-symbol error and returned only a success count, so a pass that
+     // refreshed 32 of 54 symbols looked identical to a healthy one. Capped so a
+     // provider-wide outage cannot bloat the response.
+     return json({
+-      universe: universe.length,
++      universe: fullUniverse.length,
++      stale: universe.length,
+       byMarket,
+       refreshed: lastCount,
+       failedCount: lastFailed.length,
+diff --git a/supabase/migrations/20261122090000_price_feed_tables.sql b/supabase/migrations/20261122090000_price_feed_tables.sql
+new file mode 100644
+index 0000000..2828374
+--- /dev/null
++++ b/supabase/migrations/20261122090000_price_feed_tables.sql
+@@ -0,0 +1,59 @@
++-- Fast price feed (price-feed edge function): state, browsed symbols.
++--
++-- price_feed_state  one row. Holds the lease of the run currently looping (so two
++--                   overlapping cron runs never both fetch) and its heartbeat:
++--                   last tick time, rows written, symbols missed, errors.
++-- hot_symbols       symbols someone opened in the app recently that nobody holds
++--                   or watches. price-feed adds them to its universe for 10 min,
++--                   so a browsed stock moves live instead of waiting for a
++--                   per-symbol fetch. Written only through note_hot_symbol().
++--
++-- Reversible: drop function public.note_hot_symbol(text, text);
++--             drop table public.hot_symbols, public.price_feed_state;
++
++create table if not exists public.price_feed_state (
++  id             int primary key default 1 check (id = 1),
++  run_id         uuid,
++  run_started_at timestamptz,
++  last_tick_at   timestamptz,
++  last_tick_ms   int,
++  last_rows      int,
++  last_missing   text[],
++  last_errors    text[],
++  yahoo_ms       int,
++  crypto_ms      int,
++  ticks          int
++);
++alter table public.price_feed_state enable row level security;
++-- Heartbeat is readable by the app (to show "prices delayed"); writes are
++-- service-role only (no policy).
++drop policy if exists "Price feed heartbeat: read" on public.price_feed_state;
++create policy "Price feed heartbeat: read" on public.price_feed_state
++  for select to anon, authenticated using (true);
++insert into public.price_feed_state (id) values (1) on conflict (id) do nothing;
++
++create table if not exists public.hot_symbols (
++  symbol  text not null check (char_length(symbol) between 1 and 40),
++  market  text not null check (char_length(market) between 1 and 20),
++  seen_at timestamptz not null default now(),
++  primary key (symbol, market)
++);
++create index if not exists hot_symbols_seen_at_idx on public.hot_symbols (seen_at desc);
++alter table public.hot_symbols enable row level security;
++revoke all on public.hot_symbols from anon, authenticated;
++
++create or replace function public.note_hot_symbol(p_symbol text, p_market text)
++returns void
++language sql
++security definer
++set search_path = public
++as $$
++  insert into public.hot_symbols (symbol, market, seen_at)
++  select upper(trim(p_symbol)), lower(trim(p_market)), now()
++  where char_length(trim(coalesce(p_symbol, ''))) between 1 and 40
++    and lower(trim(coalesce(p_market, ''))) in
++        ('stock', 'crypto', 'us_stock', 'commodity', 'pakistan_stock', 'italy_stock')
++  on conflict (symbol, market) do update set seen_at = excluded.seen_at;
++$$;
++revoke all on function public.note_hot_symbol(text, text) from public, anon;
++grant execute on function public.note_hot_symbol(text, text) to authenticated;
+diff --git a/supabase/migrations/20261122090100_price_feed_cron.sql b/supabase/migrations/20261122090100_price_feed_cron.sql
+new file mode 100644
+index 0000000..0e21ebb
+--- /dev/null
++++ b/supabase/migrations/20261122090100_price_feed_cron.sql
+@@ -0,0 +1,45 @@
++-- Schedules price-feed and tidies cron history.
++--
++-- price-feed       every minute; each run loops ~58s fetching every 3s and
++--                  pushing changed prices every 5s (tick_ms / broadcast_ms in the
++--                  URL are the knobs). Uses pg_net (async) so the cron worker is
++--                  not held while the function runs. The key is copied from the
++--                  existing refresh-quotes job, so no key lives in this repo.
++-- refresh-quotes   unchanged schedule; the function now only refreshes rows the
++--                  fast feed left older than 30s (safety net).
++-- cron-history-cleanup  daily; pg_cron never prunes cron.job_run_details, and a
++--                  per-minute job adds 1,440 rows a day.
++--
++-- Reversible: select cron.unschedule('price-feed');
++--             select cron.unschedule('cron-history-cleanup');
++
++do $$
++declare
++  v_key text;
++begin
++  select substring(command from 'Bearer ([A-Za-z0-9_\-\.]+)')
++    into v_key
++    from cron.job where jobname = 'refresh-quotes';
++  if v_key is null then
++    raise exception 'refresh-quotes job (source of the API key) not found; schedule price-feed by hand';
++  end if;
++
++  perform cron.schedule(
++    'price-feed',
++    '* * * * *',
++    format($cmd$
++      select net.http_post(
++        url := 'https://bftvimnhpoiuoyryyiff.supabase.co/functions/v1/price-feed?tick_ms=3000&broadcast_ms=5000',
++        headers := jsonb_build_object('Authorization', 'Bearer ' || %L, 'apikey', %L, 'Content-Type', 'application/json'),
++        body := '{}'::jsonb,
++        timeout_milliseconds := 5000
++      );
++    $cmd$, v_key, v_key)
++  );
++end $$;
++
++select cron.schedule(
++  'cron-history-cleanup',
++  '15 21 * * *',
++  $$ delete from cron.job_run_details where end_time < now() - interval '3 days' $$
++);
+-- 
+2.43.0
+

@@ -3,7 +3,7 @@ import { corsHeaders, handleCors } from "../_shared/cors.ts";
 import { fetchHistory as yfHistory, CandleData } from "../_shared/yahoo.ts";
 import { fetchHistory as cgHistory } from "../_shared/coingecko.ts";
 import { fetchHistory as dcxHistory } from "../_shared/coindcx.ts";
-import { COMMODITY_MARKET, US_MARKET, toUsYahooSymbol } from "../_shared/us_market.ts";
+import { COMMODITY_MARKET, US_MARKET, commodityUnitDivisor, toUsYahooSymbol } from "../_shared/us_market.ts";
 import {
   parseDerivativeSymbol,
   blackScholes,
@@ -66,6 +66,23 @@ async function handleRequest(req: Request): Promise<Response> {
         yfSymbol: toUsYahooSymbol(symbol),
         strict,
       });
+      if (effectiveMarket === COMMODITY_MARKET) {
+        const divisor = commodityUnitDivisor(symbol);
+        if (divisor > 1 && data) {
+          const r4 = (n: number) => Math.round((n / divisor) * 10000) / 10000;
+          data = {
+            ...data,
+            points: (data.points ?? []).map((p: { t: number; v: number }) => ({ t: p.t, v: r4(p.v) })),
+            candles: (data.candles ?? []).map((c: CandleData) => ({
+              t: c.t,
+              o: r4(c.o),
+              h: r4(c.h),
+              l: r4(c.l),
+              c: r4(c.c),
+            })),
+          };
+        }
+      }
     } else if (effectiveMarket === "pakistan_stock") {
       const yfSymbol = symbol.toUpperCase().endsWith(".KA") ? symbol.toUpperCase() : `${symbol.toUpperCase()}.KA`;
       data = await yfHistory(symbol, range, interval || undefined, {

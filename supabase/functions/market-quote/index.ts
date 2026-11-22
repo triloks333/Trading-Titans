@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import {
   COMMODITY_MARKET,
   US_MARKET,
+  commodityDisplayName,
+  commodityUnitDivisor,
   fromUsYahooSymbol,
   getUsdInrRate,
   getPkrInrRate,
@@ -165,9 +167,17 @@ async function handleRequest(req: Request): Promise<Response> {
     } else if (market === US_MARKET) {
       quote = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
     } else if (market === COMMODITY_MARKET) {
-      // Yahoo continuous futures (GC=F) come through the US quote path unchanged, in USD.
-      const q = await attempt(() => fetchUsStockQuote(symbol), errors, "yahoo");
-      quote = q && { ...q, market: COMMODITY_MARKET };
+      // Yahoo continuous futures (GC=F, SI=F) are quoted per troy ounce (31.1035g) on COMEX;
+      // scale Gold and Silver to per-1-gram so Indian prices match the 1g retail/bullion rate.
+      const divisor = commodityUnitDivisor(symbol);
+      const q = await attempt(() => fetchUsStockQuote(symbol, divisor), errors, "yahoo");
+      const cleanName = commodityDisplayName(symbol);
+      quote = q && {
+        ...q,
+        name: cleanName ?? q.name,
+        display_name: cleanName ?? q.display_name,
+        market: COMMODITY_MARKET,
+      };
     } else if (market === "pakistan_stock") {
       quote = await attempt(() => fetchPakistanStockQuote(symbol), errors, "yahoo");
     } else if (market === "italy_stock") {
@@ -334,7 +344,7 @@ async function fetchDerivativeQuote(d: ParsedDerivative, originalSymbol: string)
  * the order engine does the single USD -> INR conversion at fill time so the
  * stored FX rate belongs to the trade rather than to a quote refresh.
  */
-async function fetchUsStockQuote(symbol: string): Promise<Quote> {
+async function fetchUsStockQuote(symbol: string, unitDivisor = 1): Promise<Quote> {
   const yfSymbol = toUsYahooSymbol(symbol);
   const chartUrl = `${YAHOO_CHART}/${encodeURIComponent(yfSymbol)}?range=2d&interval=1d`;
   const chartRes = await fetch(chartUrl, { headers: { "User-Agent": USER_AGENT } });
@@ -344,29 +354,35 @@ async function fetchUsStockQuote(symbol: string): Promise<Quote> {
   const meta = result?.meta;
   if (!meta) throw new Error(`No chart meta for ${yfSymbol}`);
 
-  const price = Number(meta.regularMarketPrice ?? 0);
-  if (!(price > 0)) throw new Error(`No price for ${yfSymbol}`);
-  const previousClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? price);
+  const rawPrice = Number(meta.regularMarketPrice ?? 0);
+  if (!(rawPrice > 0)) throw new Error(`No price for ${yfSymbol}`);
+  const rawPrevClose = Number(meta.chartPreviousClose ?? meta.previousClose ?? rawPrice);
+  const price = rawPrice / unitDivisor;
+  const previousClose = rawPrevClose / unitDivisor;
   const change = price - previousClose;
+  const decimals = unitDivisor > 1 ? 4 : 2;
 
   const summary = await fetchYahooSummary(yfSymbol);
   const storedSymbol = fromUsYahooSymbol(yfSymbol);
+  const rawDayLow = number(summary.dayLow ?? meta.regularMarketDayLow);
+  const rawDayHigh = number(summary.dayHigh ?? meta.regularMarketDayHigh);
+  const rawOpen = number(summary.open ?? meta.regularMarketOpen);
 
   return {
     symbol: storedSymbol,
     yf_symbol: yfSymbol,
     name: (summary.name as string | undefined) ?? meta.shortName ?? storedSymbol,
-    price: round(price, 2),
-    previous_close: round(previousClose, 2),
-    change: round(change, 2),
-    change_pct: round(previousClose ? (change / previousClose) * 100 : 0, 2),
+    price: round(price, decimals),
+    previous_close: round(previousClose, decimals),
+    change: round(change, decimals),
+    change_pct: round(rawPrevClose ? ((rawPrice - rawPrevClose) / rawPrevClose) * 100 : 0, 2),
     // Native currency. The app formats us_stock with "$" on the strength of this.
     currency: "USD",
     market: US_MARKET,
     source: "yahoo",
-    day_low: optionalRound(summary.dayLow ?? meta.regularMarketDayLow, 2),
-    day_high: optionalRound(summary.dayHigh ?? meta.regularMarketDayHigh, 2),
-    open: optionalRound(summary.open ?? meta.regularMarketOpen, 2),
+    day_low: rawDayLow > 0 ? round(rawDayLow / unitDivisor, decimals) : undefined,
+    day_high: rawDayHigh > 0 ? round(rawDayHigh / unitDivisor, decimals) : undefined,
+    open: rawOpen > 0 ? round(rawOpen / unitDivisor, decimals) : undefined,
     volume: optionalInt(summary.volume ?? meta.regularMarketVolume),
     // Indicative only. The binding rate is the one the engine records at fill.
     fx_rate: round(await getUsdInrRate(), 4),

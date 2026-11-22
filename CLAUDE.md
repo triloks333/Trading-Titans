@@ -2,6 +2,8 @@
 
 Welcome to **Trading Titans** (`com.kwm.tradingtitans`). This document provides complete context, operational commands, architecture, and current growth objectives for Claude Code and developer agents.
 
+> **Analytics / admin intelligence dashboard work? Read `docs/handoff-2026-11-08-analytics-dashboard.md` first** — current state, what's in and out of scope, build order.
+>
 > **Continuing work? Read `docs/handoff-2026-11-02-growth-and-tooling.md` first.** It records the latest session's findings (GSC baseline, checkout drop-off), what shipped (GA4 analytics, commit `670ee57`), the tooling installed, the in-progress OmniRoute gateway install, and the prioritised next steps.
 
 ---

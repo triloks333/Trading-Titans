@@ -7,6 +7,7 @@ import '../core/market_hours.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
 import 'churn_telemetry_service.dart';
+import 'currency_service.dart';
 import 'diagnostics_service.dart';
 
 class MarketService {
@@ -403,6 +404,7 @@ class MarketService {
           final price = (m['price'] as num?)?.toDouble() ?? 0.0;
           if (price <= 0) continue;
           final reqKey = '${p.symbol}\x1F${p.market}';
+          final isUsdMarket = market == MarketHours.usStock || market == MarketHours.commodity;
           result[reqKey] = Quote(
             symbol: p.symbol,
             yfSymbol: p.symbol,
@@ -411,12 +413,13 @@ class MarketService {
             previousClose: (m['previous_close'] as num?)?.toDouble() ?? price,
             change: (m['change'] as num?)?.toDouble() ?? 0.0,
             changePct: (m['change_pct'] as num?)?.toDouble() ?? 0.0,
-            currency: 'INR',
+            currency: isUsdMarket ? 'USD' : 'INR',
             market: market,
             source: 'cache',
             dayLow: (m['day_low'] as num?)?.toDouble(),
             dayHigh: (m['day_high'] as num?)?.toDouble(),
             open: (m['open'] as num?)?.toDouble(),
+            fxRate: isUsdMarket ? CurrencyService.instance.usdInr : null,
           );
           resolved.add(reqKey);
         }
@@ -536,6 +539,7 @@ class MarketService {
       }
       final price = (m['price'] as num?)?.toDouble() ?? 0.0;
       if (price <= 0) return null;
+      final isUsdMarket = market == MarketHours.usStock || market == MarketHours.commodity;
       return Quote(
         symbol: symbol,
         yfSymbol: symbol,
@@ -544,12 +548,13 @@ class MarketService {
         previousClose: (m['previous_close'] as num?)?.toDouble() ?? price,
         change: (m['change'] as num?)?.toDouble() ?? 0.0,
         changePct: (m['change_pct'] as num?)?.toDouble() ?? 0.0,
-        currency: 'INR',
+        currency: isUsdMarket ? 'USD' : 'INR',
         market: market,
         source: 'cache',
         dayLow: (m['day_low'] as num?)?.toDouble(),
         dayHigh: (m['day_high'] as num?)?.toDouble(),
         open: (m['open'] as num?)?.toDouble(),
+        fxRate: isUsdMarket ? CurrencyService.instance.usdInr : null,
       );
     } catch (_) {
       return null; // any failure -> live fallback, never breaks pricing
@@ -625,6 +630,7 @@ class MarketService {
 
     if (s.endsWith('.NS') ||
         s.endsWith('.BO') ||
+        s.endsWith('=F') ||
         ['^NSEI', '^BSESN', '^NSEBANK'].contains(s)) {
       return s;
     }
@@ -783,6 +789,8 @@ class MarketService {
     final closes = List<num?>.from(quote['close'] ?? []);
 
     final candles = <CandleData>[];
+    final symUpper = symbol.toUpperCase().trim();
+    final divisor = (symUpper == 'GC=F' || symUpper == 'SI=F') ? 31.1034768 : 1.0;
     for (int i = 0; i < timestamps.length; i++) {
       if (opens[i] != null &&
           highs[i] != null &&
@@ -791,10 +799,10 @@ class MarketService {
         candles.add(
           CandleData(
             timestamp: timestamps[i] * 1000,
-            open: opens[i]!.toDouble(),
-            high: highs[i]!.toDouble(),
-            low: lows[i]!.toDouble(),
-            close: closes[i]!.toDouble(),
+            open: opens[i]!.toDouble() / divisor,
+            high: highs[i]!.toDouble() / divisor,
+            low: lows[i]!.toDouble() / divisor,
+            close: closes[i]!.toDouble() / divisor,
           ),
         );
       }

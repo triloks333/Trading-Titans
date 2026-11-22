@@ -73,14 +73,30 @@ export function isUsMarketOpen(at: Date = new Date()): boolean {
 /** Market value for commodity futures (GC=F, CL=F…): priced in USD off Yahoo, like US stocks. */
 export const COMMODITY_MARKET = "commodity";
 
+/** 1 troy ounce in grams. Yahoo quotes COMEX Gold (GC=F) and Silver (SI=F) per troy oz; we convert to per 1 gram. */
+export const TROY_OUNCE_GRAMS = 31.1034768;
+
 /** The whole commodity universe. Mirrors kMoverUniverse['commodity'] in trade_screen.dart. */
 export const COMMODITIES: { symbol: string; name: string }[] = [
-  { symbol: "GC=F", name: "Gold" },
-  { symbol: "SI=F", name: "Silver" },
+  { symbol: "GC=F", name: "Gold (1g)" },
+  { symbol: "SI=F", name: "Silver (1g)" },
   { symbol: "CL=F", name: "Crude Oil" },
   { symbol: "NG=F", name: "Natural Gas" },
   { symbol: "HG=F", name: "Copper" },
 ];
+
+/** Divisor to convert Yahoo's native contract quote into our display unit (per 1g for Gold & Silver). */
+export function commodityUnitDivisor(symbol: string): number {
+  const s = (symbol || "").toUpperCase().trim();
+  if (s === "GC=F" || s === "SI=F") return TROY_OUNCE_GRAMS;
+  return 1;
+}
+
+/** Friendly commodity name with unit label. */
+export function commodityDisplayName(symbol: string): string | undefined {
+  const s = (symbol || "").toUpperCase().trim();
+  return COMMODITIES.find((c) => c.symbol === s)?.name;
+}
 
 /**
  * True during the CME Globex session: Sun 18:00 ET → Fri 17:00 ET, with a daily

@@ -573,7 +573,12 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
-      child: ExpansionTile(
+      // Own Material so the header's ink isn't hidden under the white box.
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
         onExpansionChanged: (open) {
           if (open) ChurnTelemetryService.instance.recordButtonTap('subscribe_faq_mentorship_expand');
         },
@@ -604,6 +609,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -614,7 +620,12 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
         borderRadius: BorderRadius.circular(AppRadius.xl),
         border: Border.all(color: AppColors.birch),
       ),
-      child: ExpansionTile(
+      // Own Material so the header's ink isn't hidden under the white box.
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        clipBehavior: Clip.antiAlias,
+        child: ExpansionTile(
         onExpansionChanged: (open) {
           if (open) ChurnTelemetryService.instance.recordButtonTap('subscribe_faq_topup_expand');
         },
@@ -644,6 +655,7 @@ class _SubscribeScreenState extends State<SubscribeScreen> {
             'Yes, your demo capital can be used across equities, futures, and options.',
           ),
         ],
+      ),
       ),
     );
   }

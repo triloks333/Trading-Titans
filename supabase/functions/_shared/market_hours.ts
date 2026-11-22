@@ -68,7 +68,13 @@ export function isIndianStockHoliday(at: Date = new Date()): boolean {
 /// One-off sessions outside the normal week (Diwali Muhurat trading), as ISO
 /// instants, half-open [start, end). Mirror of public.market_special_sessions,
 /// which the app reads; add the window to both once NSE publishes it.
-export const SPECIAL_SESSIONS: { name: string; start: string; end: string }[] = [];
+export const SPECIAL_SESSIONS: { name: string; start: string; end: string }[] = [
+  {
+    name: "Muhurat Trading",
+    start: "2026-11-08T14:20:00+05:30",
+    end: "2026-11-08T15:30:00+05:30",
+  },
+];
 
 export function isSpecialSession(at: Date = new Date(), sessions = SPECIAL_SESSIONS): boolean {
   const t = at.getTime();
