@@ -104,8 +104,10 @@ class UsageChip extends StatelessWidget {
   final String period;
 
   @override
-  Widget build(BuildContext context) {
-    final plan = context.watch<PlanService>();
+  Widget build(BuildContext context) => ListenableBuilder(listenable: PlanService.instance, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
+    final plan = PlanService.instance;
     final left = plan.remaining(feature);
     final limit = plan.limitFor(feature);
     if (left == null || limit == null) return const SizedBox.shrink();
@@ -146,8 +148,10 @@ class LockedFeatureCard extends StatelessWidget {
   final String source;
 
   @override
-  Widget build(BuildContext context) {
-    final plan = context.watch<PlanService>();
+  Widget build(BuildContext context) => ListenableBuilder(listenable: PlanService.instance, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
+    final plan = PlanService.instance;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
