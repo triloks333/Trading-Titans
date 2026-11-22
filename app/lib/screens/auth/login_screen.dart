@@ -22,7 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   bool _obscurePassword = true;
 
-  /// Consent for the account-CREATING actions on this screen (Google, Guest).
+  /// Consent for the account-CREATING actions on this screen (Google).
   bool _acceptedLegal = false;
   bool _showLegalError = false;
 
@@ -171,28 +171,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _continueAsGuest() async {
-    if (!_requireLegalConsent()) return;
-    setState(() {
-      _error = null;
-      _busy = true;
-    });
-
-    final auth = context.read<AuthService>();
-    try {
-      await AnalyticsService.logSignupMethodSelected('guest');
-      await auth.continueAsGuest();
-    } catch (e) {
-      _failWith(e);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-        });
-      }
-    }
-  }
-
   void _showForgotPasswordSheet() {
     final emailController = TextEditingController(text: _emailController.text);
     bool resetting = false;
@@ -276,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: AppSpacing.lg),
                   AuthModeSwitch(signIn: true, onSwitch: _toRegister),
                   const SizedBox(height: AppSpacing.lg),
-                  // Google, Apple and Guest can CREATE an account, so they sit under
+                  // Google and Apple can CREATE an account, so they sit under
                   // the consent checkbox. Email sign-in below is not gated: that user
                   // accepted at signup.
                   LegalConsentCheckbox(
@@ -322,13 +300,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   if (_error != null) ...[AuthError(_error!), const SizedBox(height: AppSpacing.md)],
                   AuthPrimaryButton(label: 'Sign in', busy: _busy, onPressed: _submit),
-                  const SizedBox(height: AppSpacing.sm),
-                  // Amount disclosed up front: a guest starts at Rs 500, not Rs 1,100.
-                  TextButton(
-                    onPressed: _busy ? null : _continueAsGuest,
-                    style: TextButton.styleFrom(foregroundColor: AppColors.ink3),
-                    child: const Text('Explore as guest with \u20b9500'),
-                  ),
                   const SizedBox(height: AppSpacing.lg),
                   const AuthDisclaimer(),
                   const SizedBox(height: AppSpacing.md),

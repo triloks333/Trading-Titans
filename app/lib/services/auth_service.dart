@@ -400,6 +400,25 @@ class AuthService extends ChangeNotifier {
             : result.maintenanceMessage;
   }
 
+  /// One-time sign-out so everyone signs in again on this update and meets
+  /// the ₹1 Pro week offer. Guests are left alone: an anonymous account can't
+  /// be signed back into. Bump the key to force another round.
+  static const _reloginKey = 'forced_relogin_2026_11';
+
+  Future<void> _forceReloginOnce() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_reloginKey) == true) return;
+      await prefs.setBool(_reloginKey, true);
+      final current = _supabase.client.auth.currentUser;
+      if (current == null || current.isAnonymous) return;
+      unawaited(DiagnosticsService.logStep('forced_relogin'));
+      await _supabase.signOut();
+    } catch (e) {
+      debugPrint('Forced re-login skipped: $e');
+    }
+  }
+
   Future<void> initialize() async {
     // Fetch remote config (10s timeout) & apply the pure evaluation.
     // Fail open: on any failure/timeout, all gating states are cleared and the
@@ -416,6 +435,7 @@ class AuthService extends ChangeNotifier {
       _refreshFailed = true;
     }
 
+    await _forceReloginOnce();
     _user = await _supabase.getUserProfile();
     _isInitializing = false;
     notifyListeners();
@@ -461,7 +481,39 @@ class AuthService extends ChangeNotifier {
         }
         notifyListeners();
       }
-    });
+    }, onError: _onAuthCallbackError);
+  }
+
+  /// Why the last Google upgrade failed, for the upgrade screen. The result of
+  /// [convertWithGoogle] arrives on the deep link, so linkIdentity() itself
+  /// never throws for it.
+  String? conversionError;
+
+  /// OAuth callback errors reach the app only as errors on the auth stream.
+  /// Unhandled, a failed Google upgrade dropped the guest back on the gate
+  /// with no message.
+  Future<void> _onAuthCallbackError(Object e, [StackTrace? st]) async {
+    unawaited(DiagnosticsService.logLoginFailure('auth_callback', e, st));
+    bool converting = false;
+    try {
+      converting = (await SharedPreferences.getInstance()).getBool('pending_conversion') == true;
+    } catch (_) {}
+    if (!converting) return;
+    await _setConversionPending(false);
+    final message = e is AuthException ? e.message : e.toString();
+    if (message.toLowerCase().contains('already linked')) {
+      // That Google account already has its own Trading Titans account.
+      // Accounts are never merged, so leave the guest session and sign in to
+      // the account the user just picked.
+      unawaited(DiagnosticsService.logStep('convert_google_existing_account'));
+      await logout();
+      try {
+        await signInWithGoogle();
+      } catch (_) {} // logged inside; the login screen is showing by now
+      return;
+    }
+    conversionError = mapConversionException(e);
+    notifyListeners();
   }
 
   Future<void> login(String email, String password) async {
@@ -717,6 +769,7 @@ class AuthService extends ChangeNotifier {
   /// finalised when the app comes back and the auth listener fires.
   Future<void> convertWithGoogle() async {
     unawaited(DiagnosticsService.logStep('convert_google_attempt'));
+    conversionError = null;
     try {
       await _setConversionPending(true);
       await _supabase.client.auth.linkIdentity(
