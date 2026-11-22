@@ -22,6 +22,7 @@ import 'services/churn_telemetry_service.dart';
 import 'screens/auth/onboarding_screen.dart';
 import 'screens/main/convert_account_screen.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'services/price_store.dart';
 
 Future<void> main() async {
   ChurnTelemetryService.processStart = DateTime.now();
@@ -38,6 +39,9 @@ Future<void> main() async {
   await ChurnTelemetryService.instance.init();
   ChurnTelemetryService.instance.recordAppLaunch(source: 'app_launch');
   await ChurnTelemetryService.instance.recordSessionStart();
+  // Live prices over Realtime; off while backgrounded or when the
+  // `realtime_prices_enabled` flag is false.
+  PriceStore.instance.start();
   runApp(const TradingTitansApp());
 }
 

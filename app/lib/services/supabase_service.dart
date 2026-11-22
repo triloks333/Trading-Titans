@@ -924,12 +924,11 @@ class SupabaseService {
         })
         .toList();
 
-    final quoteFutures = keysToFetch.map((key) {
-      final parts = key.split('\x1F');
-      return MarketService.quote(parts[0], parts[1]);
-    }).toList();
-
-    final fetchedQuotes = await Future.wait(quoteFutures);
+    final batch = await MarketService.quotes([
+      for (final key in keysToFetch)
+        (symbol: key.split('\x1F')[0], market: key.split('\x1F')[1]),
+    ]);
+    final fetchedQuotes = [for (final key in keysToFetch) batch[key]];
     final quotesMap = <String, Quote?>{};
     for (int i = 0; i < keysToFetch.length; i++) {
       final key = keysToFetch[i];
@@ -1222,13 +1221,19 @@ class SupabaseService {
     final rowsList = (rows as List<dynamic>)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
-    final quoteFutures = rowsList.map((row) {
-      final symbol = row['symbol'] as String? ?? '';
-      final market = row['market'] as String? ?? 'stock';
-      return MarketService.quote(symbol, market);
-    }).toList();
-
-    final quotes = await Future.wait(quoteFutures);
+    // One batched price lookup (pushed prices, then a single cache query per
+    // market) instead of a separate request per row.
+    final batch = await MarketService.quotes([
+      for (final row in rowsList)
+        (
+          symbol: row['symbol'] as String? ?? '',
+          market: row['market'] as String? ?? 'stock',
+        ),
+    ]);
+    final quotes = [
+      for (final row in rowsList)
+        batch['${row['symbol'] as String? ?? ''}\x1F${row['market'] as String? ?? 'stock'}'],
+    ];
 
     for (int i = 0; i < rowsList.length; i++) {
       final row = rowsList[i];

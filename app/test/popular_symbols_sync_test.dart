@@ -30,7 +30,7 @@ Set<String> dartPopular(String source, String market) {
 /// the POPULAR constant.
 Set<String> tsPopular(String source, String market) {
   final popularStart = source.indexOf('const POPULAR');
-  expect(popularStart, isNot(-1), reason: 'POPULAR not found in refresh-quotes');
+  expect(popularStart, isNot(-1), reason: 'POPULAR not found in quote_universe.ts');
   final popularEnd = source.indexOf('];', popularStart);
   final block = source.substring(popularStart, popularEnd);
 
@@ -62,7 +62,9 @@ void main() {
   setUpAll(() {
     // Tests run with the app package as cwd.
     dart = File('lib/screens/main/trade_screen.dart').readAsStringSync();
-    ts = File('../supabase/functions/refresh-quotes/index.ts').readAsStringSync();
+    // The universe (POPULAR and the session gate) is shared by refresh-quotes
+    // and price-feed.
+    ts = File('../supabase/functions/_shared/quote_universe.ts').readAsStringSync();
   });
 
   test('every popular Indian stock is in the refresh universe', () {
@@ -89,7 +91,10 @@ void main() {
     // The other half of the same bug: US rows were refreshed while NSE was open
     // (US shut, so a stale close was restamped fresh) and skipped once the US
     // market opened.
-    expect(ts, contains('isUsMarketOpen'));
     expect(ts, contains('if (market === US_MARKET) return usOpen;'));
+    for (final fn in ['refresh-quotes', 'price-feed']) {
+      final src = File('../supabase/functions/$fn/index.ts').readAsStringSync();
+      expect(src, contains('isUsMarketOpen'), reason: fn);
+    }
   });
 }
