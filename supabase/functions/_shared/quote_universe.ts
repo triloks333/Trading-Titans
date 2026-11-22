@@ -51,13 +51,19 @@ export const POPULAR: UniverseEntry[] = [
       "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
     .map((symbol) => ({ symbol, market: "stock" })),
   ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
-      "LINK", "LTC", "TRX"]
+      "LINK", "TRX"]
     .map((symbol) => ({ symbol, market: "crypto" })),
   ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
       "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
     .map((symbol) => ({ symbol, market: US_MARKET })),
   ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
 ];
+
+/**
+ * Never priced: no crypto source quotes them (XAU is gold, not a coin; LTC is
+ * missing from the CoinDCX batch), so every tick would only log a failure.
+ */
+const EXCLUDED = new Set(["XAU\u001fcrypto", "LTC\u001fcrypto"]);
 
 /** How far back a symbol someone merely opened stays in the universe. */
 const HOT_SYMBOL_WINDOW_MS = 10 * 60 * 1000;
@@ -81,6 +87,7 @@ export async function buildUniverse(supabase: any): Promise<UniverseEntry[]> {
     const sym = mkt === "crypto" ? cryptoUnderlying(symbol) : extractUnderlying(symbol);
     if (!sym) return null;
     const key = `${sym}\u001f${mkt}`;
+    if (EXCLUDED.has(key)) return null;
     universe.set(key, { symbol: sym, market: mkt });
     return key;
   };
