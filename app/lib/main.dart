@@ -143,6 +143,7 @@ class TradingTitansApp extends StatelessWidget {
               homeWidget = HardUpdateGate(
                 updateUrl: auth.updateUrl,
                 releaseNotes: auth.latestVersionNotes,
+                version: auth.latestVersion,
               );
               break;
             case ActiveGate.onboarding:

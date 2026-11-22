@@ -171,6 +171,7 @@ class _MainNavigationState extends State<MainNavigation> {
       builder: (dialogCtx) => SoftUpdateDialog(
         updateUrl: auth.updateUrl,
         releaseNotes: auth.latestVersionNotes,
+        version: auth.latestVersion,
         onDismiss: () {
           auth.dismissSoftUpdate();
         },

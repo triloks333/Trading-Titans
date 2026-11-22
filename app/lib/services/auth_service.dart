@@ -274,6 +274,9 @@ class AuthService extends ChangeNotifier {
   String _latestVersionNotes = '';
   String get latestVersionNotes => _latestVersionNotes;
 
+  /// The `latest_version` on offer, shown on the update prompts.
+  String get latestVersion => _latestVersion;
+
   /// True when the most recent config fetch (during [initialize] or
   /// [reevaluate]) failed or timed out. On [initialize] the gating states are
   /// failed open to false; on [reevaluate] the last-known gating states are
