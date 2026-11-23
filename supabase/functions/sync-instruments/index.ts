@@ -70,7 +70,12 @@ serve(async (req) => {
     // one half of the CSV against one date and the other half against the next.
     const todayIso = new Date().toISOString().split("T")[0];
 
-    for (const line of foLines) {
+    // NSE and BSE F&O masters share the Fyers column layout, so one parser
+    // serves both. BSE is filtered to the index families the app offers
+    // (SENSEX, BANKEX): without it SENSEX had no contracts here at all and the
+    // app invented last-Thursday monthlies instead of the real weekly Thursdays.
+    const pushFoLines = (lines: string[], keep: (symbol: string) => boolean) => {
+    for (const line of lines) {
       if (!line.trim()) continue;
       const r = line.split(",");
       if (r.length < 10) continue;
@@ -103,6 +108,7 @@ serve(async (req) => {
       // the query in docs that enumerates prefix collisions is the early warning.
       // Remove these lines once the client resolver is fixed and shipped.
       if (/^(NIFTYNXT50|NIFTYFPI)\d/.test(symbol.toUpperCase())) continue;
+      if (!keep(symbol.toUpperCase())) continue;
       const optType = r.length > 16 ? r[16].trim() : "XX";
       
       let instType = "FUTURE";
@@ -151,6 +157,23 @@ serve(async (req) => {
         // expiry cannot be priced or settled.
         tradeable: expiryDate != null && expiryDate >= todayIso
       });
+    }
+    };
+
+    pushFoLines(foLines, () => true);
+
+    // 3. BSE index F&O (SENSEX, BANKEX). A failure here must not cost the NSE
+    // sync, which is what every other F&O screen depends on.
+    try {
+      console.log("Fetching BSE FO CSV...");
+      const bseRes = await fetch("https://public.fyers.in/sym_details/BSE_FO.csv");
+      if (!bseRes.ok) throw new Error(`HTTP ${bseRes.status}`);
+      const bseLines = (await bseRes.text()).split("\n");
+      const before = instruments.length;
+      pushFoLines(bseLines, (sym) => /^BSE:(SENSEX|BANKEX)\d/.test(sym));
+      console.log(`Kept ${instruments.length - before} SENSEX/BANKEX contracts from ${bseLines.length} BSE FO lines.`);
+    } catch (e) {
+      console.error("BSE FO sync skipped:", e);
     }
 
     console.log(`Starting upsert of ${instruments.length} total instruments...`);

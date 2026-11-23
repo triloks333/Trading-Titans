@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/supabase_config.dart';
 import '../core/option_pricing.dart';
 import '../core/market_hours.dart';
+import '../core/expiry_calendar.dart';
 import '../models/quote.dart';
 import '../models/candle.dart';
 import 'churn_telemetry_service.dart';
@@ -65,7 +66,7 @@ class MarketService {
       final und = compactFut.group(1)!.toUpperCase();
       final yr = int.tryParse(compactFut.group(2)!) ?? 26;
       final mon = compactFut.group(3)!.toUpperCase();
-      final expiry = _expiryDateFromMonth(2000 + yr, mon);
+      final expiry = _expiryDateFromMonth(2000 + yr, mon, und);
       return (
         isDerivative: true,
         type: 'FUTURE',
@@ -84,7 +85,7 @@ class MarketService {
       final mon = compactOpt.group(3)!.toUpperCase();
       final strike = double.tryParse(compactOpt.group(4)!) ?? 0.0;
       final optType = compactOpt.group(5)!.toUpperCase();
-      final expiry = _expiryDateFromMonth(2000 + yr, mon);
+      final expiry = _expiryDateFromMonth(2000 + yr, mon, und);
       return (
         isDerivative: true,
         type: 'OPTION',
@@ -120,7 +121,7 @@ class MarketService {
       final und = spaceFut.group(1)!.toUpperCase();
       final mon = spaceFut.group(3)!.toUpperCase();
       final yr = int.tryParse(spaceFut.group(4) ?? '') ?? DateTime.now().year;
-      final expiry = _expiryDateFromMonth(yr < 100 ? 2000 + yr : yr, mon);
+      final expiry = _expiryDateFromMonth(yr < 100 ? 2000 + yr : yr, mon, und);
       return (
         isDerivative: true,
         type: 'FUTURE',
@@ -149,17 +150,13 @@ class MarketService {
     return null;
   }
 
-  static String _expiryDateFromMonth(int year, String monthStr) {
+  /// Monthly expiry for a "<YY><MON>" contract: last Tuesday on NSE, last
+  /// Thursday on BSE, moved back over holidays. Was a hard-coded last Thursday.
+  static String _expiryDateFromMonth(int year, String monthStr, String underlying) {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     final mIndex = months.indexOf(monthStr.toUpperCase());
     final month = mIndex >= 0 ? mIndex + 1 : 1;
-    final lastDay = DateTime(year, month + 1, 0);
-    var diff = lastDay.weekday - DateTime.thursday;
-    if (diff < 0) diff += 7;
-    final lastThu = lastDay.subtract(Duration(days: diff));
-    final mm = month.toString().padLeft(2, '0');
-    final dd = lastThu.day.toString().padLeft(2, '0');
-    return '$year-$mm-$dd';
+    return ExpiryCalendar.isoDate(ExpiryCalendar.monthlyExpiry(year, month, underlying: underlying));
   }
 
   static String normalizeSymbol(String sym, String market) {

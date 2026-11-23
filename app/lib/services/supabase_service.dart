@@ -12,6 +12,7 @@ import '../models/price_alert.dart';
 import '../models/challenge.dart';
 import '../core/market_hours.dart';
 import '../core/option_pricing.dart';
+import '../core/expiry_calendar.dart';
 import '../core/app_constants.dart';
 import 'currency_service.dart';
 import 'market_service.dart';
@@ -1441,7 +1442,7 @@ class SupabaseService {
       'change_pct': spotQuote.changePct,
       'expiries': chains.map((c) => c['expiry_date']).toList(),
       'chains': chains,
-      'futures': _buildDbFutures(clean, spot, spotQuote.change, spotQuote.changePct),
+      'futures': _buildDbFutures(clean, await _futuresExpiries(und), spot, spotQuote.change, spotQuote.changePct),
       'derivative_type': 'options',
       'source': 'nse_db',
     };
@@ -1503,31 +1504,55 @@ class SupabaseService {
     };
   }
 
+  /// Real futures expiries for [und] from the exchange contract list
+  /// (`instruments`, synced daily), e.g. NIFTY Nov 2026 = Mon 23 Nov because
+  /// Tue 24 Nov is a holiday. Falls back to the expiry calendar when the table
+  /// has no futures for it. This used to compute "last Thursday" itself, so
+  /// every futures contract showed (and was priced to) the wrong date.
+  Future<List<DateTime>> _futuresExpiries(String und) async {
+    final exchange = ExpiryCalendar.isBse(und) ? 'BSE' : 'NSE';
+    try {
+      final today = ExpiryCalendar.isoDate(DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30)));
+      // `<und>2` (a 2-digit year follows) keeps NIFTY from matching NIFTYNXT50.
+      final rows = await client
+          .from('instruments')
+          .select('expiry_date')
+          .eq('instrument_type', 'FUTURE')
+          .like('symbol', '$exchange:${und}2%')
+          .gte('expiry_date', today)
+          .order('expiry_date')
+          .limit(6);
+      final dates = <DateTime>{};
+      for (final r in rows as List<dynamic>) {
+        final d = DateTime.tryParse('${(r as Map)['expiry_date']}');
+        if (d != null) dates.add(DateTime.utc(d.year, d.month, d.day));
+      }
+      final list = dates.toList()..sort();
+      // Drops today's contract once today's close has passed.
+      final live = list.where((d) => MarketHours.daysToExpiry(d) > 0).take(3).toList();
+      if (live.isNotEmpty) return live;
+    } catch (e) {
+      debugPrint('futures expiry lookup failed for $und: $e');
+    }
+    return ExpiryCalendar.upcomingMonthly(und);
+  }
+
   List<Map<String, dynamic>> _buildDbFutures(
-    String clean, double spot, double change, double changePct,
+    String clean, List<DateTime> expiries, double spot, double change, double changePct,
   ) {
     const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    final now = DateTime.now();
+    final exchange = ExpiryCalendar.isBse(clean) ? 'BSE' : 'NSE';
     final futures = <Map<String, dynamic>>[];
-    int monthOffset = 0;
-    while (futures.length < 3 && monthOffset < 6) {
-      final d = DateTime(now.year, now.month + monthOffset, 1);
-      final lastDay = DateTime(d.year, d.month + 1, 0);
-      var diff = lastDay.weekday - DateTime.thursday;
-      if (diff < 0) diff += 7;
-      final lastThu = lastDay.subtract(Duration(days: diff));
-      final expiryDt = DateTime(lastThu.year, lastThu.month, lastThu.day, 15, 30);
-      monthOffset++;
-      if (expiryDt.isBefore(now)) continue;
-      final daysLeft = MarketHours.daysToExpiry(expiryDt);
+    for (final exp in expiries) {
+      // Date-only: daysToExpiry reads midnight as the 15:30 IST close.
+      final daysLeft = MarketHours.daysToExpiry(exp);
       final fut = OptionPricing.futurePrice(spot: spot, daysToExpiry: daysLeft);
       final futRounded = (fut * 100).round() / 100;
       final futChange = (change * (spot > 0 ? fut / spot : 1.0) * 100).round() / 100;
-      final expiryStr =
-          '${lastThu.year}-${lastThu.month.toString().padLeft(2, '0')}-${lastThu.day.toString().padLeft(2, '0')}';
+      final expiryStr = ExpiryCalendar.isoDate(exp);
       futures.add({
-        'symbol': '$clean ${months[lastThu.month - 1]} FUT',
-        'name': 'NSE FUTURES · $expiryStr',
+        'symbol': '$clean ${months[exp.month - 1]} FUT',
+        'name': '$exchange FUTURES · $expiryStr',
         'price': futRounded,
         'previous_close': ((futRounded - futChange) * 100).round() / 100,
         'change': futChange,

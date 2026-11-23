@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { upcomingMonthlyExpiries, upcomingOptionExpiries } from "./expiry_calendar.ts";
 
 const FYERS_DATA_BASE = "https://api-t1.fyers.in/data";
 
@@ -521,61 +522,17 @@ export async function handleCallback(code: string, state: string): Promise<Recor
 
 // ── F&O Fallback and Stock Futures Helpers ──────────────────────────
 
-export function getLastThursdayOfMonth(year: number, month: number): Date {
-  const date = new Date(year, month + 1, 0); // last day of month
-  const day = date.getDay();
-  let diff = day - 4; // 4 is Thursday
-  if (diff < 0) {
-    diff += 7;
-  }
-  date.setDate(date.getDate() - diff);
-  return date;
+// Expiry dates come from the shared calendar (last Tuesday on NSE, NIFTY
+// weekly Tuesday, SENSEX weekly Thursday, holidays moved back). This block used
+// to hard-code last-Thursday monthlies and Thu/Wed/Tue/Mon index weeklies, the
+// pre-Sep-2025 schedule.
+function isoToDate(iso: string): Date {
+  return new Date(`${iso}T00:00:00Z`);
 }
 
 export function getUpcomingExpiries(symbol: string): Date[] {
-  const now = new Date();
   const cleanSymbol = symbol.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
-
-  const expiries: Date[] = [];
-
-  const isNifty = cleanSymbol === "NIFTY" || cleanSymbol === "NIFTY50" || cleanSymbol === "^NSEI" || cleanSymbol.includes("NIFTY");
-  const isBankNifty = cleanSymbol === "BANKNIFTY" || cleanSymbol === "^NSEBANK";
-  const isFinNifty = cleanSymbol === "FINNIFTY";
-  const isMidcapNifty = cleanSymbol === "MIDCPNIFTY";
-
-  if (isNifty || isBankNifty || isFinNifty || isMidcapNifty) {
-    let targetDay = 4; // Thursday default
-    if (isBankNifty) targetDay = 3; // Wednesday
-    else if (isFinNifty) targetDay = 2; // Tuesday
-    else if (isMidcapNifty) targetDay = 1; // Monday
-
-    let checkDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    while (expiries.length < 4) {
-      const day = checkDate.getDay();
-      if (day === targetDay) {
-        // Set expiry time to 15:30:00 (3:30 PM)
-        const expiryTime = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate(), 15, 30, 0);
-        if (expiryTime.getTime() >= now.getTime()) {
-          expiries.push(new Date(checkDate));
-        }
-      }
-      checkDate.setDate(checkDate.getDate() + 1);
-    }
-  } else {
-    // Stock Options/Futures expire monthly on the last Thursday
-    let monthOffset = 0;
-    while (expiries.length < 3) {
-      const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-      const lastThursday = getLastThursdayOfMonth(d.getFullYear(), d.getMonth());
-      const expiryTime = new Date(lastThursday.getFullYear(), lastThursday.getMonth(), lastThursday.getDate(), 15, 30, 0);
-      if (expiryTime.getTime() >= now.getTime()) {
-        expiries.push(lastThursday);
-      }
-      monthOffset++;
-    }
-  }
-
-  return expiries;
+  return upcomingOptionExpiries(cleanSymbol, 4).map(isoToDate);
 }
 
 export function generateStockFutures(
@@ -587,18 +544,8 @@ export function generateStockFutures(
   const cleanSymbol = symbol.toUpperCase().trim().replace(".NS", "").replace(".BO", "");
   const now = new Date();
   
-  // Futures contracts always expire monthly on the last Thursday of the month (Near, Next, Far)
-  const expiries: Date[] = [];
-  let monthOffset = 0;
-  while (expiries.length < 3) {
-    const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-    const lastThursday = getLastThursdayOfMonth(d.getFullYear(), d.getMonth());
-    const expiryTime = new Date(lastThursday.getFullYear(), lastThursday.getMonth(), lastThursday.getDate(), 15, 30, 0);
-    if (expiryTime.getTime() >= now.getTime()) {
-      expiries.push(lastThursday);
-    }
-    monthOffset++;
-  }
+  // Futures expire monthly (Near, Next, Far) on the exchange's monthly expiry.
+  const expiries: Date[] = upcomingMonthlyExpiries(cleanSymbol, 3).map(isoToDate);
   
   const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   
