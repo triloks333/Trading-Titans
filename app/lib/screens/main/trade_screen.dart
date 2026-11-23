@@ -12,6 +12,8 @@ import '../../models/quote.dart';
 import '../../services/app_flags_service.dart';
 import '../../services/currency_service.dart';
 import '../../services/market_service.dart';
+import '../../services/price_store.dart';
+import '../../widgets/price_freshness_note.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
 import '../../widgets/empty_state.dart';
@@ -24,6 +26,7 @@ import 'stock_detail_screen.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/action_reaction_engine.dart';
 import '../../services/analytics_service.dart';
+import '../../widgets/live_price_text.dart';
 
 typedef MoverSymbol = ({String symbol, String name, String? display});
 MoverSymbol _s(String symbol, String name, [String? display]) => (symbol: symbol, name: name, display: display);
@@ -69,7 +72,7 @@ final Map<String, List<MoverSymbol>> kMoverUniverse = {
     for (final (s, n) in const [
       ('BTC', 'Bitcoin'), ('ETH', 'Ethereum'), ('SOL', 'Solana'), ('BNB', 'BNB'), ('XRP', 'Ripple'), ('ADA', 'Cardano'),
       ('DOGE', 'Dogecoin'), ('POL', 'Polygon'), ('AVAX', 'Avalanche'), ('DOT', 'Polkadot'), ('LINK', 'Chainlink'),
-      ('LTC', 'Litecoin'), ('TRX', 'Tron'),
+      ('TRX', 'Tron'),
     ])
       _s(s, n),
   ],
@@ -158,14 +161,18 @@ class _TradeScreenState extends State<TradeScreen> {
     super.initState();
     _checkFirstRunPreferences();
     _refreshPrices();
-    // shortcut: 15 s, not the 4 s home poll, because this prices ~30 symbols a tick
-    // to rank movers. Move to a realtime quotes_cache subscription if it must be faster.
-    _priceTimer = Timer.periodic(const Duration(seconds: 15), (_) => _refreshPrices());
+    // Live pushes redraw the list as prices move. The timer is the fallback for
+    // when the socket is down: one batched cache read per market, so 5s is cheap.
+    _priceTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshPrices());
+    PriceStore.instance.addListener(_onPricePush);
   }
+
+  void _onPricePush() => _refreshPrices();
 
   @override
   void dispose() {
     _debounce?.cancel();
+    PriceStore.instance.removeListener(_onPricePush);
     _priceTimer?.cancel();
     _searchFocus.dispose();
     super.dispose();
@@ -354,6 +361,10 @@ class _TradeScreenState extends State<TradeScreen> {
                     if (!_searching && (_market == 'stock' || _market == 'fo')) _muhuratBanner(),
                     if (_searchFocus.hasFocus && !_searching) _browseTiles(),
                     if (!_searching) _indexCards(),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(AppSpacing.lg, 2, AppSpacing.lg, 6),
+                      child: PriceFreshnessNote(),
+                    ),
                     ...(_searching ? _searchRows() : _market == 'fo' ? _foRows() : _moverRows()),
                     if (!_searching && _market == 'stock') _chainCard(),
                   ],
@@ -490,7 +501,7 @@ class _TradeScreenState extends State<TradeScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink4)),
             const SizedBox(height: 4),
-            Text(q == null ? '—' : Money.instrument(q.price, market: _orderMarket),
+            LivePriceText(q == null ? '—' : Money.instrument(q.price, market: _orderMarket), value: q?.price,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.mono(size: 17, weight: FontWeight.w600, color: AppColors.ink)),
             Text(
               q == null ? ' ' : '${up ? '▲ +' : '▼ −'}${q.change.abs().toStringAsFixed(2)} (${q.changePct.abs().toStringAsFixed(2)}%)',

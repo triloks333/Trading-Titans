@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { pooledMap } from "https://deno.land/std@0.177.0/async/pool.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { COMMODITIES, COMMODITY_MARKET, US_MARKET, isCommodityOpen, isUsMarketOpen } from "../_shared/us_market.ts";
-import { cryptoUnderlying } from "../_shared/crypto_symbol.ts";
+import { isUsMarketOpen } from "../_shared/us_market.ts";
+import { buildUniverse, isMarketOpen, type UniverseEntry } from "../_shared/quote_universe.ts";
 // Shared session window: the old inline copy closed at 15:15, so quotes stopped
 // refreshing 15 minutes before the exchange did -- which also starved the
 // engine's stale-price guard at the end of every session.
@@ -16,105 +16,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function extractUnderlying(symbolRaw: string): string {
-  let s = (symbolRaw || "").toUpperCase().trim();
-  if (s.startsWith("NSE:")) s = s.slice(4);
-  if (s.startsWith("BSE:")) s = s.slice(4);
-  s = s.replace("-EQ-", "-");
-  if (s.endsWith("-EQ")) s = s.slice(0, -3);
-  if (s.includes(" ")) s = s.split(" ")[0];
-  if (s.includes("-")) s = s.split("-")[0];
-  if (s === "^NSEI" || s === "NSEI" || s === "NIFTY50") return "NIFTY";
-  if (s === "^NSEBANK" || s === "NSEBANK") return "BANKNIFTY";
-  if (s === "^BSESN" || s === "SENSEX") return "SENSEX";
-  const m = s.match(/\d/);
-  if (m && (m.index ?? 0) > 0) s = s.slice(0, m.index);
-  return s;
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Is this market's session live right now?
- *
- * Previously every non-crypto market was gated on the *Indian* session, which
- * got US equities exactly backwards: they were refreshed while NSE was open (the
- * US market shut, so a stale close kept being restamped as fresh) and skipped
- * once the US market actually opened. Crypto trades 24/7.
- */
-function isMarketOpen(market: string, stockOpen: boolean, usOpen: boolean): boolean {
-  if (market === "crypto") return true;
-  if (market === US_MARKET) return usOpen;
-  if (market === COMMODITY_MARKET) return isCommodityOpen();
-  return stockOpen;
-}
-
-/**
- * Symbols the Trade screen offers before the user searches for anything.
- *
- * These are not in anybody's watchlist or holdings by default, so without them
- * the popular rows miss the cache and each client fetches them live — which is
- * why rows in one list moved at different rates. Mirrors the India, crypto and US
- * lists in `kMoverUniverse` in `app/lib/screens/main/trade_screen.dart`; keep them in step.
- *
- * ponytail: duplicated across Dart and TS rather than fetched from a table. The
- * ceiling is that a new popular symbol needs editing in two files; if these
- * lists ever become user-editable, move them into a `popular_symbols` table and
- * read it here instead.
- */
-const POPULAR: { symbol: string; market: string }[] = [
-  ...["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "SBIN", "BHARTIARTL",
-      "ITC", "LT", "HINDUNILVR", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "MARUTI",
-      "SUNPHARMA", "TITAN", "ASIANPAINT", "WIPRO", "HCLTECH", "TATASTEEL", "NTPC",
-      "POWERGRID", "ONGC", "ADANIENT", "ETERNAL", "TMPV", "TMCV"]
-    .map((symbol) => ({ symbol, market: "stock" })),
-  ...["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "POL", "AVAX", "DOT",
-      "LINK", "LTC", "TRX"]
-    .map((symbol) => ({ symbol, market: "crypto" })),
-  ...["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "NFLX", "AMD",
-      "INTC", "JPM", "V", "WMT", "DIS", "ORCL", "AVGO"]
-    .map((symbol) => ({ symbol, market: US_MARKET })),
-  ...COMMODITIES.map(({ symbol }) => ({ symbol, market: COMMODITY_MARKET })),
-];
-
-async function buildUniverse(supabase: any): Promise<{ symbol: string; market: string }[]> {
-  const universe = new Map<string, { symbol: string; market: string }>();
-  const add = (symbol: string | null, market: string | null): string | null => {
-    if (!symbol) return null;
-    const mkt = (market || "stock").toLowerCase();
-    // Crypto perpetuals arrive as `B-BTC_USDT` from pending F&O orders; the feed
-    // only knows `BTC`, so without this the symbol was requested verbatim and
-    // returned a permanent 404 on every pass.
-    const sym = mkt === "crypto" ? cryptoUnderlying(symbol) : extractUnderlying(symbol);
-    if (!sym) return null;
-    const key = `${sym}\u001f${mkt}`;
-    universe.set(key, { symbol: sym, market: mkt });
-    return key;
-  };
-  // Symbols carrying a resting order are refreshed first. The pool below works
-  // through the universe in order, so if a pass is cut short by the function
-  // deadline it is a watchlist row that goes unrefreshed, never a live order.
-  const priority = new Set<string>();
-  const [watch, holds, fo, alerts, pend] = await Promise.all([
-    supabase.from("watchlist").select("symbol, market"),
-    supabase.from("holdings").select("symbol, market"),
-    supabase.from("fo_positions").select("symbol").eq("is_settled", false),
-    supabase.from("price_alerts").select("symbol, market").eq("status", "active"),
-    supabase.from("orders").select("symbol, market").eq("status", "pending"),
-  ]);
-  for (const r of (watch.data ?? [])) add(r.symbol, r.market);
-  for (const r of (holds.data ?? [])) add(r.symbol, r.market);
-  for (const r of (fo.data ?? [])) add(r.symbol, "stock");
-  for (const r of (alerts.data ?? [])) add(r.symbol, r.market);
-  for (const r of (pend.data ?? [])) { const k = add(r.symbol, r.market); if (k) priority.add(k); }
-  add("NIFTY", "stock");
-  add("BANKNIFTY", "stock");
-  add("SENSEX", "stock");
-  for (const p of POPULAR) add(p.symbol, p.market);
-  return [...universe.entries()]
-    .sort((a, b) => Number(priority.has(b[0])) - Number(priority.has(a[0])))
-    .map(([, u]) => u);
-}
 
 /// How many `market-quote` calls to have in flight at once.
 ///
@@ -156,6 +58,20 @@ async function fetchQuoteRow(u: { symbol: string; market: string }): Promise<Rec
     day_low: q.day_low ?? null, day_high: q.day_high ?? null, open: q.open ?? null,
     source: q.source ?? null, updated_at: new Date().toISOString(),
   };
+}
+
+/// A row younger than this is the fast feed's responsibility, not ours.
+const SAFETY_NET_STALE_MS = 30_000;
+
+async function staleOnly(supabase: any, universe: UniverseEntry[]): Promise<UniverseEntry[]> {
+  const { data, error } = await supabase.from("quotes_cache").select("symbol, market, updated_at");
+  if (error || !Array.isArray(data)) return universe;
+  const cutoff = Date.now() - SAFETY_NET_STALE_MS;
+  const fresh = new Set<string>();
+  for (const r of data) {
+    if (new Date(r.updated_at).getTime() >= cutoff) fresh.add(`${r.symbol}\u001f${r.market}`);
+  }
+  return universe.filter((u) => !fresh.has(`${u.symbol}\u001f${u.market}`));
 }
 
 async function refreshOnce(
@@ -201,8 +117,17 @@ serve(async (req) => {
     const stockOpen = isStockMarketOpen() || force;
     const usOpen = isUsMarketOpen() || force;
 
+    const all = url.searchParams.get("all") === "1";
+
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const universe = await buildUniverse(supabase);
+    const fullUniverse = await buildUniverse(supabase);
+    // Safety net behind `price-feed`. While the fast feed is healthy it keeps
+    // every row only seconds old, so this pass has nothing to do and makes no
+    // `market-quote` calls. A row the feed could not price (a symbol Yahoo's
+    // batch endpoint skipped, a feed outage) goes stale and is picked up here,
+    // one symbol at a time, exactly as before. `?all=1` restores the old
+    // refresh-everything behaviour.
+    const universe = all ? fullUniverse : await staleOnly(supabase, fullUniverse);
 
     // One pass per invocation.
     //
@@ -225,14 +150,15 @@ serve(async (req) => {
     // Per-market counts make a silent skip (wrong session gate, symbol never
     // added to the universe) visible without reading the function logs.
     const byMarket: Record<string, number> = {};
-    for (const u of universe) byMarket[u.market] = (byMarket[u.market] ?? 0) + 1;
+    for (const u of fullUniverse) byMarket[u.market] = (byMarket[u.market] ?? 0) + 1;
 
     // `failed` is the diagnostic that did not exist before: the old code caught
     // every per-symbol error and returned only a success count, so a pass that
     // refreshed 32 of 54 symbols looked identical to a healthy one. Capped so a
     // provider-wide outage cannot bloat the response.
     return json({
-      universe: universe.length,
+      universe: fullUniverse.length,
+      stale: universe.length,
       byMarket,
       refreshed: lastCount,
       failedCount: lastFailed.length,

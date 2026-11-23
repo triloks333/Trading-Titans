@@ -12,6 +12,8 @@ import '../../models/price_alert.dart';
 import '../../models/quote.dart';
 import '../../services/fo_instruments_service.dart';
 import '../../services/market_service.dart';
+import '../../services/price_store.dart';
+import '../../widgets/price_freshness_note.dart';
 import '../../services/supabase_service.dart';
 import '../../services/theme_service.dart';
 import '../../widgets/auth_kit.dart';
@@ -19,6 +21,7 @@ import 'fullscreen_chart_screen.dart';
 import 'option_chain_screen.dart';
 import 'order_entry_screen.dart';
 import '../../services/churn_telemetry_service.dart';
+import '../../widgets/live_price_text.dart';
 
 /// Chart range buttons and the `market-history` range each one fetches.
 const Map<String, String> kStockRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', '5Y': '5y'};
@@ -69,10 +72,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     _loadHistory(_range);
     _loadExtras();
     _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _refreshQuote());
+    PriceStore.instance.addListener(_onPricePush);
   }
+
+  void _onPricePush() => _refreshQuote();
 
   @override
   void dispose() {
+    PriceStore.instance.removeListener(_onPricePush);
     _pollTimer?.cancel();
     super.dispose();
   }
@@ -307,7 +314,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(_px(q.price), style: AppFonts.mono(size: 32, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.6)),
+          child: LivePriceText(_px(q.price), value: q.price, style: AppFonts.mono(size: 32, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.6)),
         ),
         Text.rich(TextSpan(children: [
           TextSpan(
@@ -315,10 +322,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             style: AppFonts.mono(size: 14, color: _changeColor),
           ),
           TextSpan(
-            text: open ? '  today · live' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
+            text: open ? '  today' : '  ${MarketHours.statusText(widget.market).toLowerCase()}',
             style: AppFonts.sans(size: 14, color: AppColors.ink4),
           ),
         ])),
+        const SizedBox(height: 4),
+        const PriceFreshnessNote(),
       ]),
     );
   }
