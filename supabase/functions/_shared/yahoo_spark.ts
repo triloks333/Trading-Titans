@@ -20,6 +20,30 @@ export type Parsed = {
   marketTime: number | null;
 };
 
+/**
+ * Converts a quote from Yahoo's contract unit into the unit we store and trade.
+ *
+ * Yahoo quotes COMEX Gold (GC=F) and Silver (SI=F) per troy ounce, but the app,
+ * the order engine and every existing holding price them per gram
+ * (`commodityUnitDivisor`). `market-quote` always divided; the batched feed did
+ * not, so from the 22 Nov switch to the feed it wrote gold at ~31x its real
+ * price. Users could then sell a few rupees of gold for ~31x what it cost (one
+ * user showed ~2000% on the Weekly League from it). Every price field is scaled,
+ * not just `price`, so the previous close and day range stay comparable.
+ */
+export function scaleParsed(p: Parsed, divisor: number): Parsed {
+  if (!(divisor > 0) || divisor === 1) return p;
+  const d = (v: number | null) => (v === null ? null : v / divisor);
+  return {
+    ...p,
+    price: p.price / divisor,
+    previousClose: d(p.previousClose),
+    dayLow: d(p.dayLow),
+    dayHigh: d(p.dayHigh),
+    open: d(p.open),
+  };
+}
+
 /** Exchange-local calendar day of an epoch-seconds timestamp. */
 function localDay(epochS: number, gmtOffsetS: number): number {
   return Math.floor((epochS + gmtOffsetS) / 86400);

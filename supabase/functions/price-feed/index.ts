@@ -23,9 +23,16 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { buildUniverse, isMarketOpen, type UniverseEntry } from "../_shared/quote_universe.ts";
-import { COMMODITY_MARKET, US_MARKET, fromUsYahooSymbol, isUsMarketOpen, toUsYahooSymbol } from "../_shared/us_market.ts";
+import {
+  COMMODITY_MARKET,
+  US_MARKET,
+  commodityUnitDivisor,
+  fromUsYahooSymbol,
+  isUsMarketOpen,
+  toUsYahooSymbol,
+} from "../_shared/us_market.ts";
 import { isStockOpen } from "../_shared/market_hours.ts";
-import { type Parsed, fromMeta, num, parseSpark } from "../_shared/yahoo_spark.ts";
+import { type Parsed, fromMeta, num, parseSpark, scaleParsed } from "../_shared/yahoo_spark.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -247,6 +254,9 @@ class Feed {
     for (const r of data ?? []) {
       const key = `${r.symbol}\u001f${r.market}`;
       if (r.name) this.names.set(key, r.name);
+      // Rows written before the per-gram fix hold an ounce-sized day range for
+      // Gold/Silver; never carry those forward.
+      if (r.market === COMMODITY_MARKET && commodityUnitDivisor(r.symbol) !== 1) continue;
       this.ranges.set(key, { l: num(r.day_low), h: num(r.day_high), o: num(r.open) });
     }
   }
@@ -272,8 +282,11 @@ class Feed {
       }
     }
 
-    const build = (u: UniverseEntry, p: Parsed, source: string): Row => {
+    const build = (u: UniverseEntry, raw: Parsed, source: string): Row => {
       const key = `${u.symbol}\u001f${u.market}`;
+      // Gold and Silver are stored per gram; Yahoo quotes them per troy ounce.
+      // Must match market-quote, which priced every order and holding before.
+      const p = u.market === COMMODITY_MARKET ? scaleParsed(raw, commodityUnitDivisor(u.symbol)) : raw;
       const prev = p.previousClose ?? p.price;
       const change = p.price - prev;
       const known = this.ranges.get(key);

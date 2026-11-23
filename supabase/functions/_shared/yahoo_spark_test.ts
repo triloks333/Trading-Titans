@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { parseSpark } from "./yahoo_spark.ts";
+import { parseSpark, scaleParsed } from "./yahoo_spark.ts";
 
 Deno.test("parses v7 spark shape", () => {
   const m = parseSpark({ spark: { result: [{ symbol: "RELIANCE.NS", response: [{
@@ -46,4 +46,16 @@ Deno.test("during the session today's bar is skipped for the previous close", ()
     timestamp: [day("2026-11-20T03:45:00Z"), day("2026-11-23T03:45:00Z")],
     indicators: { quote: [{ close: [1377.5, 1380] }] } }] }] } });
   assertEquals(m.get("RELIANCE.NS")!.previousClose, 1377.5);
+});
+
+// 23 Nov 2026: the feed stored GC=F at 3629.9 (USD per troy ounce) while every
+// holding was priced per gram, so gold read ~31x too high.
+Deno.test("scaleParsed converts an ounce quote to per gram", () => {
+  const oz = { price: 3629.9, previousClose: 3515.4, dayLow: 3552.3, dayHigh: 3636.4, open: null, name: null, marketTime: null };
+  const g = scaleParsed(oz, 31.1034768);
+  assertEquals(Math.round(g.price * 100) / 100, 116.7);
+  assertEquals(Math.round(g.previousClose! * 100) / 100, 113.02);
+  assertEquals(Math.round(g.dayHigh! * 100) / 100, 116.91);
+  assertEquals(g.open, null);
+  assertEquals(scaleParsed(oz, 1), oz);
 });
