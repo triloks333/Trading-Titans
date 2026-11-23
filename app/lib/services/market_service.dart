@@ -150,7 +150,7 @@ class MarketService {
     return null;
   }
 
-  /// Monthly expiry for a "<YY><MON>" contract: last Tuesday on NSE, last
+  /// Monthly expiry for a `<YY><MON>` contract: last Tuesday on NSE, last
   /// Thursday on BSE, moved back over holidays. Was a hard-coded last Thursday.
   static String _expiryDateFromMonth(int year, String monthStr, String underlying) {
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
