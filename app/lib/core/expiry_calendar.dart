@@ -31,8 +31,9 @@ class ExpiryCalendar {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   static bool isTradingDay(DateTime day, {Set<String>? holidays}) {
-    if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday)
+    if (day.weekday == DateTime.saturday || day.weekday == DateTime.sunday) {
       return false;
+    }
     final key = isoDate(day);
     if ((holidays ?? MarketHours.indianHolidays).contains(key)) return false;
     return !_fixedHolidaysMmDd.contains(key.substring(5));
