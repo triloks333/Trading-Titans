@@ -123,7 +123,7 @@ export function parseDerivativeSymbol(rawSymbol: string): ParsedDerivative | nul
   }
 
   // 5. Simple futures format: <underlying>-FUT or <underlying> FUT or <underlying>FUT (e.g. RELIANCE-FUT, NIFTY-FUT)
-  const simpleFutMatch = s.match(/^(?:NSE:|BSE:)?(\^?[A-Za-z&-]+)(?:-|\s+)?FUT$/i);
+  const simpleFutMatch = s.match(/^(?:NSE:|BSE:)?(\^?[A-Za-z&-]+?)(?:-|\s+)?FUT$/i);
   if (simpleFutMatch && !s.includes("FUTURE")) {
     return {
       isDerivative: true,
