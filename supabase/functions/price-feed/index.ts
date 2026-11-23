@@ -113,9 +113,20 @@ class YahooThrottled extends Error {
   }
 }
 
+/**
+ * Yahoo's CDN serves spark responses with `max-age=300` (plus 120s
+ * stale-while-revalidate), so the same URL fetched every few seconds returns
+ * the same price for up to 7 minutes (seen 23 Nov: the cache held NIFTY at
+ * 25879.1 while Yahoo itself said 25830.9). A unique query parameter makes
+ * every request miss that cache and reach the origin.
+ */
+function bust(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}${Math.floor(Math.random() * 1000)}`;
+}
+
 async function getJson(url: string): Promise<any> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": UA, Accept: "application/json" },
+  const res = await fetch(bust(url), {
+    headers: { "User-Agent": UA, Accept: "application/json", "Cache-Control": "no-cache" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (res.status === 429 || res.status === 403) throw new YahooThrottled(res.status);
