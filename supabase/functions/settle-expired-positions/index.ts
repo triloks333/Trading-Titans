@@ -9,7 +9,45 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const INDEX_MAP: Record<string, string> = {
   NSEI: "NIFTY", NSEBANK: "BANKNIFTY", BANKNIFTY: "BANKNIFTY", NSEFIN: "FINNIFTY",
   FINNIFTY: "FINNIFTY", NIFTY: "NIFTY", SENSEX: "SENSEX", BANKEX: "BANKEX",
+  // `^BSESN-2026-10-29-73800-CE` strips to BSESN. Missing here, SENSEX options
+  // never resolved to an underlying and sat unsettled after expiry.
+  BSESN: "SENSEX", MIDCPNIFTY: "MIDCPNIFTY",
 };
+
+/// Yahoo symbol for an underlying's spot/index close.
+const YAHOO_INDEX: Record<string, string> = {
+  NIFTY: "^NSEI", BANKNIFTY: "^NSEBANK", SENSEX: "^BSESN",
+  FINNIFTY: "NIFTY_FIN_SERVICE.NS", MIDCPNIFTY: "NIFTY_MID_SELECT.NS", BANKEX: "BSE-BANK.BO",
+};
+
+/// Official close of [underlying] on the IST trading day [expiry] from Yahoo's
+/// daily candles. Index options settle on the index close of expiry day, so
+/// this is the right price for BSE contracts (SENSEX/BANKEX), which have no
+/// NSE bhavcopy, and a safety net when the bhavcopy sync misses a day. Returns
+/// null unless a candle for exactly that IST date exists: never a nearby day.
+async function yahooCloseOn(underlying: string, expiry: string): Promise<number | null> {
+  const ySym = YAHOO_INDEX[underlying] ?? `${underlying}.NS`;
+  const start = Math.floor(new Date(`${expiry}T00:00:00+05:30`).getTime() / 1000);
+  const end = start + 86400;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}` +
+    `?period1=${start}&period2=${end}&interval=1d&_=${Date.now()}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", "Cache-Control": "no-cache" } });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const r = j?.chart?.result?.[0];
+    const ts: number[] = r?.timestamp ?? [];
+    const closes: (number | null)[] = r?.indicators?.quote?.[0]?.close ?? [];
+    for (let i = 0; i < ts.length; i++) {
+      const istDay = new Date((ts[i] + 5.5 * 3600) * 1000).toISOString().slice(0, 10);
+      const c = closes[i];
+      if (istDay === expiry && c != null && Number.isFinite(c) && c > 0) return Number(c);
+    }
+  } catch (e) {
+    console.error(`Yahoo close lookup failed for ${ySym} ${expiry}:`, e);
+  }
+  return null;
+}
 
 function computeIntrinsicValue(optionType: string, strike: number, spot: number): number {
   if (optionType === "CE") return Math.max(0, spot - strike);
@@ -51,11 +89,20 @@ async function getSettlementPrice(supabase: any, pos: any): Promise<number | nul
     }
   }
 
-  // 2. Secondary fallback: check quotes_cache for fresh underlying spot price
+  // 2. Expiry-day close from Yahoo daily candles (BSE indices, missed bhavcopy).
+  const yClose = await yahooCloseOn(underlying, String(expiry));
+  if (yClose != null) {
+    console.log(`Using Yahoo expiry-day close for ${underlying} ${expiry}: ${yClose}`);
+    return yClose;
+  }
+
+  // 3. Last resort: quotes_cache spot for THIS underlying only. The lookup used
+  // to include ^NSEI and ^NSEBANK for every symbol, so a SENSEX option could
+  // settle against NIFTY's price whenever that row happened to be freshest.
   const { data: cacheRow } = await supabase
     .from("quotes_cache")
     .select("price, updated_at")
-    .in("symbol", [underlying, `^${underlying}`, "^NSEI", "^NSEBANK"])
+    .in("symbol", [underlying, `^${underlying}`, YAHOO_INDEX[underlying] ?? underlying])
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -75,7 +122,10 @@ async function getSettlementPrice(supabase: any, pos: any): Promise<number | nul
   return null;
 }
 
-serve(async (_req) => {
+serve(async (req) => {
+  // `?dry=1` reports what would be settled, at what price, without writing.
+  const dry = new URL(req.url).searchParams.get("dry") === "1";
+  const plan: unknown[] = [];
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
@@ -87,9 +137,15 @@ serve(async (_req) => {
     if (!expiredPositions || expiredPositions.length === 0) {
       return new Response(JSON.stringify({ success: true, settled: 0, message: "No expired positions to settle." }), { headers: { "Content-Type": "application/json" } });
     }
+    // A contract expiring today settles on today's close, so it must not be
+    // settled before 15:30 IST (the cron runs at 20:00 IST; this guards manual runs).
+    const ist = new Date(Date.now() + 5.5 * 3600 * 1000);
+    const istToday = ist.toISOString().split("T")[0];
+    const beforeClose = ist.getUTCHours() * 60 + ist.getUTCMinutes() < 15 * 60 + 30;
     let settledCount = 0; let skipped = 0;
     for (const pos of expiredPositions) {
       if (String(pos.expiry_date) === "PERPETUAL") { skipped++; continue; }
+      if (String(pos.expiry_date) >= istToday && beforeClose) { skipped++; continue; }
       const settlementPrice = await getSettlementPrice(supabase, pos);
       if (settlementPrice === null) { skipped++; continue; }
       const totalUnits = Math.abs(pos.net_qty) * pos.lot_size;
@@ -109,6 +165,11 @@ serve(async (_req) => {
         if (settlementPnl < 0) walletDebit = Math.abs(settlementPnl);
         notifTitle = "Futures Expired";
         notifBody = `${pos.symbol} expired and settled at ${settlementPrice}. Settlement P&L: ${settlementPnl.toFixed(2)}. Margin released to your wallet.`;
+      }
+
+      if (dry) {
+        plan.push({ id: pos.id, symbol: pos.symbol, expiry: pos.expiry_date, settlementPrice, settlementPnl, walletCredit, walletDebit });
+        continue;
       }
 
       // Circuit Breaker: Halt settlement if an extreme anomaly / glitch is detected
@@ -140,7 +201,7 @@ serve(async (_req) => {
       await supabase.from("notifications").insert({ user_id: pos.user_id, title: notifTitle, body: notifBody, is_read: false, action_type: "expiry" });
       settledCount++;
     }
-    return new Response(JSON.stringify({ success: true, settled: settledCount, skipped }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, dry, settled: settledCount, skipped, plan }), { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error("Settlement crashed:", err);
     return new Response(JSON.stringify({ success: false, error: String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });

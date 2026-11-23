@@ -2,6 +2,7 @@
  * Shared utility for pricing and parsing F&O (Futures & Options) contracts.
  * Provides Black-Scholes pricing, Days-to-Expiry calculation, and contract symbol parsing.
  */
+import { exchangeFor, monthlyExpiry } from "./expiry_calendar.ts";
 
 export interface ParsedDerivative {
   isDerivative: boolean;
@@ -14,20 +15,17 @@ export interface ParsedDerivative {
   month?: string;
 }
 
-function expiryFromMonthYear(year2: string, month3: string): string {
+/// Monthly expiry for a "<YY><MON>" contract. Delegates to the shared expiry
+/// calendar (last Tuesday on NSE, last Thursday on BSE, moved back over
+/// holidays); this used to hard-code "last Thursday", wrong since Sep 2025.
+function expiryFromMonthYear(year2: string, month3: string, underlying = ""): string {
   const months: Record<string, number> = {
     JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
     JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12,
   };
   const m = months[month3.toUpperCase()] ?? 1;
   const y = 2000 + parseInt(year2, 10);
-  const lastDay = new Date(Date.UTC(y, m, 0));
-  let diff = lastDay.getUTCDay() - 4; // 4 = Thursday
-  if (diff < 0) diff += 7;
-  const lastThuDate = lastDay.getUTCDate() - diff;
-  const mm = String(m).padStart(2, "0");
-  const dd = String(lastThuDate).padStart(2, "0");
-  return `${y}-${mm}-${dd}`;
+  return monthlyExpiry(y, m, exchangeFor(underlying));
 }
 
 /**
@@ -63,7 +61,7 @@ export function parseDerivativeSymbol(rawSymbol: string): ParsedDerivative | nul
     const underlying = compactFutMatch[1].toUpperCase();
     const yr = compactFutMatch[2];
     const mon = compactFutMatch[3].toUpperCase();
-    const expiry = expiryFromMonthYear(yr, mon);
+    const expiry = expiryFromMonthYear(yr, mon, underlying);
     return {
       isDerivative: true,
       type: "FUTURE",
@@ -82,7 +80,7 @@ export function parseDerivativeSymbol(rawSymbol: string): ParsedDerivative | nul
     const mon = compactOptMatch[3].toUpperCase();
     const strike = parseFloat(compactOptMatch[4]);
     const optionType = compactOptMatch[5].toUpperCase() as "CE" | "PE";
-    const expiry = expiryFromMonthYear(yr, mon);
+    const expiry = expiryFromMonthYear(yr, mon, underlying);
     return {
       isDerivative: true,
       type: "OPTION",
@@ -113,7 +111,7 @@ export function parseDerivativeSymbol(rawSymbol: string): ParsedDerivative | nul
     } else if (dayOrYr && parseInt(dayOrYr, 10) >= 24 && parseInt(dayOrYr, 10) <= 35) {
       year = 2000 + parseInt(dayOrYr, 10);
     }
-    const expiry = expiryFromMonthYear(String(year % 100).padStart(2, "0"), mon);
+    const expiry = expiryFromMonthYear(String(year % 100).padStart(2, "0"), mon, underlying);
     return {
       isDerivative: true,
       type: "FUTURE",
@@ -125,7 +123,7 @@ export function parseDerivativeSymbol(rawSymbol: string): ParsedDerivative | nul
   }
 
   // 5. Simple futures format: <underlying>-FUT or <underlying> FUT or <underlying>FUT (e.g. RELIANCE-FUT, NIFTY-FUT)
-  const simpleFutMatch = s.match(/^(?:NSE:|BSE:)?(\^?[A-Za-z&-]+)(?:-|\s+)?FUT$/i);
+  const simpleFutMatch = s.match(/^(?:NSE:|BSE:)?(\^?[A-Za-z&-]+?)(?:-|\s+)?FUT$/i);
   if (simpleFutMatch && !s.includes("FUTURE")) {
     return {
       isDerivative: true,
