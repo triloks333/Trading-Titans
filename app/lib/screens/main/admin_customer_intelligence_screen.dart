@@ -777,6 +777,7 @@ class _OverviewTabState extends State<_OverviewTab> {
     final byName = ((o?['events_by_name_24h'] as Map?) ?? const {}).entries.toList()..sort((a, b) => _num(b.value).compareTo(_num(a.value)));
     final pv = s.sum('x_paywall_pack_view_30d'), cs = s.sum('x_paywall_checkout_start_30d');
     final ps = s.sum('x_paywall_purchase_success_30d'), pf = s.sum('x_paywall_purchase_failed_30d');
+    final payments = [for (final p in (o?['payments_recent'] as List?) ?? const []) if (p is Map) Map<String, dynamic>.from(p)];
     final launches = {for (final src in kLaunchSources) src: kLaunchWindows.fold<num>(0, (a, w) => a + s.sum('launch_${src}_$w'))};
     final launchTotal = launches.values.fold<num>(0, (a, b) => a + b);
 
@@ -815,7 +816,42 @@ class _OverviewTabState extends State<_OverviewTab> {
                 ),
               ]),
       ),
-      _label('Paywall funnel · 30d'),
+      _label('Payments · Razorpay'),
+      _tileGrid([
+        _tile('Paid 24h', v('payments_paid_24h'), tone: _num(o?['payments_paid_24h']) > 0 ? 'bull' : null),
+        _tile('Paid 30d', v('payments_paid_30d')),
+        _tile('Revenue 30d', o == null ? '–' : _inr(_num(o['payments_revenue_paise_30d']))),
+        _tile('Checkouts 30d', v('payments_checkouts_30d')),
+      ]),
+      _card(
+        child: payments.isEmpty
+            ? Text(o == null ? 'Loading payments…' : 'No paid orders yet', style: AppText.bodySmall)
+            : Column(children: [
+                for (final p in payments.take(10))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${p['name'] ?? s.nameOf(p['user_id'] as String?)}',
+                              maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.sans(size: 13, color: AppColors.ink)),
+                          Text(
+                            '${s.plans['${p['sku']}']?['title'] ?? p['sku']}'
+                            '${p['credited'] == true || p['kind'] != 'one_time' ? '' : ' · not credited'}',
+                            style: AppFonts.mono(size: 11, color: p['credited'] == true || p['kind'] != 'one_time' ? AppColors.ink4 : AppColors.bear),
+                          ),
+                        ]),
+                      ),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(_inr(_num(p['amount_paise'])), style: _cellStyle),
+                        if (DateTime.tryParse('${p['at']}') case final at?)
+                          Text(_ago(at.toLocal()), style: AppFonts.mono(size: 11, color: AppColors.ink4)),
+                      ]),
+                    ]),
+                  ),
+              ]),
+      ),
+      _label('Paywall funnel · 30d · app telemetry'),
       _card(
         child: Column(children: [
           for (final (label, count, color) in [
