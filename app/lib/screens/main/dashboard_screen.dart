@@ -41,6 +41,8 @@ import 'stock_detail_screen.dart';
 import 'subscribe_screen.dart';
 import 'watchlist_screen.dart';
 import 'whatif_screen.dart';
+import '../../widgets/live_price_text.dart';
+import '../../services/price_store.dart';
 
 /// Chart range buttons mapped to the `market-history` range they fetch.
 // Index strip symbol -> analytics id; SENSEX, ETH, SOL have none.
@@ -116,10 +118,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _load();
     _pollTimer = Timer.periodic(AppConstants.dashboardPricePoll, (_) => _refreshPrices());
     _tickerTimer = Timer.periodic(const Duration(seconds: 10), (_) => _advanceTicker());
+    // Redraw the moment the server pushes new prices, not on the next poll.
+    PriceStore.instance.addListener(_onPricePush);
+  }
+
+  DateTime _lastPushRefresh = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _onPricePush() {
+    // Pushes arrive every few seconds; one refresh per burst is enough.
+    final now = DateTime.now();
+    if (now.difference(_lastPushRefresh) < const Duration(milliseconds: 1500)) return;
+    _lastPushRefresh = now;
+    _refreshPrices();
   }
 
   @override
   void dispose() {
+    PriceStore.instance.removeListener(_onPricePush);
     _pollTimer?.cancel();
     _tickerTimer?.cancel();
     _ticker.dispose();
@@ -438,7 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Text((q.displayName ?? q.name).toUpperCase(), style: AppFonts.sans(size: 13, weight: FontWeight.w500, color: AppColors.ink3)),
                       const SizedBox(width: 6),
-                      Text(Money.instrument(q.price, market: q.market), style: AppFonts.mono(size: 13, color: AppColors.ink)),
+                      LivePriceText(Money.instrument(q.price, market: q.market), key: ValueKey('tick-${q.market}-${q.symbol}'), value: q.price, style: AppFonts.mono(size: 13, color: AppColors.ink)),
                       const SizedBox(width: 6),
                       Text('${q.changePct >= 0 ? '▲' : '▼'}${q.changePct.abs().toStringAsFixed(2)}%',
                           style: AppFonts.mono(size: 13, color: _tone(q.changePct))),
@@ -782,7 +797,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ]),
                 ),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(Money.instrument(q.price, market: q.market), style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
+                  LivePriceText(Money.instrument(q.price, market: q.market), key: ValueKey('row-${q.market}-${q.symbol}'), value: q.price, style: AppFonts.mono(size: 14, weight: FontWeight.w500, color: AppColors.ink)),
                   Text('${q.changePct >= 0 ? '▲ +' : '▼ −'}${q.changePct.abs().toStringAsFixed(2)}%',
                       style: AppFonts.mono(size: 12, color: _tone(q.changePct))),
                 ]),

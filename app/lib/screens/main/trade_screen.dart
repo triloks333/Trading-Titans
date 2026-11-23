@@ -26,6 +26,7 @@ import 'stock_detail_screen.dart';
 import '../../services/churn_telemetry_service.dart';
 import '../../services/action_reaction_engine.dart';
 import '../../services/analytics_service.dart';
+import '../../widgets/live_price_text.dart';
 
 typedef MoverSymbol = ({String symbol, String name, String? display});
 MoverSymbol _s(String symbol, String name, [String? display]) => (symbol: symbol, name: name, display: display);
@@ -500,7 +501,7 @@ class _TradeScreenState extends State<TradeScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: AppFonts.sans(size: 12, weight: FontWeight.w600, color: AppColors.ink4)),
             const SizedBox(height: 4),
-            Text(q == null ? '—' : Money.instrument(q.price, market: _orderMarket),
+            LivePriceText(q == null ? '—' : Money.instrument(q.price, market: _orderMarket), value: q?.price,
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: AppFonts.mono(size: 17, weight: FontWeight.w600, color: AppColors.ink)),
             Text(
               q == null ? ' ' : '${up ? '▲ +' : '▼ −'}${q.change.abs().toStringAsFixed(2)} (${q.changePct.abs().toStringAsFixed(2)}%)',

@@ -21,6 +21,7 @@ import 'fullscreen_chart_screen.dart';
 import 'option_chain_screen.dart';
 import 'order_entry_screen.dart';
 import '../../services/churn_telemetry_service.dart';
+import '../../widgets/live_price_text.dart';
 
 /// Chart range buttons and the `market-history` range each one fetches.
 const Map<String, String> kStockRanges = {'1D': '1d', '1W': '5d', '1M': '1mo', '1Y': '1y', '5Y': '5y'};
@@ -313,7 +314,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(_px(q.price), style: AppFonts.mono(size: 32, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.6)),
+          child: LivePriceText(_px(q.price), value: q.price, style: AppFonts.mono(size: 32, weight: FontWeight.w600, color: AppColors.ink, spacing: -0.6)),
         ),
         Text.rich(TextSpan(children: [
           TextSpan(
